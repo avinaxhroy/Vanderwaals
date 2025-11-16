@@ -1,0 +1,250 @@
+name: Curate Wallpapers
+
+on:
+  # Run every Sunday at 2 AM UTC
+  schedule:
+    - cron: '0 2 * * 0'
+  
+  # Allow manual trigger with test mode option
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Test mode (process only 10 images per repo)'
+        required: false
+        type: boolean
+        default: false
+      skip_release:
+        description: 'Skip creating GitHub release'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  curate:
+    name: Curate Wallpapers from GitHub Repos
+    runs-on: ubuntu-latest
+    timeout-minutes: 240  # 4 hour timeout
+    
+    permissions:
+      contents: write  # Required for committing and creating releases
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+      
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: 'scripts/requirements.txt'
+      
+      - name: Check disk space (before)
+        run: |
+          echo "=== Disk Space Before ==="
+          df -h
+          echo "=========================="
+      
+      - name: Install Python dependencies
+        run: |
+          cd scripts
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run curation script
+        id: curate
+        run: |
+          cd scripts
+          
+          # Determine arguments
+          ARGS=""
+          if [[ "${{ github.event.inputs.test_mode }}" == "true" ]]; then
+            ARGS="$ARGS --test"
+            echo "TEST_MODE=true" >> $GITHUB_ENV
+          fi
+          
+          # Run curation
+          python curate_wallpapers.py $ARGS
+          
+          # Set output variables
+          WALLPAPER_COUNT=$(jq '.total_wallpapers' curation_output/manifest.json)
+          echo "wallpaper_count=$WALLPAPER_COUNT" >> $GITHUB_OUTPUT
+          
+          MANIFEST_SIZE=$(du -h curation_output/manifest.json | cut -f1)
+          echo "manifest_size=$MANIFEST_SIZE" >> $GITHUB_OUTPUT
+          
+          COMPRESSED_SIZE=$(du -h curation_output/manifest.json.gz | cut -f1)
+          echo "compressed_size=$COMPRESSED_SIZE" >> $GITHUB_OUTPUT
+      
+      - name: Check disk space (after)
+        run: |
+          echo "=== Disk Space After ==="
+          df -h
+          echo "========================"
+      
+      - name: Validate manifest structure
+        run: |
+          cd scripts/curation_output
+          
+          echo "Validating manifest.json..."
+          
+          # Check JSON is valid
+          jq empty manifest.json || exit 1
+          
+          # Check required fields
+          jq -e '.version' manifest.json > /dev/null || { echo "Missing version"; exit 1; }
+          jq -e '.last_updated' manifest.json > /dev/null || { echo "Missing last_updated"; exit 1; }
+          jq -e '.model_version' manifest.json > /dev/null || { echo "Missing model_version"; exit 1; }
+          jq -e '.embedding_dim' manifest.json > /dev/null || { echo "Missing embedding_dim"; exit 1; }
+          jq -e '.wallpapers' manifest.json > /dev/null || { echo "Missing wallpapers array"; exit 1; }
+          
+          # Validate embedding dimensions
+          EMBEDDING_DIM=$(jq '.embedding_dim' manifest.json)
+          if [[ "$EMBEDDING_DIM" != "576" ]]; then
+            echo "Invalid embedding dimension: $EMBEDDING_DIM (expected 576)"
+            exit 1
+          fi
+          
+          # Check first wallpaper has correct structure
+          FIRST_EMBEDDING_LEN=$(jq '.wallpapers[0].embedding | length' manifest.json)
+          if [[ "$FIRST_EMBEDDING_LEN" != "576" ]]; then
+            echo "First wallpaper has invalid embedding length: $FIRST_EMBEDDING_LEN"
+            exit 1
+          fi
+          
+          echo "✓ Manifest validation passed"
+      
+      - name: Copy manifest to app assets
+        run: |
+          # Create assets directory if it doesn't exist
+          mkdir -p app/src/main/assets
+          
+          # Copy uncompressed manifest (for debug builds)
+          cp scripts/curation_output/manifest.json app/src/main/assets/manifest.json
+          
+          # Copy compressed manifest (for reference)
+          cp scripts/curation_output/manifest.json.gz app/src/main/assets/manifest.json.gz
+          
+          echo "✓ Copied manifest to app/src/main/assets/"
+      
+      - name: Commit updated manifest
+        id: commit
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          git add app/src/main/assets/manifest.json
+          git add app/src/main/assets/manifest.json.gz
+          
+          # Check if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            # Create commit message
+            WALLPAPER_COUNT="${{ steps.curate.outputs.wallpaper_count }}"
+            MANIFEST_SIZE="${{ steps.curate.outputs.manifest_size }}"
+            
+            if [[ "${{ github.event.inputs.test_mode }}" == "true" ]]; then
+              COMMIT_MSG="chore: update manifest (TEST RUN - $WALLPAPER_COUNT wallpapers) [skip ci]"
+            else
+              COMMIT_MSG="chore: update manifest ($WALLPAPER_COUNT wallpapers, $MANIFEST_SIZE) [skip ci]"
+            fi
+            
+            git commit -m "$COMMIT_MSG"
+            git push
+            
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "✓ Committed and pushed changes"
+          fi
+      
+      - name: Upload manifest artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifest-artifacts
+          path: |
+            scripts/curation_output/manifest.json
+            scripts/curation_output/manifest.json.gz
+            scripts/curation_output/curation.log
+          retention-days: 30
+      
+      - name: Create GitHub Release
+        if: |
+          github.event_name == 'schedule' && 
+          steps.commit.outputs.has_changes == 'true' &&
+          github.event.inputs.skip_release != 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: manifest-${{ github.run_number }}
+          name: Wallpaper Manifest - ${{ github.run_number }}
+          body: |
+            ## Automated Wallpaper Curation
+            
+            **Total Wallpapers:** ${{ steps.curate.outputs.wallpaper_count }}
+            **Manifest Size:** ${{ steps.curate.outputs.manifest_size }}
+            **Compressed Size:** ${{ steps.curate.outputs.compressed_size }}
+            
+            ### Files
+            - `manifest.json` - Full manifest with embeddings
+            - `manifest.json.gz` - Compressed manifest (recommended)
+            
+            ### CDN Access
+            Access via jsDelivr CDN:
+            ```
+            https://cdn.jsdelivr.net/gh/${{ github.repository }}@manifest-${{ github.run_number }}/app/src/main/assets/manifest.json
+            ```
+            
+            Or latest from main branch:
+            ```
+            https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/app/src/main/assets/manifest.json
+            ```
+            
+            ### Integration
+            Update `NetworkModule.kt` with the CDN URL to use this manifest in your app.
+            
+            ---
+            *Generated by GitHub Actions on ${{ github.run_timestamp }}*
+          files: |
+            scripts/curation_output/manifest.json
+            scripts/curation_output/manifest.json.gz
+          draft: false
+          prerelease: false
+      
+      - name: Post summary
+        if: always()
+        run: |
+          echo "## Curation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ steps.curate.outcome }}" == "success" ]]; then
+            echo "✅ **Status:** Success" >> $GITHUB_STEP_SUMMARY
+            echo "📊 **Wallpapers:** ${{ steps.curate.outputs.wallpaper_count }}" >> $GITHUB_STEP_SUMMARY
+            echo "📦 **Manifest Size:** ${{ steps.curate.outputs.manifest_size }}" >> $GITHUB_STEP_SUMMARY
+            echo "🗜️ **Compressed Size:** ${{ steps.curate.outputs.compressed_size }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Status:** Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Mode" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ github.event.inputs.test_mode }}" == "true" ]]; then
+            echo "⚠️ This was a test run (10 images per repo)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Full production run" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Check the artifacts for detailed logs" >> $GITHUB_STEP_SUMMARY
+          echo "2. Verify the manifest in \`app/src/main/assets/\`" >> $GITHUB_STEP_SUMMARY
+          echo "3. Test the CDN URL in your app" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Curation pipeline failed!"
+          echo "Check the logs for details."
+          exit 1

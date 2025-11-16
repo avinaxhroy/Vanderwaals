@@ -1,0 +1,18 @@
+# Python dependencies for Vanderwaals wallpaper curation pipeline
+# Install with: pip install -r requirements.txt
+
+# Deep Learning - TensorFlow for MobileNetV3 embeddings
+tensorflow-cpu>=2.14.0,<3.0.0  # CPU-only (smaller, sufficient for CI)
+
+# Image Processing
+Pillow>=10.0.0                  # Image loading, color extraction, resizing
+imagehash>=4.3.0                # Perceptual hashing for deduplication
+
+# Machine Learning
+numpy>=1.24.0                   # Array operations, embeddings
+scikit-learn>=1.3.0             # K-means clustering for color extraction
+
+# CLI & Progress
+tqdm>=4.66.0                    # Progress bars for long-running tasks
+
+# Note: Git is required for repository cloning (pre-installed on GitHub Actions)
