@@ -1,5 +1,5 @@
 <div align="center">
-    <img style="display: block; border-radius: 9999px;" src="Vanderwaals_logo_black.png" width="150" alt="Vanderwaals Logo">
+    <img style="display: block; border-radius: 9999px;" src="Vanderwaals_logo_black.png" width="500" alt="Vanderwaals Logo">
     <h1>Vanderwaals</h1>
     <p>
         <img src="https://img.shields.io/github/v/release/avinaxhroy/Vanderwaals?style=for-the-badge" alt="Release">
@@ -107,8 +107,13 @@ Upload one favorite wallpaper and instantly get 100+ similar matches. The algori
 </div>
 
 ## 📥 Download
-
-[<img src="https://github.com/Anthonyy232/Paperize/assets/60626873/1c034414-21cd-4a0a-838d-89fe7bd56910" alt="Download from GitHub" height="80">](https://github.com/avinaxhroy/Vanderwaals/releases)
+<div align="center">
+  <a href="https://github.com/avinaxhroy/Vanderwaals/releases">
+    <img src="https://raw.githubusercontent.com/Kunzisoft/Github-badge/main/get-it-on-github.png"
+         alt="Download from GitHub"
+         height="80">
+  </a>
+</div>
 
 ### Requirements
 - **Android 12.0 (API 31)** or higher
