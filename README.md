@@ -99,6 +99,7 @@ Upload one favorite wallpaper and instantly get 100+ similar matches. The algori
       <img style="display: block; border-radius: 9999px;" src="Screenshots/2.png" width="150" alt="Beautiful Wallpapers">
       <img style="display: block; border-radius: 9999px;" src="Screenshots/3.png" width="150" alt="Upload Favourite">
       <img style="display: block; border-radius: 9999px;" src="Screenshots/4.png" width="150" alt="Auto-Change Wallpaper">
+    <br/>
     <img style="display: block; border-radius: 9999px;" src="Screenshots/5.png" width="150" alt="Personalization Insight">
     <img style="display: block; border-radius: 9999px;" src="Screenshots/6.png" width="150" alt="Tap and Learn">
     <img style="display: block; border-radius: 9999px;" src="Screenshots/7.png" width="150" alt="More Algorithm">
