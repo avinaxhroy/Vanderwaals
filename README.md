@@ -1,5 +1,5 @@
 <div align="center">
-    <img style="display: block; border-radius: 9999px;" src="Vanderwaals_logo.png" width="150" alt="Vanderwaals Logo">
+    <img style="display: block; border-radius: 9999px;" src="Vanderwaals_logo_black.png" width="150" alt="Vanderwaals Logo">
     <h1>Vanderwaals</h1>
     <p>
         <img src="https://img.shields.io/github/v/release/avinaxhroy/Vanderwaals?style=for-the-badge" alt="Release">
@@ -95,7 +95,7 @@ Upload one favorite wallpaper and instantly get 100+ similar matches. The algori
 
 <div align="center">
     <br/>
-      <img src="https://github.com/Anthonyy232/Vanderwaals/assets/60626873/57122f72-78f8-45ed-a9ac-de943061d6a2" width="30%" alt="onboarding" />
+      <img style="display: block; border-radius: 9999px;" src="Screenshots/1.png" width="150" alt="Free">
       <img src="https://github.com/user-attachments/assets/f054e7f1-d67f-4500-a547-64bccd986bbd" width="30%" alt="wallpaper" />
       <img src="https://github.com/user-attachments/assets/cdf0d989-ae11-44ba-b33c-4aeec6b6116e" width="30%" alt="interval" />
     <br/>
