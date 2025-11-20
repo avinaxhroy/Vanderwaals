@@ -1,0 +1,21 @@
+PLACEHOLDER FILE - DO NOT DELETE
+
+This directory should contain the TensorFlow Lite model for wallpaper embedding extraction.
+
+Required file: mobilenet_v3_small.tflite
+
+Download Instructions:
+1. Visit: https://tfhub.dev/google/lite-model/imagenet/mobilenet_v3_small_100_224/feature_vector/5/default/1
+2. Download the model file
+3. Rename to: mobilenet_v3_small.tflite
+4. Place in this directory: app/src/main/assets/models/
+
+File size: ~2.9MB
+
+The model is excluded from Git (.gitignore) to avoid repository bloat.
+Developers must download it manually before building the app.
+
+Model details:
+- Input: 224x224 RGB image
+- Output: 576-dimensional embedding vector
+- Use case: Wallpaper aesthetic similarity matching

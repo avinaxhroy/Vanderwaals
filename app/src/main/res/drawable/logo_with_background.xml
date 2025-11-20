@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Dark background fills entire splash screen -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/background_dark"/>
+        </shape>
+    </item>
+    
+    <!-- Vanderwaals PNG logo - smaller size to fit within Android 12+ circular mask -->
+    <!-- Android 12+ clips splash to circle, so we need smaller dimensions -->
+    <!-- The horizontal text needs to fit within the circular viewport -->
+    <!-- Using conservative dimensions to prevent any text cutoff -->
+    <item
+        android:drawable="@drawable/vanderwaals_logo"
+        android:gravity="center"
+        android:width="106dp"
+        android:height="27.7dp"/>
+</layer-list>

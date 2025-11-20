@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ===== VANDERWAALS MODERN DARK THEME ===== -->
+    
+    <!-- Material 3 Splash Screen Theme - Premium Dark -->
+    <style name="Theme.Vanderwaals.SplashScreen" parent="Theme.SplashScreen">
+        <!-- Background -->
+        <item name="windowSplashScreenBackground">@color/background_dark</item>
+        
+        <!-- Animated Icon - Use actual Vanderwaals_logo.png -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/logo_with_background</item>
+        <item name="windowSplashScreenAnimationDuration">500</item>
+        
+        <!-- No icon background needed - logo has its own colorful background -->
+        
+        <!-- Post-splash theme -->
+        <item name="postSplashScreenTheme">@style/Theme.Vanderwaals</item>
+    </style>
+
+    <!-- Base App Theme - Modern Dark with Material 3 -->
+    <style name="Theme.Vanderwaals" parent="android:Theme.Material.NoActionBar">
+        <!-- === WINDOW COLORS === -->
+        <item name="android:windowBackground">@color/background_dark</item>
+        <item name="android:colorBackground">@color/background_dark</item>
+        
+        <!-- === SYSTEM BARS === -->
+        <!-- Transparent for edge-to-edge support with proper insets handling -->
+        <!-- === SYSTEM BARS === -->
+        <!-- Transparent for edge-to-edge support with proper insets handling -->
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>        <!-- === SYSTEM BAR APPEARANCE === -->
+        <!-- Force dark system bars (light content) -->
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowLightStatusBar">false</item>
+        
+        <!-- === EDGE-TO-EDGE ENFORCEMENT === -->
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        
+        <!-- === BRAND COLORS === -->
+        <item name="android:colorPrimary">@color/vanderwaals_tan</item>
+        <item name="android:colorPrimaryDark">@color/vanderwaals_tan_dark</item>
+        <item name="android:colorAccent">@color/vanderwaals_accent</item>
+        
+        <!-- === EDGE-TO-EDGE SUPPORT === -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <!-- Disable fitsSystemWindows to enable manual WindowInsets handling -->
+        <item name="android:fitsSystemWindows">false</item>
+        
+        <!-- === DARK MODE ENFORCEMENT === -->
+        <item name="android:forceDarkAllowed">false</item>
+        
+        <!-- === TEXT COLORS === -->
+        <item name="android:textColorPrimary">@color/text_primary_dark</item>
+        <item name="android:textColorSecondary">@color/text_secondary_dark</item>
+        <item name="android:textColorTertiary">@color/text_tertiary_dark</item>
+        
+        <!-- === WINDOW TRANSITIONS === -->
+        <item name="android:windowAnimationStyle">@style/WindowAnimation.Vanderwaals</item>
+    </style>
+    
+    <!-- Window Animation Style - Smooth Transitions -->
+    <style name="WindowAnimation.Vanderwaals" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@android:anim/fade_in</item>
+        <item name="android:activityOpenExitAnimation">@android:anim/fade_out</item>
+        <item name="android:activityCloseEnterAnimation">@android:anim/fade_in</item>
+        <item name="android:activityCloseExitAnimation">@android:anim/fade_out</item>
+    </style>
+</resources>

@@ -1,0 +1,13 @@
+Vanderwaals - AI Wallpaper Changer is a dynamic and intelligent app that learns your aesthetic preferences and automatically delivers fresh wallpapers you'll love.
+
+Dynamic Wallpaper Changer: With Vanderwaals, your wallpaper changes automatically at intervals you choose, keeping your device fresh and exciting.
+
+AI-Powered Personalization: Vanderwaals learns from your interactions and preferences to deliver wallpapers tailored to your unique style.
+
+Advanced Image Manipulation: Customize your wallpapers with darken and blur effects to suit your visual preferences or make your icons stand out.
+
+Home and Lock Screen Customization: Set your home screen and lock screen wallpapers together or separately, with full control over timing and appearance.
+
+Supports Various Image Types: Vanderwaals handles JPEG, PNG, AVIF, and WEBP formats, offering you flexibility in your wallpaper choices.
+
+Privacy policy: https://yourusername.github.io/vanderwaals/

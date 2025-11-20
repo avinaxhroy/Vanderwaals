@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
+    android:opacity="opaque">
+    <!-- Purple gradient background -->
+    <item>
+        <shape>
+            <gradient
+                android:angle="135"
+                android:centerColor="#7C6CEF"
+                android:endColor="#6366F1"
+                android:startColor="#6C5CE7"
+                android:type="linear" />
+        </shape>
+    </item>
+    <!-- Vanderwaals logo in center -->
+    <item
+        android:width="120dp"
+        android:height="120dp"
+        android:gravity="center">
+        <vector
+            android:width="120dp"
+            android:height="120dp"
+            android:viewportWidth="120"
+            android:viewportHeight="120">
+            <!-- Stylized "V" with molecular nodes -->
+            <group
+                android:scaleX="0.7"
+                android:scaleY="0.7"
+                android:translateX="18"
+                android:translateY="18">
+                <!-- Main V shape -->
+                <path
+                    android:fillColor="#FFFFFF"
+                    android:pathData="M35,25 L50,65 L62,25 L72,25 L54,75 L46,75 L28,25 Z" />
+                <!-- Connection nodes -->
+                <path
+                    android:fillColor="#FFFFFF"
+                    android:pathData="M30,22 m-5,0 a5,5 0 1,1 10,0 a5,5 0 1,1 -10,0" />
+                <path
+                    android:fillColor="#FFFFFF"
+                    android:pathData="M70,22 m-5,0 a5,5 0 1,1 10,0 a5,5 0 1,1 -10,0" />
+                <path
+                    android:fillColor="#FFFFFF"
+                    android:pathData="M50,78 m-5,0 a5,5 0 1,1 10,0 a5,5 0 1,1 -10,0" />
+                <!-- Van der Waals force lines -->
+                <path
+                    android:fillColor="@android:color/transparent"
+                    android:pathData="M38,30 Q45,45 50,60"
+                    android:strokeColor="#A78BFA"
+                    android:strokeWidth="2" />
+                <path
+                    android:fillColor="@android:color/transparent"
+                    android:pathData="M62,30 Q55,45 50,60"
+                    android:strokeColor="#A78BFA"
+                    android:strokeWidth="2" />
+            </group>
+        </vector>
+    </item>
+    <!-- App name below logo -->
+    <item
+        android:bottom="80dp"
+        android:gravity="bottom|center_horizontal">
+        <inset>
+            <shape>
+                <size
+                    android:width="200dp"
+                    android:height="40dp" />
+            </shape>
+        </inset>
+    </item>
+</layer-list>
