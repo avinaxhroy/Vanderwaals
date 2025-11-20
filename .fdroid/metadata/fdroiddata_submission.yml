@@ -1,0 +1,52 @@
+---
+Categories:
+  - Personalization
+License: AGPL-3.0-or-later
+AuthorName: Confused Coconut / Avinas
+AuthorEmail: hi@avinas.me
+WebSite: https://github.com/avinaxhroy/Vanderwaals
+SourceCode: https://github.com/avinaxhroy/Vanderwaals
+IssueTracker: https://github.com/avinaxhroy/Vanderwaals/issues
+Changelog: https://github.com/avinaxhroy/Vanderwaals/releases
+
+Build:
+  - versionCode: 270
+    versionName: 2.7.0
+    commit: v2.7.0
+    gradle: yes
+    srclibs:
+      - name: androidx-core
+        repo: https://github.com/androidx/androidx.git@androidx-main
+    prebuild: echo "Building from clean state"
+
+MaintainerNotes: |
+  AI-powered wallpaper application with on-device machine learning.
+  
+  TECHNICAL DETAILS:
+  • Uses TensorFlow Lite for local ML processing
+  • MobileNetV3 neural network for visual analysis
+  • LAB color space for color matching
+  • Exponential Moving Average (EMA) for learning
+  • Zero cloud analytics or tracking
+  • Privacy-first, 100% offline AI
+  • Material 3 design with dynamic colors
+  • No proprietary dependencies
+  
+  FEATURES:
+  • Two modes: Auto Mode & Personalize Mode
+  • Smart auto-change (unlock, hourly, daily)
+  • History/Timeline of applied wallpapers
+  • Thousands of curated wallpapers
+  • Weekly catalog auto-sync
+  • Dynamic color extraction (Android 12+)
+  • Dark theme support
+  
+  PRIVACY:
+  • 100% offline AI
+  • No Firebase, Google Analytics
+  • No data collection
+  • Open-source (AGPL-3.0)
+  • Full code transparency
+
+AllowedAPKSigningKeys:
+  - EBF1D436CE915B9B7E4CB20B4B15E7DF621C2B25

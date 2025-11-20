@@ -1,3 +1,9 @@
 scripts/.DS_Store
 .DS_Store
 .gradle/9.0.0/fileHashes/fileHashes.lock
+
+# F-Droid submission documentation (local reference)
+FDROID_*.md
+SIGNING_AND_RELEASE.md
+FILES_CREATED.txt
+

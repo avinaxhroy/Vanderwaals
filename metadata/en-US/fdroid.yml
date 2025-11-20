@@ -1,0 +1,29 @@
+---
+Categories:
+  - Personalization
+License: AGPL-3.0-or-later
+AuthorName: Confused Coconut / Avinas
+AuthorEmail: hi@avinas.me
+WebSite: https://github.com/avinaxhroy/Vanderwaals
+SourceCode: https://github.com/avinaxhroy/Vanderwaals
+IssueTracker: https://github.com/avinaxhroy/Vanderwaals/issues
+Changelog: https://github.com/avinaxhroy/Vanderwaals/releases
+
+Build:
+  - versionCode: 270
+    versionName: 2.7.0
+    commit: v2.7.0
+    gradle: yes
+    prebuild: echo "Building from clean state"
+
+MaintainerNotes: |
+  AI-powered wallpaper application with on-device machine learning.
+  - Uses TensorFlow Lite for local ML processing
+  - Zero cloud analytics or tracking
+  - Privacy-first architecture
+  - 100% offline AI personalization
+  - Material 3 design with dynamic colors
+  
+AllowedAPKSigningKeys:
+  - EBF1D436CE915B9B7E4CB20B4B15E7DF621C2B25
+

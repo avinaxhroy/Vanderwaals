@@ -58,7 +58,7 @@ A commercial license grants you:
 
 If you need a commercial license, please contact:
 
-**Email**: [Your Contact Email]  
+**Email**: hi@avinas.me 
 **GitHub**: Open an issue at https://github.com/avinaxhroy/Vanderwaals/issues with the tag `commercial-license`
 
 Provide:
