@@ -1,5 +1,5 @@
 <div align="center">
-    <img style="display: block; border-radius: 9999px;" src="Vanderwaals_logo_black.png" width="150" alt="Vanderwaals Logo">
+    <img style="display: block; border-radius: 9999px;" src="Vanderwaals_logo_black.png" width="500" alt="Vanderwaals Logo">
     <h1>Vanderwaals</h1>
     <p>
         <img src="https://img.shields.io/github/v/release/avinaxhroy/Vanderwaals?style=for-the-badge" alt="Release">
