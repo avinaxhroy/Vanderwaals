@@ -1,6 +1,8 @@
 # Contributing to Vanderwaals
 
-Thank you for your interest in contributing to Vanderwaals! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Vanderwaals! We welcome contributions from the community to help make this app better. Together, we can build something amazing while maintaining transparency and trust.
+
+This document provides guidelines and instructions for contributing.
 
 ## Code of Conduct
 
@@ -8,6 +10,52 @@ Thank you for your interest in contributing to Vanderwaals! This document provid
 - Welcome newcomers and encourage diverse perspectives
 - Focus on constructive criticism
 - Help create a positive community
+
+## ⚖️ Licensing and Contributor Agreement
+
+### Important: Please Read Before Contributing
+
+By contributing to Vanderwaals, you agree to our **Contributor License Agreement (CLA)**. This ensures:
+
+- **You retain ownership** of your contributions
+- **The project can use** your contributions under both AGPL-3.0 and commercial licenses
+- **Legal protection** for both you and the project
+- **Clear rights** for everyone involved
+
+#### Dual Licensing
+
+Vanderwaals uses a **dual licensing model**:
+
+1. **AGPL-3.0** for open-source community use (transparency and collaboration)
+2. **Commercial License** for proprietary/commercial use (sustainability)
+
+Your contributions will be available under both licenses. This allows:
+- The community to benefit from open-source improvements
+- Commercial users to support the project's development
+- The project to remain sustainable long-term
+
+For more details, see:
+- [Contributor License Agreement (CLA.md)](CLA.md)
+- [Commercial License Terms (COMMERCIAL_LICENSE.md)](COMMERCIAL_LICENSE.md)
+- [Trademark Policy (TRADEMARK.md)](TRADEMARK.md)
+
+### How to Accept the CLA
+
+**First-time contributors**: When submitting your first pull request, please add a comment with:
+
+```
+I have read and agree to the Contributor License Agreement (CLA) at:
+https://github.com/avinaxhroy/Vanderwaals/blob/main/CLA.md
+
+Full Name: [Your Full Name]
+GitHub Username: @[your-username]
+Email: [your-email@example.com]
+Date: [YYYY-MM-DD]
+```
+
+**Returning contributors**: You only need to accept once (unless the CLA is substantially updated).
+
+**Corporate contributors**: If contributing on behalf of your employer, please have an authorized representative sign our Corporate CLA by opening an issue tagged `corporate-cla`.
 
 ## How to Contribute
 
@@ -202,5 +250,19 @@ Before submitting a PR:
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the **GNU General Public License v3.0**.
+By contributing, you agree that your contributions will be licensed under:
+
+- **AGPL-3.0** (GNU Affero General Public License v3.0) for open-source use
+- Available for **commercial licensing** as per the dual licensing model
+
+See the [CLA.md](CLA.md) for complete details on the rights you grant and retain.
+
+## Questions About Contributing?
+
+- **General questions**: Open an issue with the tag `question`
+- **CLA questions**: Open an issue with the tag `cla-question`
+- **Trademark questions**: Open an issue with the tag `trademark-question`
+- **Commercial licensing**: Open an issue with the tag `commercial-license`
+
+We appreciate your contributions and look forward to building Vanderwaals together! 🚀
 

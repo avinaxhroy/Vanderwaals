@@ -405,7 +405,14 @@ Edit `app/build.gradle.kts` to customize:
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions from the community! Together, we can make Vanderwaals even better.
+
+**Before contributing**, please:
+1. Read our [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
+2. Review and accept the [Contributor License Agreement (CLA)](CLA.md)
+3. Understand our [dual licensing model](#-license)
+
+Your contributions will be licensed under AGPL-3.0 and available for commercial licensing as well. This ensures the project remains sustainable while maintaining transparency.
 
 ### Areas for Improvement
 
@@ -445,25 +452,104 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 
 ## 📜 License
 
+### Dual Licensing Model
+
+Vanderwaals uses a **dual licensing approach** to balance openness with sustainability:
+
+#### 🔓 Open Source: AGPL-3.0
+
+For the community, Vanderwaals is licensed under **AGPL-3.0** (GNU Affero General Public License v3.0):
+
+- ✅ **Free to use** for personal, educational, and open-source projects
+- ✅ **Study and modify** the source code
+- ✅ **Contribute improvements** back to the project
+- ✅ **Full transparency** - see exactly how the app works
+
+**Requirements**:
+- If you modify and distribute Vanderwaals, you **must share your source code** under AGPL-3.0
+- If you run a modified version as a network service, users must have access to the source code
+- Any derivative work must also be licensed under AGPL-3.0
+
 ```
 Vanderwaals - AI-Powered Wallpaper App
-Copyright (C) 2024 Avinas Roy
+Copyright (C) 2024-2025 Avinash Roy
 
 This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
+it under the terms of the GNU Affero General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU General Public License for more details.
+GNU Affero General Public License for more details.
 
-You should have received a copy of the GNU General Public License
+You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 ```
 
-See [LICENSE](LICENSE) for full details.
+📄 **Read the full license**: [LICENSE](LICENSE)
+
+#### 💼 Commercial: Proprietary License
+
+For commercial use, rebranding, or proprietary distribution, a **commercial license** is required.
+
+**You need a commercial license if you want to**:
+- Distribute a modified or rebranded version without sharing source code
+- Use Vanderwaals in a proprietary application
+- Offer Vanderwaals as a commercial service (SaaS, hosted, etc.)
+- Monetize through ads, subscriptions, or paid features
+
+**Benefits**:
+- No source code disclosure required
+- Technical support and updates
+- Custom licensing terms
+- Legal protection and indemnification
+
+📄 **Learn more**: [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md)
+
+### 🏷️ Trademark Protection
+
+The **"Vanderwaals" name and logo are trademarks** and are **not** covered by the AGPL-3.0 license.
+
+- ✅ You **can** use the code under AGPL-3.0
+- ✗ You **cannot** use the "Vanderwaals" name or logo in modified versions
+
+If you create a fork or derivative, you **must rebrand** it with a different name and logo.
+
+📄 **Trademark policy**: [TRADEMARK.md](TRADEMARK.md)
+
+### 🤝 Contributor License Agreement
+
+Contributors retain ownership but grant the project rights to use contributions under both licenses.
+
+📄 **CLA details**: [CLA.md](CLA.md)
+
+### Why This Approach?
+
+This multi-layered protection strategy ensures:
+
+- **🌟 Transparency**: Anyone can audit the code for security and privacy
+- **🤝 Community Growth**: Open contributions improve the app for everyone
+- **🛡️ Protection**: Prevents unauthorized rebranding and exploitation
+- **💰 Sustainability**: Commercial licensing supports long-term development
+- **✅ Trust**: Clear legal framework benefits users and contributors
+
+---
+
+### 📋 Summary
+
+| Use Case | License Required | Source Code Disclosure |
+|----------|------------------|------------------------|
+| Personal use | AGPL-3.0 (free) | Not required |
+| Open-source project | AGPL-3.0 (free) | Yes (if distributed) |
+| Modified distribution | AGPL-3.0 (free) | **Yes (required)** |
+| Commercial/proprietary | Commercial (paid) | No |
+| Rebranding | Commercial (paid) + Trademark permission | No |
+
+📧 **Questions?** Contact: avinaxh.work@gmail.com
+
+---
 
 ### Derivative Work Notice
 
@@ -486,7 +572,7 @@ Vanderwaals is a derivative work based on [Paperize](https://github.com/Anthonyy
 
 - 🐛 **Bug Reports**: [GitHub Issues](https://github.com/avinaxhroy/Vanderwaals/issues)
 - 💡 **Feature Requests**: [GitHub Discussions](https://github.com/avinaxhroy/Vanderwaals/discussions)
-- 📧 **Email**: [Contact Developer](mailto:avinaxh.work@gmail.com)
+- 📧 **Email**: [Contact Developer](mailto:hi@avinas.me)
 
 ### Documentation
 
