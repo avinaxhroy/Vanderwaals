@@ -7,3 +7,6 @@ FDROID_*.md
 SIGNING_AND_RELEASE.md
 FILES_CREATED.txt
 
+.fdroid/GITLAB_RFP_ISSUE_TEMPLATE.md
+*.lock
+*.lock

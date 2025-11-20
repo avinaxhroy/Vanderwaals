@@ -1,190 +1,65 @@
 🎨 WALLPAPERS THAT LEARN YOUR AESTHETIC
 
-Vanderwaals uses on-device AI to learn your unique style and automatically deliver wallpapers you'll love. No endless scrolling, no manual browsing—just fresh wallpapers that match your vibe.
+Vanderwaals uses on-device AI to learn your unique style and deliver wallpapers you'll love. No endless scrolling—just fresh wallpapers that match your vibe.
 
 ✨ HOW IT WORKS
 
-Pick Your Starting Point
-• Auto Mode: Start fresh, discover wallpapers
-• Personalize Mode: Upload a favorite for instant matches
-
-Like What You See
-• Tap ❤️ on wallpapers you love
-• AI learns from every interaction
-• Gets smarter over time
-
-Enjoy Fresh Wallpapers
-• Change automatically (hourly, daily, or on unlock)
-• Or browse and pick manually
-• Always something new that fits your style
+• Auto Mode: Discover wallpapers, AI learns from your feedback
+• Personalize Mode: Upload your favorite for instant matches
+• Auto-change triggers: Every unlock, hourly, daily, or manual
+• Apply to lock screen, home screen, or both
 
 🤖 INTELLIGENT PERSONALIZATION
 
-Unlike typical wallpaper galleries, Vanderwaals uses machine learning to understand YOUR aesthetic:
+Machine learning analyzes your aesthetic through:
+• Deep visual features (artistic style & mood via MobileNetV3)
+• Color matching (LAB color space for accurate palettes)
+• Category learning (minimal, nature, abstract, dark themes, etc.)
 
-• Deep Visual Features (70%)
-  MobileNetV3 neural network analyzes artistic style, composition, and mood
-
-• Color Matching (20%)
-  LAB color space for perceptually accurate palette matching
-
-• Category Learning (10%)
-  Learns your preferences (minimal, nature, abstract, dark themes, etc.)
-
-The more you use it, the better it gets at predicting what you'll love.
-
-🧠 ADAPTIVE LEARNING
-
-• Exponential Moving Average (EMA)
-  Smoothly integrates new preferences without forgetting old ones
-
-• Implicit Feedback
-  Learns from wallpaper duration (quick changes = dislike, long = like)
-
-• Smart Exploration
-  Occasionally suggests new styles to keep things fresh
-
-• Progressive Improvement
-  Balances your original taste with newly discovered preferences
+The more you use it, the better it predicts what you'll love.
 
 📚 MASSIVE CURATED LIBRARY
 
-Thousands of high-quality wallpapers from trusted sources:
-
-GitHub Collections
-• Aesthetic & minimalist designs
-• Linux ricing wallpapers
-• Anime & digital art
-• Color schemes (Gruvbox, Nord, etc.)
-
-Bing Photography Archive
-• Professional UHD photography
-• Daily featured wallpapers
-• Global landscapes & nature
-
-Weekly Auto-Updates
-• New wallpapers added automatically
-• Library keeps growing
-
-⚡ POWERFUL AUTOMATION
-
-Auto-Change Triggers
-• Every unlock (fresh wallpaper each time)
-• Hourly intervals
-• Daily at custom time
-• Manual only
-
-Apply Anywhere
-• Lock screen
-• Home screen
-• Both simultaneously
-
-Smart Crop
-• AI focuses on interesting regions
-• No awkward cropping surprises
+Thousands of high-quality wallpapers from:
+• GitHub: Aesthetic designs, anime, color schemes
+• Bing: Professional UHD photography & landscapes
+• Weekly auto-updates with fresh content
 
 🔒 PRIVACY YOU CAN TRUST
 
-Built privacy-first from day one:
-
-✓ 100% Offline AI
-  All machine learning runs on YOUR device
-
-✓ Zero Analytics
-  No Firebase, Google Analytics, or tracking SDKs
-
-✓ No Data Collection
-  Your preferences never leave your phone
-
-✓ Open Source (AGPL-3.0)
-  Full code transparency—audit it yourself
-
-Network requests only for:
-• Downloading wallpapers
-• Weekly catalog sync
-
-That's it. No hidden tracking, no ads, no surprises.
+✓ 100% Offline AI: All ML runs on your device
+✓ Zero Analytics: No Firebase, Google Analytics, or tracking
+✓ No Data Collection: Your preferences never leave your phone
+✓ Open Source (AGPL-3.0): Full code transparency
+✓ Network requests only for: Downloading wallpapers & weekly catalog sync
 
 🎨 BEAUTIFUL MATERIAL 3 DESIGN
 
-• Modern Interface
-  Latest Material Design 3 guidelines
-
-• Dynamic Colors (Android 12+)
-  App adapts to your current wallpaper
-
-• Dark Theme
-  AMOLED-optimized pure black theme
-
-• Smooth Animations
-  Polished transitions powered by Lottie
-
-📊 HISTORY & FEEDBACK
-
-• Timeline View
-  See all applied wallpapers with timestamps
-
-• Quick Actions
-  ❤️ Like, 👎 Dislike, or 📥 Download instantly
-
-• Date Grouping
-  Organized by Today / Yesterday / Month
-
-• Full Preview
-  Pinch-to-zoom viewer
-
-🚀 TWO MODES FOR EVERYONE
-
-AUTO MODE
-• Start with diverse wallpapers
-• AI learns as you give feedback
-• Perfect for discovering new aesthetics
-
-PERSONALIZE MODE
-• Upload your favorite wallpaper
-• Get instant similar matches
-• Perfect if you know your style
-
-Both modes learn continuously from your likes and dislikes!
+• Modern interface with latest Material Design 3
+• Dynamic colors (Android 12+): App adapts to your wallpaper
+• Dark theme: AMOLED-optimized with smooth animations
+• History & feedback: Timeline view with quick like/dislike actions
 
 ⚙️ REQUIREMENTS
 
-• Android 12.0 or higher
-• ~50MB storage (app + cache)
-• Internet for initial wallpaper sync (then works offline)
+• Android 12.0+
+• ~50MB storage
+• Internet for initial sync (then works offline)
 
 🏆 WHY VANDERWAALS?
 
 ✓ Only wallpaper app with on-device ML learning
-✓ Privacy-first (no cloud, no tracking)
+✓ Privacy-first with zero tracking
 ✓ Thousands of curated wallpapers
 ✓ Actually improves with use
-✓ Open source (full transparency)
+✓ Open source & free with no ads
 ✓ Material 3 design
-✓ Free & no ads
+✓ Smart crop to focus on interesting regions
 
-🤝 OPEN SOURCE
+💬 SUPPORT & CONTRIBUTE
 
-View the code, contribute improvements, or verify privacy claims:
-→ github.com/avinaxhroy/Vanderwaals
-
-💬 SUPPORT
-
-• Bug Reports: GitHub Issues
-• Feature Requests: GitHub Discussions
+• GitHub: github.com/avinaxhroy/Vanderwaals
+• Bug reports & feature requests on GitHub
 • Email: hi@avinas.me
 
-⭐ IF YOU LOVE VANDERWAALS
-
-• Rate 5 stars
-• Share with friends
-• Contribute on GitHub
-• Suggest wallpaper sources
-
----
-
 Made with ❤️ by Confused Coconut / Avinas
-
-Powered by TensorFlow Lite & Jetpack Compose
-
-#wallpaper #AI #machinelearning #privacy #opensource #MaterialYou

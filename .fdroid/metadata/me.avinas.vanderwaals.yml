@@ -16,20 +16,47 @@ Summary: Wallpapers on autopilot. Learns what you love. Fresh matches automatica
 Description: |
   🎨 WALLPAPERS THAT LEARN YOUR AESTHETIC
 
-  Vanderwaals uses on-device AI to learn your unique style and automatically 
-  deliver wallpapers you'll love. No endless scrolling, no manual browsing—just 
-  fresh wallpapers that match your vibe.
+  Vanderwaals uses on-device AI to learn your unique style and deliver wallpapers you'll love. No endless scrolling—just fresh wallpapers that match your vibe.
 
-  KEY FEATURES:
-  • On-device AI personalization using MobileNetV3 neural network
-  • Auto Mode & Personalize Mode for flexible discovery
-  • 100% offline - all machine learning runs locally
-  • Zero cloud analytics or tracking
-  • Material 3 design with dynamic colors (Android 12+)
-  • Smart auto-change: unlock, hourly, daily, or manual
-  • Privacy-first architecture - your data never leaves your phone
-  • Material Design 3 compliance
-  • Thousands of curated wallpapers from GitHub & Bing
+  ✨ HOW IT WORKS
+
+  • Auto Mode: Discover wallpapers, AI learns from your feedback
+  • Personalize Mode: Upload your favorite for instant matches
+  • Auto-change triggers: Every unlock, hourly, daily, or manual
+  • Apply to lock screen, home screen, or both
+
+  🤖 INTELLIGENT PERSONALIZATION
+
+  Machine learning analyzes your aesthetic through:
+  • Deep visual features (artistic style & mood via MobileNetV3)
+  • Color matching (LAB color space for accurate palettes)
+  • Category learning (minimal, nature, abstract, dark themes, etc.)
+
+  📚 MASSIVE CURATED LIBRARY
+
+  Thousands of high-quality wallpapers from:
+  • GitHub: Aesthetic designs, anime, color schemes
+  • Bing: Professional UHD photography & landscapes
+  • Weekly auto-updates with fresh content
+
+  🔒 PRIVACY YOU CAN TRUST
+
+  ✓ 100% Offline AI: All ML runs on your device
+  ✓ Zero Analytics: No Firebase, Google Analytics, or tracking
+  ✓ No Data Collection: Your preferences never leave your phone
+  ✓ Open Source (AGPL-3.0): Full code transparency
+
+  🎨 BEAUTIFUL MATERIAL 3 DESIGN
+
+  • Modern interface with latest Material Design 3
+  • Dynamic colors (Android 12+): App adapts to your wallpaper
+  • Dark theme: AMOLED-optimized with smooth animations
+
+  ⚙️ REQUIREMENTS
+
+  • Android 12.0+
+  • ~50MB storage
+  • Internet for initial sync (then works offline)
 
 # License Information
 License: AGPL-3.0-or-later
