@@ -472,7 +472,7 @@ For the community, Vanderwaals is licensed under **AGPL-3.0** (GNU Affero Genera
 
 ```
 Vanderwaals - AI-Powered Wallpaper App
-Copyright (C) 2024-2025 Avinash Roy
+Copyright (C) 2024-2025 Avinash/Confused Coconut
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published by
@@ -547,7 +547,7 @@ This multi-layered protection strategy ensures:
 | Commercial/proprietary | Commercial (paid) | No |
 | Rebranding | Commercial (paid) + Trademark permission | No |
 
-📧 **Questions?** Contact: avinaxh.work@gmail.com
+📧 **Questions?** Contact: hi@avinas.me
 
 ---
 
@@ -594,7 +594,7 @@ If you find Vanderwaals helpful:
 ---
 
 <div align="center">
-    <p><strong>Made with ❤️ by Avinas Roy</strong></p>
+    <p><strong>Made with ❤️ by Avinas/ Confused Coconut</strong></p>
     <p>
         <a href="https://github.com/avinaxhroy">GitHub</a> •
         <a href="https://github.com/avinaxhroy/Vanderwaals/releases">Releases</a> •
