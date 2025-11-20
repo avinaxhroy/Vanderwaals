@@ -108,8 +108,13 @@ Upload one favorite wallpaper and instantly get 100+ similar matches. The algori
 
 ## 📥 Download
 <div align="center">
-[<img src="https://raw.githubusercontent.com/Kunzisoft/Github-badge/main/get-it-on-github.png" alt="Download from GitHub" height="80">](https://github.com/avinaxhroy/Vanderwaals/releases)
+  <a href="https://github.com/avinaxhroy/Vanderwaals/releases">
+    <img src="https://raw.githubusercontent.com/Kunzisoft/Github-badge/main/get-it-on-github.png"
+         alt="Download from GitHub"
+         height="80">
+  </a>
 </div>
+
 ### Requirements
 - **Android 12.0 (API 31)** or higher
 - **~50MB** storage space (app + cache)
