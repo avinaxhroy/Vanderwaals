@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 import me.avinas.vanderwaals.data.entity.WallpaperMetadata
+import me.avinas.vanderwaals.data.entity.WallpaperSummary
 
 /**
  * Room DAO for accessing wallpaper metadata from the local database.
@@ -86,6 +87,27 @@ interface WallpaperMetadataDao {
      */
     @Query("SELECT * FROM wallpaper_metadata")
     suspend fun getAllOnce(): List<WallpaperMetadata>
+
+    /**
+     * Retrieves all wallpaper summaries as a reactive Flow.
+     *
+     * Optimized query that excludes the large embedding array.
+     * Use this for UI lists to reduce memory usage.
+     *
+     * @return Flow emitting list of wallpaper summaries
+     */
+    @Query("SELECT id, url, thumbnailUrl, source, category, colors, brightness, contrast, resolution, attribution FROM wallpaper_metadata")
+    fun getAllSummaries(): Flow<List<WallpaperSummary>>
+
+    /**
+     * Retrieves all wallpaper summaries as a one-shot suspend function.
+     *
+     * Optimized query that excludes the large embedding array.
+     *
+     * @return List of wallpaper summaries
+     */
+    @Query("SELECT id, url, thumbnailUrl, source, category, colors, brightness, contrast, resolution, attribution FROM wallpaper_metadata")
+    suspend fun getAllSummariesOnce(): List<WallpaperSummary>
     
     /**
      * Retrieves wallpapers filtered by category as a reactive Flow.

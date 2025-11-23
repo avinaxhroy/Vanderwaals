@@ -24,9 +24,40 @@ import android.view.WindowMetrics
  * @param context Application context
  * @return Size with width and height in pixels
  */
+private var isTabletCached: Boolean? = null
+
+/**
+ * Check if the device is a tablet.
+ * Result is cached to avoid repeated resource checks.
+ */
+fun isTablet(context: Context): Boolean {
+    if (isTabletCached == null) {
+        val smallestScreenWidthDp = context.resources.configuration.smallestScreenWidthDp
+        isTabletCached = smallestScreenWidthDp >= 600
+    }
+    return isTabletCached!!
+}
+
+/**
+ * Get device screen size with orientation consideration.
+ * 
+ * Returns actual screen dimensions adjusted for portrait/landscape.
+ * 
+ * @param context Application context
+ * @return Size with width and height in pixels
+ */
 fun getDeviceScreenSize(context: Context): Size {
-    val orientation = context.resources.configuration.orientation
     val size = getScreenSize(context)
+    val isTabletDevice = isTablet(context)
+    
+    // For phones, always assume portrait orientation for wallpapers
+    // This prevents issues where background workers run while phone is in landscape
+    // but the wallpaper should still be generated for portrait launcher.
+    if (!isTabletDevice) {
+         return Size(minOf(size.width, size.height), maxOf(size.width, size.height))
+    }
+
+    val orientation = context.resources.configuration.orientation
     return if (orientation == Configuration.ORIENTATION_PORTRAIT) {
         Size(minOf(size.width, size.height), maxOf(size.width, size.height))
     } else {

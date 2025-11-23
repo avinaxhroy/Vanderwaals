@@ -76,6 +76,13 @@ class WallpaperRepositoryImpl @Inject constructor(
     override fun getAllWallpapers(): Flow<List<WallpaperMetadata>> {
         return wallpaperMetadataDao.getAll()
     }
+
+    override fun getAllWallpaperSummaries(): Flow<List<WallpaperMetadata>> {
+        return wallpaperMetadataDao.getAllSummaries()
+            .map { summaries ->
+                summaries.map { it.toWallpaperMetadata() }
+            }
+    }
     
     override fun getDownloadedWallpapers(): Flow<List<WallpaperMetadata>> {
         // Combine wallpaper metadata with download queue status

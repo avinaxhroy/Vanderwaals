@@ -1,0 +1,18 @@
+# Critical startup path
+Lme/avinas/vanderwaals/VanderwaalsApplication;
+Lme/avinas/vanderwaals/feature/wallpaper/presentation/MainActivity;
+Lme/avinas/vanderwaals/ui/main/MainViewModel;
+Lme/avinas/vanderwaals/data/repository/WallpaperRepositoryImpl;
+Lme/avinas/vanderwaals/data/repository/PreferenceRepositoryImpl;
+
+# Worker classes
+Lme/avinas/vanderwaals/worker/WallpaperChangeWorker;
+Lme/avinas/vanderwaals/worker/WorkScheduler;
+
+# Core utilities
+Lme/avinas/vanderwaals/core/SmartCrop;
+Lme/avinas/vanderwaals/core/LiveWallpaperDetector;
+
+# Compose critical path
+Landroidx/compose/runtime/Composer;
+Landroidx/compose/ui/node/LayoutNode;

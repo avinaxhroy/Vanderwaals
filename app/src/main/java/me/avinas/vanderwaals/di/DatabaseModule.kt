@@ -105,10 +105,6 @@ object DatabaseModule {
         )
         .addTypeConverter(converters)
         .addMigrations(*VanderwaalsDatabase.MIGRATIONS)
-        // NOTE: fallbackToDestructiveMigration() is appropriate for version 1.x development
-        // Remove this line when version 2+ requires data preservation across updates
-        // and add proper migrations to VanderwaalsDatabase.MIGRATIONS array
-        .fallbackToDestructiveMigration(dropAllTables = true)
         // CRITICAL: Enable multi-instance invalidation for Workers
         // Workers run in separate processes and need to see main app's database updates
         .enableMultiInstanceInvalidation()

@@ -3,6 +3,7 @@ package me.avinas.vanderwaals.ui.onboarding
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -16,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -31,6 +33,7 @@ import me.avinas.vanderwaals.ui.theme.animations.pressAnimation
 import me.avinas.vanderwaals.worker.ChangeInterval
 import me.avinas.vanderwaals.worker.WorkScheduler
 import java.time.LocalTime
+import me.avinas.vanderwaals.ui.theme.components.GlassCard
 
 /**
  * Application Settings Screen - Final screen in onboarding flow.
@@ -146,7 +149,7 @@ fun ApplicationSettingsScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(8.dp),
-                                    color = me.avinas.vanderwaals.ui.theme.VanderwaalsTan,
+                                    color = MaterialTheme.colorScheme.primary,
                                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
                                     strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
                                 )
@@ -164,7 +167,7 @@ fun ApplicationSettingsScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(8.dp),
-                                    color = me.avinas.vanderwaals.ui.theme.VanderwaalsTan,
+                                    color = MaterialTheme.colorScheme.primary,
                                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
                                     strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
                                 )
@@ -176,7 +179,7 @@ fun ApplicationSettingsScreen(
                             onClick = { viewModel.startUsing(selectedMode) },
                             enabled = startState !is StartState.Starting,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = me.avinas.vanderwaals.ui.theme.VanderwaalsTan
+                                containerColor = MaterialTheme.colorScheme.primary
                             ),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier
@@ -211,21 +214,21 @@ fun ApplicationSettingsScreen(
             val secondaryColor = MaterialTheme.colorScheme.secondary
             val tertiaryColor = MaterialTheme.colorScheme.tertiary
             
-            Canvas(modifier = Modifier.fillMaxSize()) {
+            Canvas(modifier = Modifier.fillMaxSize().blur(60.dp)) {
                 drawCircle(
-                    color = primaryColor.copy(alpha = 0.08f),
+                    color = primaryColor.copy(alpha = 0.3f),
                     center = Offset(size.width * 0.1f, size.height * 0.2f),
-                    radius = size.minDimension * 0.3f
+                    radius = size.minDimension * 0.5f
                 )
                 drawCircle(
-                    color = secondaryColor.copy(alpha = 0.08f),
+                    color = secondaryColor.copy(alpha = 0.3f),
                     center = Offset(size.width * 0.9f, size.height * 0.5f),
-                    radius = size.minDimension * 0.4f
+                    radius = size.minDimension * 0.6f
                 )
                 drawCircle(
-                    color = tertiaryColor.copy(alpha = 0.08f),
+                    color = tertiaryColor.copy(alpha = 0.3f),
                     center = Offset(size.width * 0.2f, size.height * 0.8f),
-                    radius = size.minDimension * 0.35f
+                    radius = size.minDimension * 0.5f
                 )
             }
 
@@ -379,6 +382,9 @@ fun ApplicationSettingsScreen(
  * @param description Section description
  * @param content Section content
  */
+
+// ... (imports remain the same)
+
 @Composable
 private fun SettingsSection(
     title: String,
@@ -407,28 +413,11 @@ private fun SettingsSection(
             )
         }
         
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-            ),
-            border = BorderStroke(
-                width = 1.dp,
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.02f)
-                    )
-                )
-            ),
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier.fillMaxWidth()
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(16.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                content = content
-            )
+            content()
         }
     }
 }

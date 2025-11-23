@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 6,
-    "identityHash": "383028b56bb38eba0127437caf89c67f",
+    "identityHash": "5d9b384c347d6815ef5336851d85b69b",
     "entities": [
       {
         "tableName": "wallpaper_metadata",
@@ -358,7 +358,18 @@
           "columnNames": [
             "category"
           ]
-        }
+        },
+        "indices": [
+          {
+            "name": "index_category_preferences_lastShown",
+            "unique": false,
+            "columnNames": [
+              "lastShown"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_category_preferences_lastShown` ON `${TABLE_NAME}` (`lastShown`)"
+          }
+        ]
       },
       {
         "tableName": "color_preferences",
@@ -400,7 +411,18 @@
           "columnNames": [
             "colorHex"
           ]
-        }
+        },
+        "indices": [
+          {
+            "name": "index_color_preferences_lastShown",
+            "unique": false,
+            "columnNames": [
+              "lastShown"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_color_preferences_lastShown` ON `${TABLE_NAME}` (`lastShown`)"
+          }
+        ]
       },
       {
         "tableName": "composition_preferences",
@@ -489,7 +511,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '383028b56bb38eba0127437caf89c67f')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5d9b384c347d6815ef5336851d85b69b')"
     ]
   }
 }

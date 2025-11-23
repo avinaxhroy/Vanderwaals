@@ -33,6 +33,7 @@ class SettingsDataStore @Inject constructor(
         private val BING_ENABLED = booleanPreferencesKey("bing_enabled")
         private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         private val LAST_SYNC_TIMESTAMP = androidx.datastore.preferences.core.longPreferencesKey("last_sync_timestamp")
+        private val THEME_MODE = stringPreferencesKey("theme_mode")
     }
     
     val settings: Flow<Settings> = context.dataStore.data
@@ -52,7 +53,8 @@ class SettingsDataStore @Inject constructor(
                 githubEnabled = prefs[GITHUB_ENABLED] ?: true,
                 bingEnabled = prefs[BING_ENABLED] ?: false,  // Disabled by default, only enabled in auto mode
                 onboardingCompleted = prefs[ONBOARDING_COMPLETED] ?: false,
-                lastSyncTimestamp = prefs[LAST_SYNC_TIMESTAMP] ?: 0L
+                lastSyncTimestamp = prefs[LAST_SYNC_TIMESTAMP] ?: 0L,
+                themeMode = prefs[THEME_MODE] ?: "light"
             )
         }
     
@@ -87,6 +89,10 @@ class SettingsDataStore @Inject constructor(
     suspend fun updateLastSyncTimestamp(timestamp: Long) {
         context.dataStore.edit { it[LAST_SYNC_TIMESTAMP] = timestamp }
     }
+    
+    suspend fun updateThemeMode(themeMode: String) {
+        context.dataStore.edit { it[THEME_MODE] = themeMode }
+    }
 }
 
 data class Settings(
@@ -97,5 +103,6 @@ data class Settings(
     val githubEnabled: Boolean,
     val bingEnabled: Boolean,
     val onboardingCompleted: Boolean,
-    val lastSyncTimestamp: Long
+    val lastSyncTimestamp: Long,
+    val themeMode: String
 )

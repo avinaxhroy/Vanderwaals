@@ -41,6 +41,16 @@ interface WallpaperRepository {
      * @return Flow<List<WallpaperMetadata>> emitting all wallpapers from catalog
      */
     fun getAllWallpapers(): Flow<List<WallpaperMetadata>>
+
+    /**
+     * Retrieves all wallpapers as lightweight summaries (without embeddings).
+     *
+     * Optimized for UI display to reduce memory usage.
+     * The returned WallpaperMetadata objects will have empty embedding arrays.
+     *
+     * @return Flow emitting list of all wallpapers (summarized)
+     */
+    fun getAllWallpaperSummaries(): Flow<List<WallpaperMetadata>>
     
     /**
      * Retrieves only downloaded wallpapers that are ready for display.

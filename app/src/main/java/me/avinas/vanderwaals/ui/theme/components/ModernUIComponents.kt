@@ -15,8 +15,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -71,7 +73,7 @@ fun GradientButton(
             )
             .clip(shape)
             .background(if (enabled) gradient else Brush.horizontalGradient(
-                colors = listOf(SurfaceElevated, SurfaceElevated)
+                colors = listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surfaceVariant)
             ))
             .clickable(
                 onClick = onClick,
@@ -100,7 +102,7 @@ fun GradientButton(
             Text(
                 text = text,
                 style = textStyle,
-                color = if (enabled) Color.White else TextDisabledDark,
+                color = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
                 fontWeight = FontWeight.SemiBold
             )
         }
@@ -109,48 +111,124 @@ fun GradientButton(
 
 // ===== GLASS CARD =====
 
+// ===== GLASS CARD =====
+
 /**
- * Modern glassmorphism card with blur effect
- * 
+ * Modern glassmorphism card with premium Apple-style aesthetic
+ *
  * Features:
- * - Translucent background
- * - Subtle border
- * - Smooth shadows
- * - Flexible content
+ * - High-quality translucent background
+ * - Subtle white border with gradient
+ * - Soft shadow
+ * - Noise texture simulation (via gradient)
  */
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
     shape: Shape = PremiumCardShape,
-    backgroundColor: Color = SurfaceGlass,
-    borderColor: Color = BorderHighlight,
-    borderWidth: Dp = 1.dp,
-    elevation: Dp = 4.dp,
+    elevation: Dp = 0.dp, // Glass usually doesn't have high elevation, but shadow is important
     contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val containerColor = if (isDark) SurfaceGlass else SurfaceGlassLight
+    val borderColor = if (isDark) SurfaceGlassHighlight else SurfaceGlassHighlightLight
+    
+    Box(
         modifier = modifier
             .shadow(
-                elevation = elevation,
+                elevation = 16.dp, // Soft, large shadow
                 shape = shape,
-                ambientColor = Color.Black.copy(alpha = 0.2f)
+                ambientColor = if (isDark) Color.Black.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.05f),
+                spotColor = if (isDark) Color.Black.copy(alpha = 0.4f) else Color.Black.copy(alpha = 0.1f)
             )
+            .clip(shape)
+            .background(containerColor)
             .border(
-                width = borderWidth,
-                color = borderColor,
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        borderColor.copy(alpha = 0.5f), // Top is brighter
+                        borderColor.copy(alpha = 0.1f)  // Bottom is subtle
+                    )
+                ),
                 shape = shape
-            ),
-        shape = shape,
-        colors = CardDefaults.cardColors(
-            containerColor = backgroundColor
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = elevation
-        )
+            )
     ) {
+        // Subtle noise/gradient overlay for texture
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = if (isDark) 0.05f else 0.4f),
+                            Color.Transparent
+                        ),
+                        start = Offset(0f, 0f),
+                        end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                    )
+                )
+        )
+        
         Column(
             modifier = Modifier.padding(contentPadding),
+            content = content
+        )
+    }
+}
+
+/**
+ * Glassmorphism Sheet for Bottom Sheets / Overlays
+ */
+@Composable
+fun GlassSheet(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val containerColor = if (isDark) SurfaceGlass else SurfaceGlassLight
+    val borderColor = if (isDark) SurfaceGlassHighlight else SurfaceGlassHighlightLight
+    val shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+    
+    Box(
+        modifier = modifier
+            .shadow(
+                elevation = 24.dp,
+                shape = shape,
+                ambientColor = Color.Black.copy(alpha = 0.2f),
+                spotColor = Color.Black.copy(alpha = 0.4f)
+            )
+            .clip(shape)
+            .background(containerColor)
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        borderColor.copy(alpha = 0.6f),
+                        borderColor.copy(alpha = 0.05f)
+                    )
+                ),
+                shape = shape
+            )
+    ) {
+        // Reflection gradient
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = if (isDark) 0.08f else 0.5f),
+                            Color.Transparent
+                        ),
+                        endY = 200f // Only top part has reflection
+                    )
+                )
+        )
+        
+        Column(
+            modifier = Modifier.padding(24.dp),
             content = content
         )
     }
@@ -166,7 +244,7 @@ fun PremiumCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     shape: Shape = PremiumCardShape,
-    backgroundColor: Color = SurfaceElevated,
+    backgroundColor: Color = MaterialTheme.colorScheme.surfaceVariant,
     contentPadding: PaddingValues = PaddingValues(16.dp),
     elevation: Dp = 8.dp,
     content: @Composable ColumnScope.() -> Unit
@@ -215,7 +293,7 @@ fun OutlinedGlowCard(
     onClick: (() -> Unit)? = null,
     shape: Shape = PremiumCardShape,
     borderColor: Color = BorderGlow,
-    backgroundColor: Color = SurfaceDark,
+    backgroundColor: Color = MaterialTheme.colorScheme.surface,
     contentPadding: PaddingValues = PaddingValues(16.dp),
     glowOnHover: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
@@ -266,8 +344,9 @@ fun ModernChip(
 ) {
     val backgroundColor = when {
         gradient && selected -> GradientPrimary
-        selected -> Brush.horizontalGradient(listOf(SurfaceHighlight, SurfaceHighlight))
-        else -> Brush.horizontalGradient(listOf(SurfaceElevated, SurfaceElevated))
+        gradient && selected -> GradientPrimary
+        selected -> Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.surfaceContainerHighest, MaterialTheme.colorScheme.surfaceContainerHighest))
+        else -> Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surfaceVariant))
     }
     
     val interactionSource = remember { MutableInteractionSource() }
@@ -300,7 +379,7 @@ fun ModernChip(
             Text(
                 text = text,
                 style = MaterialTheme.typography.labelMedium,
-                color = if (selected) TextPrimaryDark else TextSecondaryDark,
+                color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
             )
         }
@@ -349,7 +428,7 @@ fun SectionHeader(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
-                color = TextPrimaryDark,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold
             )
             subtitle?.let {
@@ -357,7 +436,7 @@ fun SectionHeader(
                 Text(
                     text = it,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondaryDark
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -378,7 +457,7 @@ fun ModernDivider(
     modifier: Modifier = Modifier,
     thickness: Dp = 1.dp,
     gradient: Boolean = false,
-    color: Color = DividerDark
+    color: Color = MaterialTheme.colorScheme.outlineVariant
 ) {
     if (gradient) {
         Box(

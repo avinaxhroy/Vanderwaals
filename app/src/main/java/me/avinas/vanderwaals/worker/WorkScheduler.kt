@@ -159,6 +159,7 @@ class WorkScheduler @Inject constructor(
     private fun scheduleCleanup() {
         val constraints = Constraints.Builder()
             .setRequiresBatteryNotLow(true)
+            .setRequiresDeviceIdle(true)
             .build()
         
         val cleanupWork = PeriodicWorkRequestBuilder<CleanupWorker>(

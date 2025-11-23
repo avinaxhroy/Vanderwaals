@@ -46,13 +46,14 @@ val Pink40 = Color(0xFFDB2777)
 val Pink20 = Color(0xFFBE185D)
 
 // === DARK THEME BACKGROUND HIERARCHY - OLED Optimized ===
-val BackgroundDark = Color(0xFF0A0A0F) // Deep dark background - Pure black with subtle blue tint
-val SurfaceDark = Color(0xFF16161F) // Primary surface
-val SurfaceElevated = Color(0xFF1E1E2D) // Elevated surface (cards, dialogs)
-val SurfaceHighlight = Color(0xFF2A2A3E) // Highest elevation
-val SurfaceTransparent = Color(0x1Aa8a095) // Transparent tan tint
-val SurfaceGlass = Color(0x4D16161F) // Glassmorphism effect (30% opacity)
-val SurfaceGlassHighlight = Color(0x661E1E2D) // Glassmorphism highlight (40% opacity)
+// === DARK THEME BACKGROUND HIERARCHY - OLED Optimized ===
+val BackgroundDark = Color(0xFF000000) // Pure black for OLED
+val SurfaceDark = Color(0xFF1C1C1E) // Apple's dark gray surface
+val SurfaceElevated = Color(0xFF2C2C2E) // Elevated surface
+val SurfaceHighlight = Color(0xFF3A3A3C) // Highest elevation
+val SurfaceTransparent = Color(0x00000000) // Fully transparent
+val SurfaceGlass = Color(0x4D1C1C1E) // Glassmorphism (30% opacity dark gray) - Apple Style
+val SurfaceGlassHighlight = Color(0x1AFFFFFF) // Highlight for glass edges
 
 // === TEXT COLORS - Enhanced Contrast ===
 val TextPrimaryDark = Color(0xFFF5F5F7) // High emphasis text - Near white
@@ -128,3 +129,44 @@ val BackgroundGradientTan = Brush.verticalGradient(
 val GlowTan = Color(0x4Da8a095) // Tan glow (30% opacity)
 val GlowAccent = Color(0x4DFF6B9D) // Accent glow (30% opacity)
 val ShadowColor = Color(0x66000000) // Shadow color (40% black)
+
+// === LIGHT THEME BACKGROUND HIERARCHY - Light ===
+val BackgroundLight = Color(0xFFF2F2F7) // Apple's system gray 6
+val SurfaceLight = Color(0xFFFFFFFF) // Pure white surface
+val SurfaceElevatedLight = Color(0xFFFFFFFF) // Elevated surface
+val SurfaceHighlightLight = Color(0xFFFFFFFF) // Highlighted surface
+val SurfaceTransparentLight = Color(0x00000000) // Fully transparent
+val SurfaceGlassLight = Color(0x66FFFFFF) // Glassmorphism (40% opacity white) - Apple Style
+val SurfaceGlassHighlightLight = Color(0x40FFFFFF) // Highlight for glass edges
+
+// === TEXT COLORS - Light ===
+val TextPrimaryLight = Color(0xFF1C1917) // High emphasis - Near black
+val TextSecondaryLight = Color(0xFF44403C) // Medium emphasis - Dark grey/brown
+val TextTertiaryLight = Color(0xFF78716C) // Low emphasis - Grey/brown
+val TextDisabledLight = Color(0xFFA8A29E) // Disabled state
+
+// === BORDER & DIVIDER COLORS - Light ===
+val BorderLight = Color(0xFFE7E5E4) // Subtle borders
+val BorderHighlightLight = Color(0xFFD6D3D1) // More prominent borders
+val BorderGlassLight = Color(0x40FFFFFF) // Glass border (25% white) for light mode
+val DividerLight = Color(0xFFF5F5F4) // Dividers
+
+// === STATE COLORS - Light ===
+val ErrorColorLight = Color(0xFFDC2626) // Red
+val SuccessColorLight = Color(0xFF059669) // Green
+val WarningColorLight = Color(0xFFD97706) // Amber
+val InfoColorLight = Color(0xFF2563EB) // Blue
+
+// === OVERLAY COLORS - Light ===
+val ScrimColorLight = Color(0x99FFFFFF) // Modal backdrop (60% white)
+
+// === GRADIENTS - Light Mode ===
+val GradientPrimaryLight = Brush.horizontalGradient(
+    colors = listOf(VanderwaalsTanDark, VanderwaalsTan)
+)
+
+val GradientVerticalLight = Brush.verticalGradient(
+    colors = listOf(VanderwaalsTanDark, VanderwaalsTan)
+)
+
+

@@ -6,11 +6,14 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.blur
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Palette
@@ -25,6 +28,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -32,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import me.avinas.vanderwaals.ui.theme.animations.bounceOnAppear
 import me.avinas.vanderwaals.ui.theme.animations.pressAnimation
+import me.avinas.vanderwaals.ui.theme.components.GlassCard
 
 /**
  * Mode Selection Screen - First screen in onboarding flow.
@@ -84,21 +89,21 @@ fun ModeSelectionScreen(
             val secondaryColor = MaterialTheme.colorScheme.secondary
             val tertiaryColor = MaterialTheme.colorScheme.tertiary
             
-            Canvas(modifier = Modifier.fillMaxSize()) {
+            Canvas(modifier = Modifier.fillMaxSize().blur(60.dp)) {
                 drawCircle(
-                    color = primaryColor.copy(alpha = 0.08f),
+                    color = primaryColor.copy(alpha = 0.3f),
                     center = Offset(size.width * 0.85f, size.height * 0.15f),
+                    radius = size.minDimension * 0.5f
+                )
+                drawCircle(
+                    color = secondaryColor.copy(alpha = 0.3f),
+                    center = Offset(size.width * 0.15f, size.height * 0.5f),
                     radius = size.minDimension * 0.4f
                 )
                 drawCircle(
-                    color = secondaryColor.copy(alpha = 0.08f),
-                    center = Offset(size.width * 0.15f, size.height * 0.5f),
-                    radius = size.minDimension * 0.3f
-                )
-                drawCircle(
-                    color = tertiaryColor.copy(alpha = 0.08f),
+                    color = tertiaryColor.copy(alpha = 0.3f),
                     center = Offset(size.width * 0.85f, size.height * 0.85f),
-                    radius = size.minDimension * 0.35f
+                    radius = size.minDimension * 0.5f
                 )
             }
 
@@ -113,8 +118,16 @@ fun ModeSelectionScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Logo at top with animation - clear background, larger size
+                // Determine logo based on background luminance (low luminance = dark background = white logo)
+                val isDarkBackground = androidx.compose.material3.MaterialTheme.colorScheme.background.luminance() < 0.5f
+                val logoResId = if (isDarkBackground) {
+                    me.avinas.vanderwaals.R.drawable.vanderwaals_logo
+                } else {
+                    me.avinas.vanderwaals.R.drawable.vanderwaals_logo_black
+                }
+                
                 Image(
-                    painter = painterResource(id = me.avinas.vanderwaals.R.drawable.vanderwaals_logo),
+                    painter = painterResource(id = logoResId),
                     contentDescription = "Vanderwaals Logo",
                     modifier = Modifier
                         .size(160.dp)
@@ -144,140 +157,102 @@ fun ModeSelectionScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 // Auto Mode Card with Glassmorphism
-                Card(
-                    onClick = {
-                        viewModel.selectMode(OnboardingMode.AUTO)
-                        onAutoModeSelected()
-                    },
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-                    ),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.02f)
-                            )
-                        )
-                    ),
-                    shape = RoundedCornerShape(24.dp),
+                GlassCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .bounceOnAppear()
-                        .pressAnimation()
+                        .clickable { 
+                            viewModel.selectMode(OnboardingMode.AUTO)
+                            onAutoModeSelected()
+                        },
+                    contentPadding = PaddingValues(24.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp)
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(72.dp)
-                                    .clip(CircleShape)
-                                    .background(me.avinas.vanderwaals.ui.theme.VanderwaalsTan.copy(alpha = 0.2f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(36.dp),
-                                    tint = me.avinas.vanderwaals.ui.theme.VanderwaalsTan
-                                )
-                            }
-                            
-                            Spacer(modifier = Modifier.height(16.dp))
-                            
-                            Text(
-                                text = "Auto Mode",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                            
-                            Spacer(modifier = Modifier.height(8.dp))
-                            
-                            Text(
-                                text = "Let the algorithm pick great wallpapers and learn your style",
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                modifier = Modifier.size(36.dp),
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Text(
+                            text = "Auto Mode",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Text(
+                            text = "Let the algorithm pick great wallpapers and learn your style",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
                 
                 // Personalize Mode Card with Glassmorphism
-                Card(
-                    onClick = {
-                        viewModel.selectMode(OnboardingMode.PERSONALIZE)
-                        onPersonalizeModeSelected()
-                    },
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-                    ),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.02f)
-                            )
-                        )
-                    ),
-                    shape = RoundedCornerShape(24.dp),
+                GlassCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .bounceOnAppear()
-                        .pressAnimation()
+                        .clickable { 
+                            viewModel.selectMode(OnboardingMode.PERSONALIZE)
+                            onPersonalizeModeSelected()
+                        },
+                    contentPadding = PaddingValues(24.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp)
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(72.dp)
-                                    .clip(CircleShape)
-                                    .background(me.avinas.vanderwaals.ui.theme.VanderwaalsAccent.copy(alpha = 0.2f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Palette,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(36.dp),
-                                    tint = me.avinas.vanderwaals.ui.theme.VanderwaalsAccent
-                                )
-                            }
-                            
-                            Spacer(modifier = Modifier.height(16.dp))
-                            
-                            Text(
-                                text = "Personalize",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                            
-                            Spacer(modifier = Modifier.height(8.dp))
-                            
-                            Text(
-                                text = "Upload your favorite wallpaper to find similar matches instantly",
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            Icon(
+                                imageVector = Icons.Default.Palette,
+                                contentDescription = null,
+                                modifier = Modifier.size(36.dp),
+                                tint = MaterialTheme.colorScheme.tertiary
                             )
                         }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Text(
+                            text = "Personalize",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Text(
+                            text = "Upload your favorite wallpaper to find similar matches instantly",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }

@@ -10,73 +10,73 @@
     <color name="vanderwaals_accent">#FF6B9D</color>
     <color name="vanderwaals_accent_light">#FF8FB5</color>
     
-    <!-- === BACKGROUND HIERARCHY - OLED Optimized === -->
-    <color name="background_dark">#0A0A0F</color>
-    <color name="surface_dark">#16161F</color>
-    <color name="surface_elevated">#1E1E2D</color>
-    <color name="surface_highlight">#2A2A3E</color>
-    <color name="surface_glass">#4D16161F</color>
-    <color name="surface_glass_highlight">#661E1E2D</color>
+    <!-- === BACKGROUND HIERARCHY - Light Mode (Default) === -->
+    <color name="background_dark">#FDFCFB</color>
+    <color name="surface_dark">#FFFFFF</color>
+    <color name="surface_elevated">#F5F2EF</color>
+    <color name="surface_highlight">#EBE8E4</color>
+    <color name="surface_glass">#CCFFFFFF</color>
+    <color name="surface_glass_highlight">#E6FFFFFF</color>
     
-    <!-- === TEXT COLORS - Enhanced Contrast === -->
-    <color name="text_primary_dark">#F5F5F7</color>
-    <color name="text_secondary_dark">#B8B8BD</color>
-    <color name="text_tertiary_dark">#8A8A90</color>
-    <color name="text_disabled_dark">#5A5A60</color>
-    <color name="text_accent">#a8a095</color>
-    <color name="text_link">#60A5FA</color>
+    <!-- === TEXT COLORS - Light Mode === -->
+    <color name="text_primary_dark">#1C1917</color>
+    <color name="text_secondary_dark">#44403C</color>
+    <color name="text_tertiary_dark">#78716C</color>
+    <color name="text_disabled_dark">#A8A29E</color>
+    <color name="text_accent">#8a7d72</color>
+    <color name="text_link">#2563EB</color>
     
-    <!-- === BORDER & DIVIDER COLORS === -->
-    <color name="border_dark">#2A2A3E</color>
-    <color name="border_highlight">#3A3A4E</color>
+    <!-- === BORDER & DIVIDER COLORS - Light Mode === -->
+    <color name="border_dark">#E7E5E4</color>
+    <color name="border_highlight">#D6D3D1</color>
     <color name="border_glow">#a8a095</color>
-    <color name="divider_dark">#1E1E2D</color>
-    <color name="divider_subtle">#1AFFFFFF</color>
+    <color name="divider_dark">#F5F5F4</color>
+    <color name="divider_subtle">#1A000000</color>
     
     <!-- === STATE COLORS - Vibrant & Clear === -->
-    <color name="success_color">#34D399</color>
-    <color name="success_color_dark">#10B981</color>
-    <color name="error_color">#EF4444</color>
-    <color name="error_color_dark">#DC2626</color>
-    <color name="warning_color">#F59E0B</color>
-    <color name="warning_color_dark">#D97706</color>
-    <color name="info_color">#60A5FA</color>
-    <color name="info_color_dark">#3B82F6</color>
+    <color name="success_color">#059669</color>
+    <color name="success_color_dark">#047857</color>
+    <color name="error_color">#DC2626</color>
+    <color name="error_color_dark">#B91C1C</color>
+    <color name="warning_color">#D97706</color>
+    <color name="warning_color_dark">#B45309</color>
+    <color name="info_color">#2563EB</color>
+    <color name="info_color_dark">#1D4ED8</color>
     
     <!-- === INTERACTIVE COLORS === -->
     <color name="feedback_like">#EC4899</color>
-    <color name="feedback_dislike">#60A5FA</color>
-    <color name="feedback_download">#34D399</color>
+    <color name="feedback_dislike">#3B82F6</color>
+    <color name="feedback_download">#059669</color>
     <color name="feedback_share">#A855F7</color>
     
     <!-- === APP ICON COLORS === -->
-    <color name="interactive_hover">#1A8B7FFF</color>
-    <color name="interactive_pressed">#338B7FFF</color>
+    <color name="interactive_hover">#1A8a7d72</color>
+    <color name="interactive_pressed">#338a7d72</color>
     
-    <!-- === OVERLAY COLORS === -->
-    <color name="overlay_dark">#CC000000</color>
-    <color name="overlay_medium">#99000000</color>
-    <color name="overlay_light">#66000000</color>
-    <color name="overlay_subtle">#33000000</color>
-    <color name="scrim_color">#B3000000</color>
-    <color name="ripple_color">#1AFFFFFF</color>
+    <!-- === OVERLAY COLORS - Light Mode === -->
+    <color name="overlay_dark">#66FFFFFF</color>
+    <color name="overlay_medium">#99FFFFFF</color>
+    <color name="overlay_light">#CCFFFFFF</color>
+    <color name="overlay_subtle">#E6FFFFFF</color>
+    <color name="scrim_color">#99FFFFFF</color>
+    <color name="ripple_color">#1A000000</color>
     
-    <!-- === SPECIAL UI ELEMENTS === -->
-    <color name="card_background">#1E1E2D</color>
-    <color name="card_background_elevated">#2A2A3E</color>
-    <color name="card_border">#2A2A3E</color>
-    <color name="card_border_highlight">#3A3A4E</color>
-    <color name="input_background">#16161F</color>
-    <color name="input_border">#3A3A4E</color>
+    <!-- === SPECIAL UI ELEMENTS - Light Mode === -->
+    <color name="card_background">#FFFFFF</color>
+    <color name="card_background_elevated">#F5F2EF</color>
+    <color name="card_border">#E7E5E4</color>
+    <color name="card_border_highlight">#D6D3D1</color>
+    <color name="input_background">#FFFFFF</color>
+    <color name="input_border">#D6D3D1</color>
     <color name="input_border_focused">#a8a095</color>
-    <color name="input_border_error">#EF4444</color>
+    <color name="input_border_error">#DC2626</color>
     
-    <!-- === GLOW & SHADOW EFFECTS === -->
+    <!-- === GLOW & SHADOW EFFECTS - Light Mode === -->
     <color name="glow_tan">#4Da8a095</color>
     <color name="glow_accent">#4DFF6B9D</color>
-    <color name="shadow_color">#66000000</color>
-    <color name="shimmer_color">#2A2A3E</color>
-    <color name="shimmer_highlight">#3A3A4E</color>
+    <color name="shadow_color">#33000000</color>
+    <color name="shimmer_color">#F5F5F4</color>
+    <color name="shimmer_highlight">#E7E5E4</color>
     
     <!-- === STANDARD COLORS === -->
     <color name="black">#FF000000</color>
@@ -89,6 +89,18 @@
     <color name="purple_700">#7165E3</color>
     <color name="teal_200">#34D399</color>
     <color name="teal_700">#10B981</color>
+    
+    <!-- === LIGHT THEME COLORS === -->
+    <color name="background_light">#FDFCFB</color>
+    <color name="surface_light">#FFFFFF</color>
+    <color name="surface_elevated_light">#F5F2EF</color>
+    <color name="surface_highlight_light">#EBE8E4</color>
+    <color name="text_primary_light">#1C1917</color>
+    <color name="text_secondary_light">#44403C</color>
+    <color name="text_tertiary_light">#78716C</color>
+    <color name="border_light">#E7E5E4</color>
+    <color name="border_highlight_light">#D6D3D1</color>
+    <color name="error_color_light">#DC2626</color>
     
     <!-- === SPLASH SCREEN COLORS === -->
     <color name="default_splash_light">#F5F5F7</color>

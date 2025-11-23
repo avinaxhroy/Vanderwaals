@@ -50,6 +50,8 @@ import me.avinas.vanderwaals.R
 import me.avinas.vanderwaals.core.SmartCropTransformation
 import me.avinas.vanderwaals.core.getDeviceScreenSize
 import java.io.File
+import me.avinas.vanderwaals.ui.theme.components.GlassSheet
+import androidx.compose.animation.core.animateDpAsState
 
 /**
  * Compose screen for main wallpaper preview (primary user interface).
@@ -96,15 +98,22 @@ fun MainScreen(
     
     // Get device screen dimensions for SmartCrop
     val context = LocalContext.current
-    val wallpaperManager = remember { WallpaperManager.getInstance(context) }
-    val desiredWidth = wallpaperManager.desiredMinimumWidth
-    val desiredHeight = wallpaperManager.desiredMinimumHeight
-    val fallbackSize = remember { getDeviceScreenSize(context) }
-    val screenWidth = if (desiredWidth > 0) desiredWidth else fallbackSize.width
-    val screenHeight = if (desiredHeight > 0) desiredHeight else fallbackSize.height
+    // CRITICAL: Use getDeviceScreenSize directly to match WallpaperChangeWorker logic
+    // This ensures the preview shows exactly what will be applied (SmartCrop to screen size)
+    // We ignore desiredMinimumWidth because Worker also ignores it to fix cropping issues
+    val screenSize = remember { getDeviceScreenSize(context) }
+    val screenWidth = screenSize.width
+    val screenHeight = screenSize.height
 
     // Haptic feedback
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+    // Animate blur radius for background
+    val blurRadius by animateDpAsState(
+        targetValue = if (showOverlay) 20.dp else 0.dp,
+        animationSpec = tween(durationMillis = 300),
+        label = "background_blur"
+    )
 
     Box(
         modifier = Modifier
@@ -128,98 +137,119 @@ fun MainScreen(
             }
         }
         // Full-screen wallpaper background with crossfade animation
-        Crossfade(
-            targetState = currentWallpaper,
-            animationSpec = tween(durationMillis = 300),
-            label = "wallpaper_transition"
-        ) { wallpaper ->
-            if (wallpaper != null) {
-                // CRITICAL: Load the cropped file created by Worker for pixel-perfect preview matching
-                // File path: cache/wallpapers/{wallpaperId}_cropped.jpg
-                val croppedFile = java.io.File(context.cacheDir, "wallpapers/${wallpaper.id}_cropped.jpg")
-                val imageSource = if (croppedFile.exists()) {
-                    croppedFile.absolutePath  // Load pre-cropped file
-                } else {
-                    wallpaper.url  // Fallback to URL if cropped file doesn't exist yet
-                }
-                
-                GlideImage(
-                    imageModel = { imageSource },
-                    imageOptions = ImageOptions(
-                        contentScale = ContentScale.Crop,
-                        alignment = Alignment.Center
-                    ),
-                    requestOptions = {
-                        // No transformation needed - file is already cropped!
-                        if (croppedFile.exists()) {
-                            RequestOptions()  // Just load the cropped file as-is
-                        } else {
-                            // Fallback: transform the URL (for first load before Worker runs)
-                            // CRITICAL: Remember this transformation to avoid recreation on recomposition
-                            RequestOptions()
-                                .override(com.bumptech.glide.request.target.Target.SIZE_ORIGINAL)
-                                .transform(
-                                    SmartCropTransformation(
-                                        targetWidth = screenWidth,
-                                        targetHeight = screenHeight
-                                    )
-                                )
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                    loading = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.surface)
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.align(Alignment.Center)
-                            )
-                        }
-                    },
-                    failure = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.surface)
-                        ) {
-                            Text(
-                                text = "Failed to load wallpaper",
-                                modifier = Modifier.align(Alignment.Center),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-                )
-            } else {
-                // Placeholder when no wallpaper is set
+        val uiState by viewModel.currentWallpaper.collectAsState()
+        
+        when (val state = uiState) {
+            is MainViewModel.MainUiState.Loading -> {
+                // Show loading indicator or keep previous frame
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.surface)
                 ) {
-                    Column(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+            }
+            is MainViewModel.MainUiState.Success -> {
+                val currentWallpaper = state.wallpaper
+                Crossfade(
+                    targetState = currentWallpaper,
+                    animationSpec = tween(durationMillis = 300),
+                    label = "wallpaper_transition"
+                ) { wallpaper ->
+                    if (wallpaper != null) {
+                        // CRITICAL: Load the cropped file created by Worker for pixel-perfect preview matching
+                        // File path: cache/wallpapers/{wallpaperId}_cropped.jpg
+                        val croppedFile = java.io.File(context.cacheDir, "wallpapers/${wallpaper.id}_cropped.jpg")
+                        val imageSource = if (croppedFile.exists()) {
+                            croppedFile.absolutePath  // Load pre-cropped file
+                        } else {
+                            wallpaper.url  // Fallback to URL if cropped file doesn't exist yet
+                        }
+                        
+                        GlideImage(
+                            imageModel = { imageSource },
+                            imageOptions = ImageOptions(
+                                contentScale = ContentScale.Crop,
+                                alignment = Alignment.Center
+                            ),
+                            requestOptions = {
+                                // No transformation needed - file is already cropped!
+                                if (croppedFile.exists()) {
+                                    RequestOptions()  // Just load the cropped file as-is
+                                } else {
+                                    // Fallback: transform the URL (for first load before Worker runs)
+                                    // CRITICAL: Remember this transformation to avoid recreation on recomposition
+                                    RequestOptions()
+                                        .override(com.bumptech.glide.request.target.Target.SIZE_ORIGINAL)
+                                        .transform(
+                                            SmartCropTransformation(
+                                                targetWidth = screenWidth,
+                                                targetHeight = screenHeight
+                                            )
+                                        )
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .blur(blurRadius), // Apply animated blur here
+                            loading = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.surface)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.align(Alignment.Center)
+                                    )
+                                }
+                            },
+                            failure = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.surface)
+                                ) {
+                                    Text(
+                                        text = "Failed to load wallpaper",
+                                        modifier = Modifier.align(Alignment.Center),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
                         )
-                        Text(
-                            text = "No wallpaper set",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Tap \"Change Now\" to get started",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    } else {
+                        // Placeholder when no wallpaper is set
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surface)
+                        ) {
+                            Column(
+                                modifier = Modifier.align(Alignment.Center),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "No wallpaper set",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Tap \"Change Now\" to get started",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -360,32 +390,11 @@ fun MainScreen(
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             // Glassmorphism Bottom Sheet
-            Box(
+            GlassSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding() // Push up from nav bar
-                    .padding(16.dp)
             ) {
-                // Glass Background Layer
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(
-                            color = Color(0xFF0F0F15).copy(alpha = 0.75f),
-                            shape = RoundedCornerShape(32.dp)
-                        )
-                        .border(
-                            width = 1.dp,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = 0.15f),
-                                    Color.White.copy(alpha = 0.05f)
-                                )
-                            ),
-                            shape = RoundedCornerShape(32.dp)
-                        )
-                ) {}
-
                 // Content Layer
                 Column(
                     modifier = Modifier
@@ -468,7 +477,7 @@ fun MainScreen(
                                 .weight(1f)
                                 .height(56.dp)
                                 .clip(RoundedCornerShape(20.dp))
-                                .background(Color.White.copy(alpha = 0.08f))
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                 .clickable {
                                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                     viewModel.toggleOverlay()
@@ -476,7 +485,7 @@ fun MainScreen(
                                 }
                                 .border(
                                     1.dp,
-                                    Color.White.copy(alpha = 0.1f),
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
                                     RoundedCornerShape(20.dp)
                                 ),
                             contentAlignment = Alignment.Center
@@ -486,13 +495,13 @@ fun MainScreen(
                                     imageVector = Icons.Default.History,
                                     contentDescription = null,
                                     modifier = Modifier.size(20.dp),
-                                    tint = Color.White.copy(alpha = 0.9f)
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "History",
                                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                                    color = Color.White.copy(alpha = 0.9f)
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
                                 )
                             }
                         }
@@ -503,7 +512,7 @@ fun MainScreen(
                                 .weight(1f)
                                 .height(56.dp)
                                 .clip(RoundedCornerShape(20.dp))
-                                .background(Color.White.copy(alpha = 0.08f))
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                 .clickable {
                                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                     viewModel.toggleOverlay()
@@ -511,7 +520,7 @@ fun MainScreen(
                                 }
                                 .border(
                                     1.dp,
-                                    Color.White.copy(alpha = 0.1f),
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
                                     RoundedCornerShape(20.dp)
                                 ),
                             contentAlignment = Alignment.Center
@@ -521,13 +530,13 @@ fun MainScreen(
                                     imageVector = Icons.Default.Settings,
                                     contentDescription = null,
                                     modifier = Modifier.size(20.dp),
-                                    tint = Color.White.copy(alpha = 0.9f)
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "Settings",
                                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                                    color = Color.White.copy(alpha = 0.9f)
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
                                 )
                             }
                         }
@@ -586,7 +595,7 @@ fun MainScreen(
                     }
 
                     // Source attribution
-                    currentWallpaper?.let { wallpaper ->
+                    (currentWallpaper as? MainViewModel.MainUiState.Success)?.wallpaper?.let { wallpaper ->
                         Text(
                             text = "From ${wallpaper.source}",
                             style = MaterialTheme.typography.bodySmall,

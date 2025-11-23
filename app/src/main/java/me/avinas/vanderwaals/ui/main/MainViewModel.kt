@@ -56,22 +56,41 @@ class MainViewModel @Inject constructor(
 ) : ViewModel() {
 
     /**
-     * Current wallpaper metadata being displayed.
-     * Null if no wallpaper has been set yet.
-     * Reactively updates when wallpaper history changes.
+     * UI State for the Main Screen.
      */
-    val currentWallpaper: StateFlow<WallpaperMetadata?> = historyDao.getActiveWallpaperFlow()
-        .combine(wallpaperRepository.getAllWallpapers()) { activeHistory, wallpapers ->
+    sealed interface MainUiState {
+        data object Loading : MainUiState
+        data class Success(val wallpaper: WallpaperMetadata?) : MainUiState
+    }
+
+    /**
+     * Current wallpaper state.
+     * Emits Loading initially, then Success with wallpaper or null.
+     */
+    val currentWallpaper: StateFlow<MainUiState> = historyDao.getActiveWallpaperFlow()
+        // Load wallpapers (summaries only for UI performance)
+        .combine(wallpaperRepository.getAllWallpaperSummaries().distinctUntilChanged()) { activeHistory: WallpaperHistory?, wallpapers: List<WallpaperMetadata> ->
             if (activeHistory != null) {
-                wallpapers.find { it.id == activeHistory.wallpaperId }
+                // CRITICAL FIX: If we have history but no wallpapers yet, it means metadata is still loading.
+                // Don't emit Success(null) yet, wait for metadata.
+                if (wallpapers.isEmpty()) {
+                    MainUiState.Loading
+                } else {
+                    val wallpaper = wallpapers.find { it.id == activeHistory.wallpaperId }
+                    // If wallpaper is still null but list is not empty, it might be deleted or missing.
+                    // In that case, we can emit Success(null) or keep Loading. 
+                    // For now, let's treat it as Success(null) so the UI shows "No wallpaper set" 
+                    // if the specific wallpaper is truly missing from the catalog.
+                    MainUiState.Success(wallpaper)
+                }
             } else {
-                null
+                MainUiState.Success(null)
             }
         }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = null
+            initialValue = MainUiState.Loading
         )
 
     /**
@@ -261,7 +280,8 @@ class MainViewModel @Inject constructor(
     fun likeCurrentWallpaper() {
         viewModelScope.launch {
             try {
-                val wallpaper = currentWallpaper.value
+                val state = currentWallpaper.value
+                val wallpaper = (state as? MainUiState.Success)?.wallpaper
                 if (wallpaper == null) {
                     _errorMessage.value = "No wallpaper to like"
                     return@launch
@@ -313,7 +333,8 @@ class MainViewModel @Inject constructor(
     fun dislikeCurrentWallpaper() {
         viewModelScope.launch {
             try {
-                val wallpaper = currentWallpaper.value
+                val state = currentWallpaper.value
+                val wallpaper = (state as? MainUiState.Success)?.wallpaper
                 if (wallpaper == null) {
                     _errorMessage.value = "No wallpaper to dislike"
                     return@launch

@@ -29,34 +29,89 @@ class MediaSaver @Inject constructor(
      */
     fun saveImageToGallery(file: File, fileName: String): Result<Uri> {
         return try {
-            val contentValues = ContentValues().apply {
-                put(MediaStore.Images.Media.DISPLAY_NAME, "$fileName.jpg")
-                put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/Vanderwaals")
-                    put(MediaStore.Images.Media.IS_PENDING, 1)
-                }
+            if (!file.exists() || file.length() <= 0) {
+                return Result.failure(Exception("Source file is empty or does not exist"))
             }
+            
+            android.util.Log.d("MediaSaver", "Saving image: ${file.absolutePath} (${file.length()} bytes)")
 
-            val resolver = context.contentResolver
-            val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-                ?: return Result.failure(Exception("Failed to create MediaStore entry"))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                saveImageScopedStorage(file, fileName)
+            } else {
+                saveImageLegacy(file, fileName)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MediaSaver", "Error saving image", e)
+            Result.failure(e)
+        }
+    }
 
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.Q)
+    private fun saveImageScopedStorage(file: File, fileName: String): Result<Uri> {
+        val contentValues = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, "$fileName.jpg")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/Vanderwaals")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+            ?: return Result.failure(Exception("Failed to create MediaStore entry"))
+
+        try {
             resolver.openOutputStream(uri)?.use { outputStream ->
                 file.inputStream().use { inputStream ->
                     inputStream.copyTo(outputStream)
                 }
             } ?: return Result.failure(Exception("Failed to open output stream"))
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                contentValues.clear()
-                contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
-                resolver.update(uri, contentValues, null, null)
+            contentValues.clear()
+            contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
+            val rowsUpdated = resolver.update(uri, contentValues, null, null)
+            
+            if (rowsUpdated == 0) {
+                 return Result.failure(Exception("Failed to publish image (update IS_PENDING)"))
             }
 
-            Result.success(uri)
+            return Result.success(uri)
         } catch (e: Exception) {
-            Result.failure(e)
+            // Clean up empty/partial file if possible
+            try {
+                resolver.delete(uri, null, null)
+            } catch (deleteEx: Exception) {
+                // Ignore delete failure
+            }
+            return Result.failure(e)
+        }
+    }
+
+    private fun saveImageLegacy(file: File, fileName: String): Result<Uri> {
+        val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+        val appDir = File(picturesDir, "Vanderwaals")
+        
+        if (!appDir.exists()) {
+            if (!appDir.mkdirs()) {
+                return Result.failure(Exception("Failed to create directory: ${appDir.absolutePath}"))
+            }
+        }
+
+        val targetFile = File(appDir, "$fileName.jpg")
+        
+        try {
+            file.copyTo(targetFile, overwrite = true)
+            
+            // Scan the file so it shows up in Gallery immediately
+            android.media.MediaScannerConnection.scanFile(
+                context,
+                arrayOf(targetFile.absolutePath),
+                arrayOf("image/jpeg"),
+                null
+            )
+            
+            return Result.success(Uri.fromFile(targetFile))
+        } catch (e: Exception) {
+            return Result.failure(e)
         }
     }
 }

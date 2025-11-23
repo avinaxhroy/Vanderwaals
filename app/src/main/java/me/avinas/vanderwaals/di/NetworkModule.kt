@@ -211,8 +211,12 @@ object NetworkModule {
      * 
      * Logs HTTP requests and responses in debug builds only.
      * Level:
-     * - Debug: BODY (full request/response)
+     * - Debug: HEADERS (request/response headers only, no body to prevent OOM)
      * - Release: NONE (no logging for production)
+     * 
+     * Note: Using HEADERS instead of BODY to prevent OutOfMemoryError when downloading
+     * large files (e.g., 65MB manifest). BODY level tries to load entire response into
+     * memory as a String, which can exceed heap limits.
      * 
      * @return Configured logging interceptor
      */
@@ -221,7 +225,7 @@ object NetworkModule {
     fun provideLoggingInterceptor(): HttpLoggingInterceptor {
         return HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) {
-                HttpLoggingInterceptor.Level.BODY
+                HttpLoggingInterceptor.Level.HEADERS
             } else {
                 HttpLoggingInterceptor.Level.NONE
             }

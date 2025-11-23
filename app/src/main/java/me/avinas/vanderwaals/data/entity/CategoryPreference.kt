@@ -1,6 +1,7 @@
 package me.avinas.vanderwaals.data.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -36,7 +37,10 @@ import androidx.room.PrimaryKey
  * @property views Number of times wallpapers from this category were shown
  * @property lastShown Timestamp when category was last shown (milliseconds since epoch)
  */
-@Entity(tableName = "category_preferences")
+@Entity(
+    tableName = "category_preferences",
+    indices = [Index(value = ["lastShown"])]
+)
 data class CategoryPreference(
     @PrimaryKey
     val category: String,

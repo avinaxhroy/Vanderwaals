@@ -9,6 +9,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -24,6 +27,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -140,16 +144,16 @@ fun UploadWallpaperScreen(
             val primaryColor = MaterialTheme.colorScheme.primary
             val secondaryColor = MaterialTheme.colorScheme.secondary
             
-            Canvas(modifier = Modifier.fillMaxSize()) {
+            Canvas(modifier = Modifier.fillMaxSize().blur(80.dp)) {
                 drawCircle(
-                    color = primaryColor.copy(alpha = 0.08f),
+                    color = primaryColor.copy(alpha = 0.2f),
                     center = Offset(size.width * 0.2f, size.height * 0.2f),
-                    radius = size.minDimension * 0.4f
+                    radius = size.minDimension * 0.5f
                 )
                 drawCircle(
-                    color = secondaryColor.copy(alpha = 0.08f),
+                    color = secondaryColor.copy(alpha = 0.2f),
                     center = Offset(size.width * 0.8f, size.height * 0.8f),
-                    radius = size.minDimension * 0.4f
+                    radius = size.minDimension * 0.5f
                 )
             }
 
@@ -186,42 +190,64 @@ fun UploadWallpaperScreen(
                     
                     // Upload Button with Glassmorphism
                     val primaryColor = MaterialTheme.colorScheme.primary
-                    Card(
-                        onClick = {
-                            if (permissionState.status.isGranted) {
-                                imagePickerLauncher.launch("image/*")
-                            } else {
-                                permissionState.launchPermissionRequest()
-                            }
-                        },
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-                        ),
-                        border = BorderStroke(
-                            width = 1.dp,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.02f)
-                                )
-                            )
-                        ),
+                    val isDark = isSystemInDarkTheme()
+                    
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(160.dp)
-                            .drawBehind {
-                                val stroke = Stroke(
-                                    width = 2.dp.toPx(),
-                                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(20f, 20f), 0f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                brush = Brush.linearGradient(
+                                    colors = if (isDark) listOf(
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.15f),
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.05f)
+                                    ) else listOf(
+                                        Color.White.copy(alpha = 0.6f),
+                                        Color.White.copy(alpha = 0.2f)
+                                    ),
+                                    start = Offset(0f, 0f),
+                                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
                                 )
-                                drawRoundRect(
-                                    color = primaryColor.copy(alpha = 0.5f),
-                                    style = stroke,
-                                    cornerRadius = CornerRadius(12.dp.toPx())
-                                )
+                            )
+                            .border(
+                                width = 1.dp,
+                                brush = Brush.linearGradient(
+                                    colors = if (isDark) listOf(
+                                        Color.White.copy(alpha = 0.2f),
+                                        Color.White.copy(alpha = 0.05f)
+                                    ) else listOf(
+                                        Color.White.copy(alpha = 0.8f),
+                                        Color.White.copy(alpha = 0.3f)
+                                    ),
+                                    start = Offset(0f, 0f),
+                                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                                ),
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                            .clickable {
+                                if (permissionState.status.isGranted) {
+                                    imagePickerLauncher.launch("image/*")
+                                } else {
+                                    permissionState.launchPermissionRequest()
+                                }
                             }
-                            .clip(RoundedCornerShape(12.dp))
                     ) {
+                        // Dashed border for "drop zone" feel
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val stroke = Stroke(
+                                width = 2.dp.toPx(),
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(20f, 20f), 0f)
+                            )
+                            drawRoundRect(
+                                color = primaryColor.copy(alpha = 0.3f),
+                                style = stroke,
+                                cornerRadius = CornerRadius(16.dp.toPx()),
+                                topLeft = Offset(8.dp.toPx(), 8.dp.toPx()),
+                                size = size.copy(width = size.width - 16.dp.toPx(), height = size.height - 16.dp.toPx())
+                            )
+                        }
+
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -353,55 +379,70 @@ private fun StyleSampleCard(
     style: WallpaperStyle,
     onClick: () -> Unit
 ) {
-    Card(
-        onClick = onClick,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-        ),
-        border = BorderStroke(
-            width = 1.dp,
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.02f)
-                )
-            )
-        ),
+    val isDark = isSystemInDarkTheme()
+    
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                brush = Brush.linearGradient(
+                    colors = if (isDark) listOf(
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.15f),
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.05f)
+                    ) else listOf(
+                        Color.White.copy(alpha = 0.6f),
+                        Color.White.copy(alpha = 0.2f)
+                    ),
+                    start = Offset(0f, 0f),
+                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                )
+            )
+            .border(
+                width = 1.dp,
+                brush = Brush.linearGradient(
+                    colors = if (isDark) listOf(
+                        Color.White.copy(alpha = 0.2f),
+                        Color.White.copy(alpha = 0.05f)
+                    ) else listOf(
+                        Color.White.copy(alpha = 0.8f),
+                        Color.White.copy(alpha = 0.3f)
+                    ),
+                    start = Offset(0f, 0f),
+                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = style.icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(28.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                Text(
-                    text = style.displayName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                Icon(
+                    imageVector = style.icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Text(
+                text = style.displayName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }

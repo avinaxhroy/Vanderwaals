@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import me.avinas.vanderwaals.data.entity.UserPreferences
 import me.avinas.vanderwaals.data.entity.WallpaperHistory
 import me.avinas.vanderwaals.data.repository.PreferenceRepository
 import me.avinas.vanderwaals.data.repository.WallpaperRepository
@@ -51,8 +52,9 @@ class AnalyticsViewModel @Inject constructor(
                 combine(
                     preferenceRepository.getUserPreferences(),
                     wallpaperRepository.getHistory(),
-                    wallpaperRepository.getAllWallpapers()
-                ) { preferences, history, allWallpapers ->
+                    // Load wallpapers (summaries only for performance)
+                    wallpaperRepository.getAllWallpaperSummaries().distinctUntilChanged()
+                ) { preferences: UserPreferences?, history: List<WallpaperHistory>, allWallpapers: List<me.avinas.vanderwaals.data.entity.WallpaperMetadata> ->
                     Triple(preferences, history, allWallpapers)
                 }.collectLatest { (preferences, history, allWallpapers) ->
                     

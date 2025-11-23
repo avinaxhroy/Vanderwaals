@@ -85,6 +85,7 @@ class SettingsViewModel @Inject constructor(
     private val _syncError = MutableStateFlow<String?>(null)
     private val _toastMessage = MutableStateFlow<String?>(null)
     private val _needsAlarmPermission = MutableStateFlow(false)
+    private val _themeMode = MutableStateFlow(ThemeMode.SYSTEM)
     
     // Public toast message flow
     val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
@@ -160,6 +161,12 @@ class SettingsViewModel @Inject constructor(
                 
                 // Load last sync timestamp
                 _lastSyncTimestamp.value = settings.lastSyncTimestamp
+                
+                _themeMode.value = when (settings.themeMode) {
+                    "light" -> ThemeMode.LIGHT
+                    "dark" -> ThemeMode.DARK
+                    else -> ThemeMode.SYSTEM
+                }
             }
         }
     }
@@ -174,7 +181,8 @@ class SettingsViewModel @Inject constructor(
         _applyTo,
         _sourcesEnabled,
         _lastSyncTimestamp,
-        _cacheRefreshTrigger
+        _cacheRefreshTrigger,
+        _themeMode
     ) { values: Array<Any?> ->
         val mode = values[0] as String
         val interval = values[1] as ChangeInterval
@@ -183,7 +191,8 @@ class SettingsViewModel @Inject constructor(
         @Suppress("UNCHECKED_CAST")
         val sources = values[4] as Map<String, Boolean>
         val lastSync = values[5] as Long
-        // values[6] is cacheRefreshTrigger - just used to trigger recalculation
+        // values[6] is cacheRefreshTrigger
+        val themeMode = values[7] as ThemeMode
         
         SettingsState(
             mode = mode,
@@ -192,7 +201,8 @@ class SettingsViewModel @Inject constructor(
             applyTo = applyTo,
             sourcesEnabled = sources,
             cacheSize = calculateCacheSize(),
-            lastSynced = formatLastSyncTime(lastSync)
+            lastSynced = formatLastSyncTime(lastSync),
+            themeMode = themeMode
         )
     }.flowOn(Dispatchers.IO) // CRITICAL: Move heavy calculation to IO thread
     .stateIn(
@@ -208,7 +218,8 @@ class SettingsViewModel @Inject constructor(
                 "Bing Wallpapers" to false  // Only enabled in auto mode
             ),
             cacheSize = "Calculating...",
-            lastSynced = "Never synced"
+            lastSynced = "Never synced",
+            themeMode = ThemeMode.SYSTEM
         )
     )
 
@@ -298,6 +309,27 @@ class SettingsViewModel @Inject constructor(
             _sourcesEnabled.value = updated
             val sourceKey = if (source.contains("GitHub")) "github" else "bing"
             settingsDataStore.toggleSource(sourceKey, enabled)
+        }
+    }
+    
+    /**
+     * Updates the app theme mode.
+     */
+    fun updateThemeMode(themeMode: ThemeMode) {
+        viewModelScope.launch {
+            _themeMode.value = themeMode
+            val themeString = when (themeMode) {
+                ThemeMode.LIGHT -> "light"
+                ThemeMode.DARK -> "dark"
+                ThemeMode.SYSTEM -> "system"
+            }
+            android.util.Log.d("SettingsViewModel", "Updating theme mode to: $themeString")
+            try {
+                settingsDataStore.updateThemeMode(themeString)
+                android.util.Log.d("SettingsViewModel", "Theme mode updated in DataStore")
+            } catch (e: Exception) {
+                android.util.Log.e("SettingsViewModel", "Failed to update theme mode", e)
+            }
         }
     }
 
@@ -477,7 +509,8 @@ data class SettingsState(
     val applyTo: ApplyTo,
     val sourcesEnabled: Map<String, Boolean>,
     val cacheSize: String,
-    val lastSynced: String
+    val lastSynced: String,
+    val themeMode: ThemeMode
 )
 
 // Enums for settings
@@ -498,3 +531,9 @@ data class DailyTime(
     val hour: Int,
     val minute: Int
 )
+
+enum class ThemeMode(val displayName: String) {
+    SYSTEM("System Default"),
+    LIGHT("Light"),
+    DARK("Dark")
+}

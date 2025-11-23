@@ -82,12 +82,79 @@ private val VanderwaalsDarkColorScheme = darkColorScheme(
 )
 
 /**
+ * Vanderwaals Modern Light Color Scheme
+ * 
+ * Clean, airy light theme with:
+ * - Warm white backgrounds
+ * - High contrast dark text
+ * - Same brand accent colors
+ */
+private val VanderwaalsLightColorScheme = androidx.compose.material3.lightColorScheme(
+    // ===== PRIMARY COLORS - Brand Purple =====
+    primary = VanderwaalsTanDark, // Darker tan for better contrast on light
+    onPrimary = Color.White,
+    primaryContainer = VanderwaalsTan,
+    onPrimaryContainer = Color.White,
+    
+    // ===== SECONDARY COLORS - Indigo Accent =====
+    secondary = VanderwaalsTan,
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFE0E7FF),
+    onSecondaryContainer = Color(0xFF2D2F6F),
+    
+    // ===== TERTIARY COLORS - Pink Accent =====
+    tertiary = VanderwaalsAccent,
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFFFD6E4),
+    onTertiaryContainer = Color(0xFF5E1841),
+    
+    // ===== ERROR COLORS =====
+    error = ErrorColorLight,
+    onError = Color.White,
+    errorContainer = Color(0xFFFEE2E2),
+    onErrorContainer = ErrorColorDark,
+    
+    // ===== BACKGROUND HIERARCHY =====
+    background = BackgroundLight,
+    onBackground = TextPrimaryLight,
+    
+    // ===== SURFACE HIERARCHY =====
+    surface = SurfaceLight,
+    onSurface = TextPrimaryLight,
+    surfaceVariant = SurfaceElevatedLight,
+    onSurfaceVariant = TextSecondaryLight,
+    surfaceTint = VanderwaalsTanDark,
+    surfaceBright = SurfaceHighlightLight,
+    surfaceDim = SurfaceElevatedLight,
+    
+    // ===== SURFACE CONTAINERS - Elevation System =====
+    surfaceContainer = SurfaceLight,
+    surfaceContainerHigh = SurfaceElevatedLight,
+    surfaceContainerHighest = SurfaceHighlightLight,
+    surfaceContainerLow = BackgroundLight,
+    surfaceContainerLowest = Color.White,
+    
+    // ===== INVERSE COLORS =====
+    inverseSurface = Color(0xFF2A2A3E), // Dark surface for inverse (tooltips on light bg)
+    inverseOnSurface = Color.White, // White text on dark inverse surface
+    inversePrimary = VanderwaalsTan,
+    
+    // ===== OUTLINE COLORS =====
+    outline = BorderHighlightLight,
+    outlineVariant = BorderLight,
+    
+    // ===== SCRIM =====
+    scrim = ScrimColor
+)
+
+/**
  * Vanderwaals Modern Theme
  * 
- * Premium Material 3 dark theme featuring:
+ * Premium Material 3 theme featuring both Light and Dark modes:
  * 
  * **Visual Design:**
  * - Exclusive dark mode with OLED optimization
+ * - Clean, airy light mode
  * - Vibrant purple gradient brand identity
  * - Rich surface elevation system
  * - Smooth, modern rounded corners
@@ -95,7 +162,7 @@ private val VanderwaalsDarkColorScheme = darkColorScheme(
  * 
  * **Typography:**
  * - System sans-serif with refined weights
- * - Optimized for readability on dark backgrounds
+ * - Optimized for readability
  * - Proper line heights and letter spacing
  * 
  * **Shapes:**
@@ -108,11 +175,13 @@ private val VanderwaalsDarkColorScheme = darkColorScheme(
  * - Clear visual hierarchy
  * - Proper touch target sizes
  * 
+ * @param darkTheme Whether to use dark theme (default: follows system)
  * @param dynamicColor Use Material You colors on Android 12+ (default: false for brand consistency)
  * @param content The composable content to be themed
  */
 @Composable
 fun VanderwaalsTheme(
+    darkTheme: Boolean = androidx.compose.foundation.isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
@@ -120,20 +189,17 @@ fun VanderwaalsTheme(
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            dynamicDarkColorScheme(context)
+            if (darkTheme) dynamicDarkColorScheme(context) else androidx.compose.material3.dynamicLightColorScheme(context)
         }
-        else -> VanderwaalsDarkColorScheme
+        darkTheme -> VanderwaalsDarkColorScheme
+        else -> VanderwaalsLightColorScheme
     }
     
     // Configure system UI (status bar, navigation bar)
     val view = LocalView.current
     if (!view.isInEditMode) {
-    // Configure system UI (status bar, navigation bar)
-    val view = LocalView.current
-    if (!view.isInEditMode) {
         // SideEffect removed: enableEdgeToEdge in MainActivity handles transparency
         // and we want the app background to show through
-    }
     }
 
     // Apply Material Theme with our custom design system

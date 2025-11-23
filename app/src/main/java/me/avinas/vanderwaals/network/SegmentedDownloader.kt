@@ -48,12 +48,22 @@ class SegmentedDownloader @Inject constructor(
             headResponse.close()
 
             // Step 2: Decide strategy
-            if (contentLength > MIN_SEGMENT_SIZE && acceptRanges == "bytes") {
-                downloadSegmented(url, targetFile, contentLength)
-            } else {
+            // FORCE STANDARD DOWNLOAD: Temporarily disabling segmented download to rule out corruption
+            // if (contentLength > MIN_SEGMENT_SIZE && acceptRanges == "bytes") {
+            //    downloadSegmented(url, targetFile, contentLength)
+            // } else {
                 downloadStandard(url, targetFile)
+            // }
+            
+            // Step 3: Verify file integrity
+            if (targetFile.length() <= 0) {
+                 if (targetFile.exists()) targetFile.delete()
+                 return@withContext Result.failure(IOException("Download failed: File is empty"))
             }
+            
+            Result.success(targetFile)
         } catch (e: Exception) {
+            if (targetFile.exists()) targetFile.delete()
             Result.failure(e)
         }
     }

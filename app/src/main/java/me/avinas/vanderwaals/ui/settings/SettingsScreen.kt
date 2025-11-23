@@ -7,6 +7,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,6 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -30,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import me.avinas.vanderwaals.ui.theme.components.GlassCard
 
 /**
  * Compose screen for app settings and preferences.
@@ -149,21 +152,21 @@ fun SettingsScreen(
             val secondaryColor = MaterialTheme.colorScheme.secondary
             val tertiaryColor = MaterialTheme.colorScheme.tertiary
             
-            Canvas(modifier = Modifier.fillMaxSize()) {
+            Canvas(modifier = Modifier.fillMaxSize().blur(60.dp)) {
                 drawCircle(
-                    color = primaryColor.copy(alpha = 0.08f),
+                    color = primaryColor.copy(alpha = 0.3f),
                     center = Offset(size.width * 0.1f, size.height * 0.2f),
-                    radius = size.minDimension * 0.3f
+                    radius = size.minDimension * 0.5f
                 )
                 drawCircle(
-                    color = secondaryColor.copy(alpha = 0.08f),
+                    color = secondaryColor.copy(alpha = 0.3f),
                     center = Offset(size.width * 0.9f, size.height * 0.5f),
-                    radius = size.minDimension * 0.4f
+                    radius = size.minDimension * 0.6f
                 )
                 drawCircle(
-                    color = tertiaryColor.copy(alpha = 0.08f),
+                    color = tertiaryColor.copy(alpha = 0.3f),
                     center = Offset(size.width * 0.2f, size.height * 0.8f),
-                    radius = size.minDimension * 0.35f
+                    radius = size.minDimension * 0.5f
                 )
             }
 
@@ -238,6 +241,31 @@ fun SettingsScreen(
                 }
             }
 
+            // APPEARANCE Section
+            item {
+                SettingsSection(title = "APPEARANCE") {
+                    SettingsCard {
+                        Column {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                ThemeMode.entries.forEach { mode ->
+                                    FilterChip(
+                                        selected = settings.themeMode == mode,
+                                        onClick = { viewModel.updateThemeMode(mode) },
+                                        label = { Text(mode.displayName) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // AUTO-CHANGE Section
             item {
                 SettingsSection(title = "AUTO-CHANGE") {
@@ -285,7 +313,7 @@ fun SettingsScreen(
                                             text = settings.dailyTime?.let { 
                                                 String.format("%02d:%02d", it.hour, it.minute)
                                             } ?: "Set Time",
-                                            color = Color(0xFFA8A095)
+                                            color = MaterialTheme.colorScheme.primary
                                         )
                                     }
                                 }
@@ -363,16 +391,16 @@ fun SettingsScreen(
                                     .fillMaxWidth()
                                     .padding(16.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFFA8A095).copy(alpha = 0.2f),
-                                    contentColor = Color(0xFFA8A095),
-                                    disabledContainerColor = Color(0xFFA8A095).copy(alpha = 0.1f),
-                                    disabledContentColor = Color(0xFFA8A095).copy(alpha = 0.5f)
+                                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                                    contentColor = MaterialTheme.colorScheme.primary,
+                                    disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                    disabledContentColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
                                 )
                             ) {
                                 if (isSyncing) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(18.dp),
-                                        color = Color(0xFFA8A095),
+                                        color = MaterialTheme.colorScheme.primary,
                                         strokeWidth = 2.dp
                                     )
                                 } else {
@@ -699,21 +727,9 @@ private fun SettingsSection(
 
 @Composable
 private fun SettingsCard(content: @Composable () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-        ),
-        border = BorderStroke(
-            width = 1.dp,
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.02f)
-                )
-            )
-        ),
-        shape = RoundedCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth()
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(0.dp) // SettingsRow handles padding
     ) {
         content()
     }

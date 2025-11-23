@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Light background fills entire splash screen -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/background_light"/>
+        </shape>
+    </item>
+    
+    <!-- Vanderwaals PNG logo (black version for light mode) -->
+    <!-- Android 12+ clips splash to circle, so we need smaller dimensions -->
+    <!-- The horizontal text needs to fit within the circular viewport -->
+    <!-- Using conservative dimensions to prevent any text cutoff -->
+    <item
+        android:drawable="@drawable/vanderwaals_logo_black"
+        android:gravity="center"
+        android:width="106dp"
+        android:height="27.7dp"/>
+</layer-list>

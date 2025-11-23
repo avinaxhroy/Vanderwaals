@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -41,6 +42,7 @@ import com.skydoves.landscapist.glide.GlideImage
 import me.avinas.vanderwaals.core.getDeviceScreenSize
 import me.avinas.vanderwaals.domain.usecase.FeedbackType
 import java.io.File
+import me.avinas.vanderwaals.ui.theme.components.GlassCard
 
 /**
  * Compose screen for feedback history display and interaction.
@@ -92,6 +94,7 @@ fun HistoryScreen(
     
     // Get device screen dimensions for SmartCrop
     val context = LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val screenSize = remember { getDeviceScreenSize(context) }
     val screenWidth = screenSize.width
     val screenHeight = screenSize.height
@@ -158,74 +161,101 @@ fun HistoryScreen(
                 )
             }
 
-            if (historyGroups.isEmpty()) {
-                // Empty state
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+            val uiState by viewModel.historyGroups.collectAsState()
+            
+            when (val state = uiState) {
+                is HistoryViewModel.HistoryUiState.Loading -> {
+                    // Loading state
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "No history yet",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "Wallpapers you've used will appear here",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
+                        CircularProgressIndicator()
                     }
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                        .navigationBarsPadding(),
-                    contentPadding = PaddingValues(vertical = 16.dp, horizontal = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(24.dp)
-                ) {
-                    historyGroups.forEach { (dateHeader, items) ->
-                        item(key = "header_$dateHeader") {
-                            Text(
-                                text = dateHeader,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                letterSpacing = 1.2.dp.value.sp,
-                                modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
-                            )
+                is HistoryViewModel.HistoryUiState.Success -> {
+                    val historyGroups = state.groups
+                    if (historyGroups.isEmpty()) {
+                        // Empty state
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(paddingValues),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Text(
+                                    text = "No history yet",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "Wallpapers you've used will appear here",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                            }
                         }
-
-                        items(
-                            items = items,
-                            key = { it.id }
-                        ) { historyItem ->
-                            HistoryItemCard(
-                                item = historyItem,
-                                onThumbnailClick = { selectedWallpaper = historyItem },
-                                onLikeClick = {
-                                    viewModel.updateFeedback(historyItem.id, FeedbackType.LIKE) {
-                                        viewModel.showSnackbar(snackbarHostState, "Preferences updated")
-                                    }
-                                },
-                                onDislikeClick = {
-                                    viewModel.updateFeedback(historyItem.id, FeedbackType.DISLIKE) {
-                                        viewModel.showSnackbar(snackbarHostState, "Preferences updated")
-                                    }
-                                },
-                                onDownloadClick = {
-                                    viewModel.downloadWallpaper(historyItem.wallpaper.id) {
-                                        viewModel.showSnackbar(snackbarHostState, "Saved to gallery")
-                                    }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(paddingValues)
+                                .navigationBarsPadding(),
+                            contentPadding = PaddingValues(vertical = 16.dp, horizontal = 20.dp),
+                            verticalArrangement = Arrangement.spacedBy(24.dp)
+                        ) {
+                            historyGroups.forEach { (dateHeader, items) ->
+                                item(key = "header_$dateHeader") {
+                                    Text(
+                                        text = dateHeader,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        letterSpacing = 1.2.dp.value.sp,
+                                        modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
+                                    )
                                 }
-                            )
+
+                                items(
+                                    items = items,
+                                    key = { it.id }
+                                ) { historyItem ->
+                                        HistoryItemCard(
+                                        item = historyItem,
+                                        onThumbnailClick = { selectedWallpaper = historyItem },
+                                        onLikeClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            viewModel.updateFeedback(historyItem.id, FeedbackType.LIKE) {
+                                                viewModel.showSnackbar(snackbarHostState, "Preferences updated")
+                                            }
+                                        },
+                                        onDislikeClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            viewModel.updateFeedback(historyItem.id, FeedbackType.DISLIKE) {
+                                                viewModel.showSnackbar(snackbarHostState, "Preferences updated")
+                                            }
+                                        },
+                                        onDownloadClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            viewModel.downloadWallpaper(
+                                                wallpaperId = historyItem.wallpaper.id,
+                                                onSuccess = {
+                                                    viewModel.showSnackbar(snackbarHostState, "Saved to gallery")
+                                                },
+                                                onError = { error ->
+                                                    viewModel.showSnackbar(snackbarHostState, error)
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -286,26 +316,11 @@ private fun HistoryItemCard(
     onDislikeClick: () -> Unit,
     onDownloadClick: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
-            .border(
-                BorderStroke(
-                    1.dp,
-                    Brush.verticalGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.02f)
-                        )
-                    )
-                ),
-                RoundedCornerShape(16.dp)
-            )
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(16.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
@@ -360,7 +375,7 @@ private fun HistoryItemCard(
                     isActive = item.feedback == FeedbackType.LIKE,
                     activeIcon = Icons.Filled.Favorite,
                     inactiveIcon = Icons.Outlined.FavoriteBorder,
-                    activeColor = Color(0xFFEC4899), // Pink
+                    activeColor = MaterialTheme.colorScheme.tertiary, // Pink
                     label = if (item.feedback == FeedbackType.LIKE) "Liked" else null,
                     onClick = onLikeClick
                 )
@@ -370,7 +385,7 @@ private fun HistoryItemCard(
                     isActive = item.feedback == FeedbackType.DISLIKE,
                     activeIcon = Icons.Filled.ThumbDown,
                     inactiveIcon = Icons.Outlined.ThumbDown,
-                    activeColor = Color(0xFF60A5FA), // Blue
+                    activeColor = MaterialTheme.colorScheme.primary, // Blue/Tan
                     label = if (item.feedback == FeedbackType.DISLIKE) "Disliked" else null,
                     onClick = onDislikeClick
                 )

@@ -84,6 +84,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var engagementTracker: UserEngagementTracker
     
+    @Inject
+    lateinit var settingsDataStore: me.avinas.vanderwaals.data.datastore.SettingsDataStore
+    
     private companion object {
         const val TAG = "MainActivity"
     }
@@ -110,9 +113,12 @@ class MainActivity : ComponentActivity() {
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Check system dark mode to set initial system bars correctly
+        val isDarkMode = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
+            statusBarStyle = if (isDarkMode) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = if (isDarkMode) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
         )
         super.onCreate(savedInstanceState)
         
@@ -142,6 +148,24 @@ class MainActivity : ComponentActivity() {
             val loadingSubMessage by initViewModel.loadingSubMessage.collectAsState()
             val loadingProgress by initViewModel.loadingProgress.collectAsState()
             
+            // Observe settings for theme
+            val settings by settingsDataStore.settings.collectAsState(initial = null)
+            val darkTheme = when (settings?.themeMode) {
+                "light" -> false
+                "dark" -> true
+                else -> androidx.compose.foundation.isSystemInDarkTheme()
+            }
+            
+            Log.d(TAG, "Theme update: mode=${settings?.themeMode}, systemDark=${androidx.compose.foundation.isSystemInDarkTheme()}, finalDarkTheme=$darkTheme")
+            
+            // Update system bars based on theme
+            LaunchedEffect(darkTheme) {
+                enableEdgeToEdge(
+                    statusBarStyle = if (darkTheme) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+                    navigationBarStyle = if (darkTheme) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                )
+            }
+            
             LaunchedEffect(Unit) {
                 // Record app launch for engagement tracking
                 engagementTracker.recordAppLaunch()
@@ -156,6 +180,7 @@ class MainActivity : ComponentActivity() {
             }
             
             VanderwaalsTheme(
+                darkTheme = darkTheme,
                 dynamicColor = false // Use brand colors, not dynamic
             ) {
                 Surface(

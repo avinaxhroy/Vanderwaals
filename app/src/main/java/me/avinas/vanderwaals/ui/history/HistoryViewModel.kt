@@ -67,50 +67,68 @@ class HistoryViewModel @Inject constructor(
      * History items grouped by date headers (Today, Yesterday, Month Year).
      * Each group contains a list of HistoryItemUiState.
      */
-    val historyGroups: StateFlow<List<Pair<String, List<HistoryItemUiState>>>> =
+    /**
+     * UI State for the History Screen.
+     */
+    sealed interface HistoryUiState {
+        data object Loading : HistoryUiState
+        data class Success(val groups: List<Pair<String, List<HistoryItemUiState>>>) : HistoryUiState
+    }
+
+    /**
+     * History items grouped by date headers (Today, Yesterday, Month Year).
+     * Each group contains a list of HistoryItemUiState.
+     */
+    val historyGroups: StateFlow<HistoryUiState> =
         historyDao.getHistory()
             .combine(wallpaperRepository.getAllWallpapers()) { historyList, wallpapers ->
-                // Create map for quick wallpaper lookup
-                val wallpaperMap = wallpapers.associateBy { it.id }
-                
-                // Convert to UI state with timestamp tracking for grouping
-                val uiItems = historyList
-                    .mapNotNull { history ->
-                        wallpaperMap[history.wallpaperId]?.let { wallpaper ->
-                            Pair(
-                                HistoryItemUiState(
-                                    id = history.id,
-                                    wallpaper = wallpaper,
-                                    appliedAt = formatRelativeTime(history.appliedAt),
-                                    localCroppedPath = wallpaperRepository.getCroppedWallpaperFile(wallpaper).absolutePath,
-                                    feedback = when (history.userFeedback) {
-                                        WallpaperHistory.FEEDBACK_LIKE -> FeedbackType.LIKE
-                                        WallpaperHistory.FEEDBACK_DISLIKE -> FeedbackType.DISLIKE
-                                        else -> null
-                                    }
-                                ),
-                                history.appliedAt  // Track original timestamp
-                            )
+                // CRITICAL FIX: If we have history items but no wallpapers yet, it means metadata is still loading.
+                // Don't emit Success(empty) yet, wait for metadata.
+                if (historyList.isNotEmpty() && wallpapers.isEmpty()) {
+                    HistoryUiState.Loading
+                } else {
+                    // Create map for quick wallpaper lookup
+                    val wallpaperMap = wallpapers.associateBy { it.id }
+                    
+                    // Convert to UI state with timestamp tracking for grouping
+                    val uiItems = historyList
+                        .mapNotNull { history ->
+                            wallpaperMap[history.wallpaperId]?.let { wallpaper ->
+                                Pair(
+                                    HistoryItemUiState(
+                                        id = history.id,
+                                        wallpaper = wallpaper,
+                                        appliedAt = formatRelativeTime(history.appliedAt),
+                                        localCroppedPath = wallpaperRepository.getCroppedWallpaperFile(wallpaper).absolutePath,
+                                        feedback = when (history.userFeedback) {
+                                            WallpaperHistory.FEEDBACK_LIKE -> FeedbackType.LIKE
+                                            WallpaperHistory.FEEDBACK_DISLIKE -> FeedbackType.DISLIKE
+                                            else -> null
+                                        }
+                                    ),
+                                    history.appliedAt  // Track original timestamp
+                                )
+                            }
                         }
-                    }
-                    .sortedByDescending { (_, timestamp) -> timestamp } // Sort by timestamp descending - most recent first
-                    .groupBy { (_, timestamp) -> getDateHeader(timestamp) }
-                    .map { (header, items) -> header to items.map { (uiState, _) -> uiState } }
-                    .sortedBy { (header, _) ->
-                        // Sort groups: Today, Yesterday, then by date descending
-                        when (header) {
-                            "Today" -> 0
-                            "Yesterday" -> 1
-                            else -> 2
+                        .sortedByDescending { (_, timestamp) -> timestamp } // Sort by timestamp descending - most recent first
+                        .groupBy { (_, timestamp) -> getDateHeader(timestamp) }
+                        .map { (header, items) -> header to items.map { (uiState, _) -> uiState } }
+                        .sortedBy { (header, _) ->
+                            // Sort groups: Today, Yesterday, then by date descending
+                            when (header) {
+                                "Today" -> 0
+                                "Yesterday" -> 1
+                                else -> 2
+                            }
                         }
-                    }
-                uiItems
+                    HistoryUiState.Success(uiItems)
+                }
             }
             .flowOn(Dispatchers.Default) // CRITICAL: Run heavy sorting/grouping on Default dispatcher
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),
-                initialValue = emptyList()
+                initialValue = HistoryUiState.Loading
             )
 
     /**
@@ -164,7 +182,7 @@ class HistoryViewModel @Inject constructor(
      * @param wallpaperId The ID of the wallpaper to download
      * @param onSuccess Callback invoked on successful download
      */
-    fun downloadWallpaper(wallpaperId: String, onSuccess: () -> Unit) {
+    fun downloadWallpaper(wallpaperId: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
                 val wallpaper = wallpaperRepository.getAllWallpapers().first()
@@ -175,14 +193,27 @@ class HistoryViewModel @Inject constructor(
                 val downloadResult = wallpaperRepository.downloadWallpaper(wallpaper)
                 
                 downloadResult.onSuccess { file ->
+                    // Validate file before saving
+                    if (!file.exists() || file.length() <= 0) {
+                        onError("Download failed: Empty file")
+                        return@onSuccess
+                    }
+
                     // Save to gallery
                     val saveResult = mediaSaver.saveImageToGallery(file, wallpaper.id)
                     if (saveResult.isSuccess) {
                         onSuccess()
+                    } else {
+                        onError("Failed to save to gallery")
                     }
+                }
+                downloadResult.onFailure {
+                    onError("Download failed: ${it.message}")
                 }
             } catch (e: Exception) {
                 println("Error downloading wallpaper: ${e.message}")
+                e.printStackTrace()
+                onError("Error: ${e.message}")
             }
         }
     }

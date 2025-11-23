@@ -1,37 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- ===== VANDERWAALS MODERN DARK THEME ===== -->
+    <!-- ===== VANDERWAALS MODERN LIGHT THEME ===== -->
     
-    <!-- Material 3 Splash Screen Theme - Premium Dark -->
+    <!-- Material 3 Splash Screen Theme - Clean Light -->
     <style name="Theme.Vanderwaals.SplashScreen" parent="Theme.SplashScreen">
         <!-- Background -->
-        <item name="windowSplashScreenBackground">@color/background_dark</item>
+        <item name="windowSplashScreenBackground">@color/background_light</item>
         
-        <!-- Animated Icon - Use actual Vanderwaals_logo.png -->
-        <item name="windowSplashScreenAnimatedIcon">@drawable/logo_with_background</item>
+        <!-- Animated Icon - Use light version with black logo -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/logo_with_background_light</item>
         <item name="windowSplashScreenAnimationDuration">500</item>
-        
-        <!-- No icon background needed - logo has its own colorful background -->
         
         <!-- Post-splash theme -->
         <item name="postSplashScreenTheme">@style/Theme.Vanderwaals</item>
     </style>
 
-    <!-- Base App Theme - Modern Dark with Material 3 -->
-    <style name="Theme.Vanderwaals" parent="android:Theme.Material.NoActionBar">
+    <!-- Base App Theme - Modern Light with Material 3 -->
+    <style name="Theme.Vanderwaals" parent="android:Theme.Material.Light.NoActionBar">
         <!-- === WINDOW COLORS === -->
-        <item name="android:windowBackground">@color/background_dark</item>
-        <item name="android:colorBackground">@color/background_dark</item>
+        <item name="android:windowBackground">@color/background_light</item>
+        <item name="android:colorBackground">@color/background_light</item>
         
         <!-- === SYSTEM BARS === -->
         <!-- Transparent for edge-to-edge support with proper insets handling -->
-        <!-- === SYSTEM BARS === -->
-        <!-- Transparent for edge-to-edge support with proper insets handling -->
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>        <!-- === SYSTEM BAR APPEARANCE === -->
-        <!-- Force dark system bars (light content) -->
-        <item name="android:windowLightNavigationBar">false</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        
+        <!-- === SYSTEM BAR APPEARANCE === -->
+        <!-- Light system bars (dark icons) -->
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowLightStatusBar">true</item>
         
         <!-- === EDGE-TO-EDGE ENFORCEMENT === -->
         <item name="android:enforceNavigationBarContrast">false</item>
@@ -47,13 +45,10 @@
         <!-- Disable fitsSystemWindows to enable manual WindowInsets handling -->
         <item name="android:fitsSystemWindows">false</item>
         
-        <!-- === DARK MODE ENFORCEMENT === -->
-        <item name="android:forceDarkAllowed">false</item>
-        
         <!-- === TEXT COLORS === -->
-        <item name="android:textColorPrimary">@color/text_primary_dark</item>
-        <item name="android:textColorSecondary">@color/text_secondary_dark</item>
-        <item name="android:textColorTertiary">@color/text_tertiary_dark</item>
+        <item name="android:textColorPrimary">@color/text_primary_light</item>
+        <item name="android:textColorSecondary">@color/text_secondary_light</item>
+        <item name="android:textColorTertiary">@color/text_tertiary_light</item>
         
         <!-- === WINDOW TRANSITIONS === -->
         <item name="android:windowAnimationStyle">@style/WindowAnimation.Vanderwaals</item>
