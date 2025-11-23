@@ -26,6 +26,36 @@
 
 ---
 
+## Screenshots
+
+<div align="center">
+    <br/>
+      <img style="display: block; border-radius: 9999px;" src="Screenshots/1.png" width="150" alt="Free">
+      <img style="display: block; border-radius: 9999px;" src="Screenshots/2.png" width="150" alt="Beautiful Wallpapers">
+      <img style="display: block; border-radius: 9999px;" src="Screenshots/3.png" width="150" alt="Upload Favourite">
+      <img style="display: block; border-radius: 9999px;" src="Screenshots/4.png" width="150" alt="Auto-Change Wallpaper">
+    <br/>
+    <img style="display: block; border-radius: 9999px;" src="Screenshots/5.png" width="150" alt="Personalization Insight">
+    <img style="display: block; border-radius: 9999px;" src="Screenshots/6.png" width="150" alt="Tap and Learn">
+    <img style="display: block; border-radius: 9999px;" src="Screenshots/7.png" width="150" alt="More Algorithm">
+    <br/>
+</div>
+
+## 📥 Download
+<div align="center">
+  <a href="https://github.com/avinaxhroy/Vanderwaals/releases">
+    <img src="https://raw.githubusercontent.com/Kunzisoft/Github-badge/main/get-it-on-github.png"
+         alt="Download from GitHub"
+         height="80">
+  </a>
+</div>
+
+### Requirements
+- **Android 12.0 (API 31)** or higher
+- **~50MB** storage space (app + cache)
+- **Internet connection** for initial wallpaper sync (then works offline)
+
+
 ## 🚀 Features
 
 ### 🎨 Intelligent Personalization
@@ -91,34 +121,6 @@ Upload one favorite wallpaper and instantly get 100+ similar matches. The algori
 - **Smooth Animations**: Polished transitions and interactions with Lottie animations
 - **Adaptive Layout**: Optimized for phones and tablets
 
-## Screenshots
-
-<div align="center">
-    <br/>
-      <img style="display: block; border-radius: 9999px;" src="Screenshots/1.png" width="150" alt="Free">
-      <img style="display: block; border-radius: 9999px;" src="Screenshots/2.png" width="150" alt="Beautiful Wallpapers">
-      <img style="display: block; border-radius: 9999px;" src="Screenshots/3.png" width="150" alt="Upload Favourite">
-      <img style="display: block; border-radius: 9999px;" src="Screenshots/4.png" width="150" alt="Auto-Change Wallpaper">
-    <br/>
-    <img style="display: block; border-radius: 9999px;" src="Screenshots/5.png" width="150" alt="Personalization Insight">
-    <img style="display: block; border-radius: 9999px;" src="Screenshots/6.png" width="150" alt="Tap and Learn">
-    <img style="display: block; border-radius: 9999px;" src="Screenshots/7.png" width="150" alt="More Algorithm">
-    <br/>
-</div>
-
-## 📥 Download
-<div align="center">
-  <a href="https://github.com/avinaxhroy/Vanderwaals/releases">
-    <img src="https://raw.githubusercontent.com/Kunzisoft/Github-badge/main/get-it-on-github.png"
-         alt="Download from GitHub"
-         height="80">
-  </a>
-</div>
-
-### Requirements
-- **Android 12.0 (API 31)** or higher
-- **~50MB** storage space (app + cache)
-- **Internet connection** for initial wallpaper sync (then works offline)
 
 ## 🏗️ Architecture
 
