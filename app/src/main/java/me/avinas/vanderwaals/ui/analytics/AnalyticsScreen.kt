@@ -6,8 +6,16 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -25,7 +33,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -61,27 +71,29 @@ fun AnalyticsScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = Color.Transparent, // Transparent to show blobs
         topBar = {
             TopAppBar(
                 title = { 
                     Text(
                         "Personalization Insights",
                         style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSystemInDarkTheme()) Color.White else Color(0xFF111827)
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = "Back",
+                            tint = if (isSystemInDarkTheme()) Color.Gray else Color.Gray
                         )
                     }
                 },
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                    containerColor = Color.Transparent
                 ),
                 modifier = Modifier.statusBarsPadding()
             )
@@ -90,21 +102,94 @@ fun AnalyticsScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .navigationBarsPadding()
         ) {
-            when {
-                state.isLoading -> {
-                    LoadingView()
-                }
-                state.error != null -> {
-                    ErrorView(error = state.error!!, onRetry = { viewModel.refresh() })
-                }
-                else -> {
-                    AnalyticsContent(
-                        state = state,
-                        scrollState = scrollState
+            // Dynamic Background Blobs
+            val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
+            val infiniteTransition = rememberInfiniteTransition(label = "blobs")
+
+            // Animate positions
+            val offset1 by infiniteTransition.animateFloat(
+                initialValue = 0f, targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(10000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ), label = "offset1"
+            )
+            val offset2 by infiniteTransition.animateFloat(
+                initialValue = 0f, targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(15000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ), label = "offset2"
+            )
+
+            Canvas(modifier = Modifier.fillMaxSize().blur(80.dp)) {
+                val w = size.width
+                val h = size.height
+
+                if (isDark) {
+                    // Dark Mode Blobs (Indigo/Rose/Sky)
+                    drawCircle(
+                        color = Color(0xFF5C6BC0).copy(alpha = 0.2f), // Indigo 400
+                        center = Offset(w * 0.2f + (offset1 * 100f), h * 0.2f),
+                        radius = 400.dp.toPx()
                     )
+                    drawCircle(
+                        color = Color(0xFFEC407A).copy(alpha = 0.15f), // Rose 400
+                        center = Offset(w * 0.8f - (offset2 * 100f), h * 0.5f),
+                        radius = 350.dp.toPx()
+                    )
+                    drawCircle(
+                        color = Color(0xFF29B6F6).copy(alpha = 0.15f), // Sky 400
+                        center = Offset(w * 0.4f, h * 0.8f + (offset1 * 50f)),
+                        radius = 450.dp.toPx()
+                    )
+                } else {
+                    // Light Mode Blobs (Purple/Orange/Teal)
+                    drawCircle(
+                        color = Color(0xFFAB47BC).copy(alpha = 0.3f), // Purple 400
+                        center = Offset(w * 0.8f - (offset1 * 100f), h * 0.1f),
+                        radius = 500.dp.toPx()
+                    )
+                    drawCircle(
+                        color = Color(0xFFFFA726).copy(alpha = 0.25f), // Orange 400
+                        center = Offset(w * 0.1f + (offset2 * 100f), h * 0.6f),
+                        radius = 400.dp.toPx()
+                    )
+                    drawCircle(
+                        color = Color(0xFF26A69A).copy(alpha = 0.25f), // Teal 400
+                        center = Offset(w * 0.6f, h * 0.9f - (offset1 * 50f)),
+                        radius = 450.dp.toPx()
+                    )
+                }
+            }
+            
+            // Blur effect over blobs
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(60.dp)
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .navigationBarsPadding()
+            ) {
+                when {
+                    state.isLoading -> {
+                        LoadingView()
+                    }
+                    state.error != null -> {
+                        ErrorView(error = state.error!!, onRetry = { viewModel.refresh() })
+                    }
+                    else -> {
+                        AnalyticsContent(
+                            state = state,
+                            scrollState = scrollState
+                        )
+                    }
                 }
             }
         }

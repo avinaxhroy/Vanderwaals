@@ -5,6 +5,12 @@ import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -50,6 +56,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import me.avinas.vanderwaals.ui.theme.components.GlassCard
 
 /**
  * Upload Wallpaper Screen - Second screen in personalize flow.
@@ -140,21 +147,65 @@ fun UploadWallpaperScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surface)
         ) {
-            // Ambient background for glassmorphism
-            val primaryColor = MaterialTheme.colorScheme.primary
-            val secondaryColor = MaterialTheme.colorScheme.secondary
-            
+            // Dynamic Background Blobs
+            val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
+            val infiniteTransition = rememberInfiniteTransition(label = "blobs")
+
+            // Animate positions
+            val offset1 by infiniteTransition.animateFloat(
+                initialValue = 0f, targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(10000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ), label = "offset1"
+            )
+            val offset2 by infiniteTransition.animateFloat(
+                initialValue = 0f, targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(15000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ), label = "offset2"
+            )
+
             Canvas(modifier = Modifier.fillMaxSize().blur(80.dp)) {
-                drawCircle(
-                    color = primaryColor.copy(alpha = 0.2f),
-                    center = Offset(size.width * 0.2f, size.height * 0.2f),
-                    radius = size.minDimension * 0.5f
-                )
-                drawCircle(
-                    color = secondaryColor.copy(alpha = 0.2f),
-                    center = Offset(size.width * 0.8f, size.height * 0.8f),
-                    radius = size.minDimension * 0.5f
-                )
+                val w = size.width
+                val h = size.height
+
+                if (isDark) {
+                    // Dark Mode Blobs (Indigo/Rose/Sky)
+                    drawCircle(
+                        color = Color(0xFF5C6BC0).copy(alpha = 0.2f), // Indigo 400
+                        center = Offset(w * 0.2f + (offset1 * 100f), h * 0.2f),
+                        radius = 400.dp.toPx()
+                    )
+                    drawCircle(
+                        color = Color(0xFFEC407A).copy(alpha = 0.15f), // Rose 400
+                        center = Offset(w * 0.8f - (offset2 * 100f), h * 0.5f),
+                        radius = 350.dp.toPx()
+                    )
+                    drawCircle(
+                        color = Color(0xFF29B6F6).copy(alpha = 0.15f), // Sky 400
+                        center = Offset(w * 0.4f, h * 0.8f + (offset1 * 50f)),
+                        radius = 450.dp.toPx()
+                    )
+                } else {
+                    // Light Mode Blobs (Purple/Orange/Teal)
+                    drawCircle(
+                        color = Color(0xFFAB47BC).copy(alpha = 0.3f), // Purple 400
+                        center = Offset(w * 0.8f - (offset1 * 100f), h * 0.1f),
+                        radius = 500.dp.toPx()
+                    )
+                    drawCircle(
+                        color = Color(0xFFFFA726).copy(alpha = 0.25f), // Orange 400
+                        center = Offset(w * 0.1f + (offset2 * 100f), h * 0.6f),
+                        radius = 400.dp.toPx()
+                    )
+                    drawCircle(
+                        color = Color(0xFF26A69A).copy(alpha = 0.25f), // Teal 400
+                        center = Offset(w * 0.6f, h * 0.9f - (offset1 * 50f)),
+                        radius = 450.dp.toPx()
+                    )
+                }
             }
 
             Box(
@@ -190,48 +241,20 @@ fun UploadWallpaperScreen(
                     
                     // Upload Button with Glassmorphism
                     val primaryColor = MaterialTheme.colorScheme.primary
-                    val isDark = isSystemInDarkTheme()
                     
-                    Box(
+                    GlassCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(160.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(
-                                brush = Brush.linearGradient(
-                                    colors = if (isDark) listOf(
-                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.15f),
-                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.05f)
-                                    ) else listOf(
-                                        Color.White.copy(alpha = 0.6f),
-                                        Color.White.copy(alpha = 0.2f)
-                                    ),
-                                    start = Offset(0f, 0f),
-                                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-                                )
-                            )
-                            .border(
-                                width = 1.dp,
-                                brush = Brush.linearGradient(
-                                    colors = if (isDark) listOf(
-                                        Color.White.copy(alpha = 0.2f),
-                                        Color.White.copy(alpha = 0.05f)
-                                    ) else listOf(
-                                        Color.White.copy(alpha = 0.8f),
-                                        Color.White.copy(alpha = 0.3f)
-                                    ),
-                                    start = Offset(0f, 0f),
-                                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-                                ),
-                                shape = RoundedCornerShape(16.dp)
-                            )
                             .clickable {
                                 if (permissionState.status.isGranted) {
                                     imagePickerLauncher.launch("image/*")
                                 } else {
                                     permissionState.launchPermissionRequest()
                                 }
-                            }
+                            },
+                        shape = RoundedCornerShape(16.dp),
+                        contentPadding = PaddingValues(0.dp) // Custom content
                     ) {
                         // Dashed border for "drop zone" feel
                         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -259,7 +282,7 @@ fun UploadWallpaperScreen(
                                 imageVector = Icons.Default.Upload,
                                 contentDescription = null,
                                 modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.onSurface
                             )
                             
                             Spacer(modifier = Modifier.height(16.dp))
@@ -379,45 +402,16 @@ private fun StyleSampleCard(
     style: WallpaperStyle,
     onClick: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
-    
-    Box(
+    GlassCard(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(12.dp))
-            .background(
-                brush = Brush.linearGradient(
-                    colors = if (isDark) listOf(
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.15f),
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.05f)
-                    ) else listOf(
-                        Color.White.copy(alpha = 0.6f),
-                        Color.White.copy(alpha = 0.2f)
-                    ),
-                    start = Offset(0f, 0f),
-                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-                )
-            )
-            .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(
-                    colors = if (isDark) listOf(
-                        Color.White.copy(alpha = 0.2f),
-                        Color.White.copy(alpha = 0.05f)
-                    ) else listOf(
-                        Color.White.copy(alpha = 0.8f),
-                        Color.White.copy(alpha = 0.3f)
-                    ),
-                    start = Offset(0f, 0f),
-                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            )
             .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
+        shape = RoundedCornerShape(12.dp),
+        contentPadding = PaddingValues(0.dp)
     ) {
         Column(
+            modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -432,7 +426,7 @@ private fun StyleSampleCard(
                     imageVector = style.icon,
                     contentDescription = null,
                     modifier = Modifier.size(28.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
             

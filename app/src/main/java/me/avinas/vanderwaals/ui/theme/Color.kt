@@ -57,7 +57,7 @@ val SurfaceGlassHighlight = Color(0x1AFFFFFF) // Highlight for glass edges
 
 // === TEXT COLORS - Enhanced Contrast ===
 val TextPrimaryDark = Color(0xFFF5F5F7) // High emphasis text - Near white
-val TextSecondaryDark = Color(0xFFB8B8BD) // Medium emphasis - Light grey
+val TextSecondaryDark = Color(0xFFEBEBF5) // Medium emphasis - Lighter grey for better contrast on glass
 val TextTertiaryDark = Color(0xFF8A8A90) // Low emphasis - Grey
 val TextDisabledDark = Color(0xFF5A5A60) // Disabled state - Dark grey
 val TextAccent = VanderwaalsTan // Accent colored text
@@ -167,6 +167,40 @@ val GradientPrimaryLight = Brush.horizontalGradient(
 
 val GradientVerticalLight = Brush.verticalGradient(
     colors = listOf(VanderwaalsTanDark, VanderwaalsTan)
+)
+
+// === GLASSMORPHISM COLORS - CSS MATCHED ===
+// Dark Mode - CSS Matched
+val GlassBackground = Color(0x8C1F2937) // rgba(31, 41, 55, 0.55)
+val GlassBorder = Color(0x1AFFFFFF) // rgba(255, 255, 255, 0.1)
+val GlassShadow = Color(0x1A000000) // rgba(0, 0, 0, 0.1)
+val GlassHighlight = Color(0xCCFFFFFF) // rgba(255, 255, 255, 0.8)
+val GlassHighlightSubtle = Color(0x4DFFFFFF) // rgba(255, 255, 255, 0.3)
+val GlassInsetTop = Color(0x80FFFFFF) // rgba(255, 255, 255, 0.5)
+val GlassInsetBottom = Color(0x1AFFFFFF) // rgba(255, 255, 255, 0.1)
+val GlassInnerGlow = Color(0x26FFFFFF) // Approximating the strong inner glow safely
+
+// Light Mode - Adjusted for visibility on light backgrounds
+val GlassBackgroundLight = Color(0x80FFFFFF) // rgba(255, 255, 255, 0.5)
+val GlassBorderLight = Color(0x2EFFFFFF) // rgba(255, 255, 255, 0.18)
+val GlassShadowLight = Color(0x1A000000) // Same shadow
+val GlassHighlightLight = Color(0xFFFFFFFF) // Pure white highlight
+
+// Gradients
+val GlassGradientTop = Brush.horizontalGradient(
+    colors = listOf(Color.Transparent, GlassHighlight, Color.Transparent)
+)
+
+val GlassGradientLeft = Brush.verticalGradient(
+    colors = listOf(GlassHighlight, Color.Transparent, GlassHighlightSubtle)
+)
+
+val GlassGradientTopLight = Brush.horizontalGradient(
+    colors = listOf(Color.Transparent, GlassHighlightLight, Color.Transparent)
+)
+
+val GlassGradientLeftLight = Brush.verticalGradient(
+    colors = listOf(GlassHighlightLight, Color.Transparent, GlassBorderLight)
 )
 
 

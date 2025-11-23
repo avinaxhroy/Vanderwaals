@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html class="" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Settings</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+<script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#13ec6d",
+            "background-light": "#f6f8f7",
+            "background-dark": "#102218"
+          },
+          fontFamily: {
+            display: "Manrope"
+          },
+          borderRadius: {
+            DEFAULT: "0.5rem",
+            lg: "1rem",
+            xl: "1.5rem",
+            full: "9999px"
+          },
+          boxShadow: {
+            soft: "0 8px 32px 0 rgba(0, 0, 0, 0.1)"
+          }
+        }
+      }
+    };
+  </script>
+<style>
+    .glassmorphism {
+      background: rgba(255, 255, 255, 0.5);
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+    }
+    .dark .glassmorphism {
+      background: rgba(30, 30, 30, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+    }
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display bg-background-light dark:bg-background-dark text-gray-800 dark:text-gray-200 antialiased">
+<div class="relative min-h-screen w-full max-w-md mx-auto overflow-hidden">
+<div class="absolute inset-0 z-0 overflow-hidden">
+<div class="absolute -top-40 -left-60 w-[500px] h-[500px] bg-purple-400 rounded-full filter blur-3xl opacity-30 dark:opacity-40"></div>
+<div class="absolute bottom-20 -right-60 w-[500px] h-[500px] bg-orange-400 rounded-full filter blur-3xl opacity-20 dark:opacity-30"></div>
+<div class="absolute bottom-[-200px] -left-20 w-[400px] h-[400px] bg-teal-400 rounded-full filter blur-3xl opacity-20 dark:opacity-30"></div>
+</div>
+<div class="relative z-10 p-4 space-y-6 pb-24">
+<header class="flex items-center pt-4 pb-2">
+<button class="text-gray-500 dark:text-gray-400">
+<span class="material-symbols-outlined">arrow_back_ios_new</span>
+</button>
+<h1 class="text-3xl font-bold ml-3 text-gray-900 dark:text-white">Settings</h1>
+</header>
+<div>
+<h2 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 px-4 mb-2 tracking-wider">Mode</h2>
+<div class="glassmorphism rounded-xl">
+<div class="flex items-center justify-between p-4">
+<div class="flex items-center space-x-4">
+<div class="w-10 h-10 bg-black/5 dark:bg-white/5 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">shuffle</span>
+</div>
+<div>
+<p class="font-semibold text-gray-900 dark:text-white">Auto Mode</p>
+<p class="text-sm text-gray-600 dark:text-gray-400">Automatic wallpaper selection</p>
+</div>
+</div>
+<button class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-gray-200 dark:bg-gray-700 transition-colors duration-200 ease-in-out focus:outline-none">
+<span class="inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-5"></span>
+</button>
+</div>
+<div class="px-4 pb-4">
+<p class="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">In Auto Mode, wallpapers are selected automatically. Enable Personalized Mode to teach the app your style.</p>
+</div>
+</div>
+</div>
+<div>
+<h2 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 px-4 mb-2 tracking-wider">Appearance</h2>
+<div class="glassmorphism p-2 rounded-xl">
+<div class="flex items-center justify-between space-x-2 bg-black/5 dark:bg-black/20 rounded-lg p-1">
+<button class="flex-1 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-400 transition-colors hover:bg-black/5 dark:hover:bg-white/10">System</button>
+<button class="flex-1 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-400 transition-colors hover:bg-black/5 dark:hover:bg-white/10">Light</button>
+<button class="flex-1 py-2 text-sm font-medium rounded-md bg-primary text-white shadow-md">Dark</button>
+</div>
+</div>
+</div>
+<div>
+<h2 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 px-4 mb-2 tracking-wider">Auto-Change</h2>
+<div class="glassmorphism rounded-xl divide-y divide-black/5 dark:divide-white/10">
+<div class="flex items-center justify-between p-4">
+<div>
+<p class="font-medium text-gray-900 dark:text-white">Frequency</p>
+<p class="text-sm text-gray-600 dark:text-gray-400">Daily</p>
+</div>
+<div class="flex items-center space-x-1 text-gray-600 dark:text-gray-400">
+<span>Daily</span>
+<span class="material-symbols-outlined text-base">arrow_drop_down</span>
+</div>
+</div>
+<div class="flex items-center justify-between p-4">
+<div>
+<p class="font-medium text-gray-900 dark:text-white">Change Time</p>
+<p class="text-sm text-gray-600 dark:text-gray-400">9:00 AM</p>
+</div>
+<span class="font-medium text-gray-600 dark:text-gray-400">09:00</span>
+</div>
+</div>
+</div>
+<div>
+<h2 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 px-4 mb-2 tracking-wider">Battery &amp; Performance</h2>
+<div class="bg-red-500/10 dark:bg-red-500/20 rounded-xl p-4 space-y-3 border border-red-500/20">
+<div class="flex items-start space-x-3">
+<span class="material-symbols-outlined text-red-500 mt-0.5">battery_alert</span>
+<div>
+<p class="font-semibold text-red-800 dark:text-red-200">Battery Optimization Active</p>
+<p class="text-sm text-red-700 dark:text-red-300">Auto-change may not work after restart.</p>
+</div>
+</div>
+<button class="w-full py-2.5 bg-red-500/20 dark:bg-red-400/20 text-red-800 dark:text-red-200 font-semibold rounded-lg hover:bg-red-500/30 dark:hover:bg-red-400/30 transition-colors text-sm">Open Battery Settings</button>
+</div>
+</div>
+<div>
+<h2 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 px-4 mb-2 tracking-wider">Apply To</h2>
+<div class="glassmorphism p-2 rounded-xl">
+<div class="flex items-center justify-between space-x-2 bg-black/5 dark:bg-black/20 rounded-lg p-1">
+<button class="flex-1 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-400 transition-colors hover:bg-black/5 dark:hover:bg-white/10">Lock Screen</button>
+<button class="flex-1 py-2 text-sm font-medium rounded-md bg-primary text-white shadow-md">Home Screen</button>
+<button class="flex-1 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-400 transition-colors hover:bg-black/5 dark:hover:bg-white/10">Both</button>
+</div>
+</div>
+</div>
+<div>
+<h2 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 px-4 mb-2 tracking-wider">Sources</h2>
+<div class="glassmorphism rounded-xl p-4 space-y-4">
+<div class="flex items-center justify-between">
+<div>
+<p class="font-medium text-gray-900 dark:text-white">GitHub Collections</p>
+<p class="text-sm text-gray-600 dark:text-gray-400">Enabled</p>
+</div>
+<div class="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-base">check</span>
+</div>
+</div>
+<hr class="border-black/5 dark:border-white/10"/>
+<div class="flex items-center justify-between">
+<div>
+<p class="font-medium text-gray-900 dark:text-white">Bing Wallpapers</p>
+<p class="text-sm text-gray-600 dark:text-gray-400">Enabled</p>
+</div>
+<div class="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-base">check</span>
+</div>
+</div>
+<hr class="border-black/5 dark:border-white/10"/>
+<button class="w-full flex items-center justify-center space-x-2 py-2.5 bg-black/5 dark:bg-white/10 text-gray-800 dark:text-gray-200 font-semibold rounded-lg hover:bg-black/10 dark:hover:bg-white/20 transition-colors">
+<span class="material-symbols-outlined text-xl">sync</span>
+<span>Sync Now</span>
+</button>
+<div class="text-center">
+<p class="text-xs text-gray-500 dark:text-gray-400">Last synced: Never</p>
+<a class="text-xs text-red-500 dark:text-red-400 font-medium" href="#">Sync wallpaper catalog to start</a>
+</div>
+</div>
+</div>
+<div>
+<h2 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 px-4 mb-2 tracking-wider">Storage</h2>
+<div class="glassmorphism rounded-xl p-4 space-y-4">
+<div>
+<p class="font-medium text-gray-900 dark:text-white">Cache Size</p>
+<p class="text-sm text-gray-600 dark:text-gray-400">3 MB, 3 wallpapers</p>
+</div>
+<hr class="border-black/5 dark:border-white/10"/>
+<div>
+<p class="font-medium text-gray-900 dark:text-white">Download Location</p>
+<p class="text-sm text-gray-600 dark:text-gray-400">Pictures/WallpaperApp</p>
+</div>
+<hr class="border-black/5 dark:border-white/10"/>
+<button class="w-full py-2.5 bg-red-500/20 dark:bg-red-400/20 text-red-800 dark:text-red-200 font-semibold rounded-lg hover:bg-red-500/30 dark:hover:bg-red-400/30 transition-colors">Clear Cache</button>
+</div>
+</div>
+<div>
+<h2 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 px-4 mb-2 tracking-wider">Insights</h2>
+<a class="glassmorphism rounded-xl p-4 flex items-center justify-between hover:bg-black/5 dark:hover:bg-white/10 transition-colors" href="#">
+<div class="flex items-center space-x-4">
+<div class="w-10 h-10 bg-black/5 dark:bg-white/5 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">bar_chart_4_bars</span>
+</div>
+<div>
+<p class="font-semibold text-gray-900 dark:text-white">Personalization Analytics</p>
+<p class="text-sm text-gray-600 dark:text-gray-400">See how personalization is working</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-gray-500 dark:text-gray-400 text-base">arrow_forward_ios</span>
+</a>
+</div>
+<div>
+<h2 class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 px-4 mb-2 tracking-wider">About</h2>
+<div class="glassmorphism rounded-xl divide-y divide-black/5 dark:divide-white/10">
+<div class="p-4">
+<p class="font-medium text-gray-900 dark:text-white">Version</p>
+<p class="text-sm text-gray-600 dark:text-gray-400">v3.0.0</p>
+</div>
+<a class="flex items-center justify-between p-4 hover:bg-black/5 dark:hover:bg-white/10 transition-colors" href="#">
+<div>
+<p class="font-medium text-gray-900 dark:text-white">View on GitHub</p>
+<p class="text-sm text-gray-600 dark:text-gray-400">Star us on GitHub</p>
+</div>
+<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">open_in_new</span>
+</a>
+<a class="flex items-center justify-between p-4 hover:bg-black/5 dark:hover:bg-white/10 transition-colors" href="#">
+<div>
+<p class="font-medium text-gray-900 dark:text-white">Rate on Store</p>
+<p class="text-sm text-gray-600 dark:text-gray-400">Help us improve</p>
+</div>
+</a>
+</div>
+</div>
+</div>
+</div>
+
+</body></html>

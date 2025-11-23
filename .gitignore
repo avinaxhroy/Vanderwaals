@@ -76,3 +76,4 @@ scripts/.DS_Store
 *.lock
 /.gradle
 /app/release
+/.gradle

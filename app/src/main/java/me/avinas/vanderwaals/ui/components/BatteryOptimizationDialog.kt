@@ -54,7 +54,7 @@ fun BatteryOptimizationDialog(
                 imageVector = Icons.Default.BatteryAlert,
                 contentDescription = null,
                 modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.onSurface // Changed from primary
             )
         },
         title = {

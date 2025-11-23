@@ -147,16 +147,25 @@ class MainActivity : ComponentActivity() {
             val loadingMessage by initViewModel.loadingMessage.collectAsState()
             val loadingSubMessage by initViewModel.loadingSubMessage.collectAsState()
             val loadingProgress by initViewModel.loadingProgress.collectAsState()
+            val syncFailed by initViewModel.syncFailed.collectAsState()
             
-            // Observe settings for theme
+            // Observe settings for theme - directly derive darkTheme to ensure reactive updates
             val settings by settingsDataStore.settings.collectAsState(initial = null)
+            val systemDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+            
+            // Directly compute theme from settings - this triggers recomposition when settings change
             val darkTheme = when (settings?.themeMode) {
                 "light" -> false
                 "dark" -> true
-                else -> androidx.compose.foundation.isSystemInDarkTheme()
+                else -> systemDarkTheme  // "system" or null
             }
             
-            Log.d(TAG, "Theme update: mode=${settings?.themeMode}, systemDark=${androidx.compose.foundation.isSystemInDarkTheme()}, finalDarkTheme=$darkTheme")
+            Log.d(TAG, "MainActivity Theme: mode=${settings?.themeMode}, system=$systemDarkTheme, final=$darkTheme")
+            
+            // Log when theme actually changes
+            LaunchedEffect(darkTheme) {
+                Log.d(TAG, ">>> THEME CHANGED IN MAINACTIVITY: darkTheme=$darkTheme <<<")
+            }
             
             // Update system bars based on theme
             LaunchedEffect(darkTheme) {
@@ -173,6 +182,16 @@ class MainActivity : ComponentActivity() {
                 onboardingComplete = userPreferenceDao.exists()
                 keepSplashScreen = false
                 Log.d(TAG, "Onboarding complete: $onboardingComplete")
+            }
+            
+            // Observe user preferences to handle reset/re-onboarding
+            LaunchedEffect(Unit) {
+                userPreferenceDao.get().collect { prefs ->
+                    // If prefs become null after being complete, it means they were deleted (reset)
+                    if (prefs == null && onboardingComplete == true) {
+                        onboardingComplete = false
+                    }
+                }
             }
             
             LaunchedEffect(Unit) {
@@ -195,7 +214,9 @@ class MainActivity : ComponentActivity() {
                         LoadingScreen(
                             message = loadingMessage,
                             subMessage = loadingSubMessage,
-                            progress = loadingProgress
+                            progress = loadingProgress,
+                            isError = syncFailed,
+                            onRetry = { initViewModel.retryInitialization() }
                         )
                     } else {
                         when (onboardingComplete) {

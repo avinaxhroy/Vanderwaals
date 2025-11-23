@@ -122,51 +122,96 @@ fun GradientButton(
  * - Soft shadow
  * - Noise texture simulation (via gradient)
  */
+/**
+ * Modern glassmorphism card with premium Apple-style aesthetic
+ *
+ * Features:
+ * - High-quality translucent background
+ * - Subtle white border with gradient
+ * - Soft shadow
+ * - Noise texture simulation (via gradient)
+ */
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
-    shape: Shape = PremiumCardShape,
-    elevation: Dp = 0.dp, // Glass usually doesn't have high elevation, but shadow is important
+    shape: Shape = RoundedCornerShape(20.dp),
+    elevation: Dp = 0.dp, // Unused, kept for API compatibility
     contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
-    val containerColor = if (isDark) SurfaceGlass else SurfaceGlassLight
-    val borderColor = if (isDark) SurfaceGlassHighlight else SurfaceGlassHighlightLight
+    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
+    val containerColor = if (isDark) GlassBackground else GlassBackgroundLight
+    val borderColor = if (isDark) GlassBorder else GlassBorderLight
+    val topGradient = if (isDark) GlassGradientTop else GlassGradientTopLight
+    val leftGradient = if (isDark) GlassGradientLeft else GlassGradientLeftLight
     
     Box(
         modifier = modifier
             .shadow(
-                elevation = 16.dp, // Soft, large shadow
+                elevation = 32.dp, // 0 8px 32px
                 shape = shape,
-                ambientColor = if (isDark) Color.Black.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.05f),
-                spotColor = if (isDark) Color.Black.copy(alpha = 0.4f) else Color.Black.copy(alpha = 0.1f)
+                ambientColor = if (isDark) Color.Black.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f),
+                spotColor = if (isDark) Color.Black.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f)
             )
             .clip(shape)
             .background(containerColor)
             .border(
                 width = 1.dp,
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        borderColor.copy(alpha = 0.5f), // Top is brighter
-                        borderColor.copy(alpha = 0.1f)  // Bottom is subtle
-                    )
-                ),
+                color = borderColor,
                 shape = shape
             )
     ) {
-        // Subtle noise/gradient overlay for texture
+        // Top Gradient Border (simulated with Box)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(topGradient)
+                .align(Alignment.TopCenter)
+        )
+
+        // Left Gradient Border (simulated with Box)
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(1.dp)
+                .background(leftGradient)
+                .align(Alignment.CenterStart)
+        )
+        
+        // CSS: inset 0 1px 0 rgba(255, 255, 255, 0.5) -> Top Inner Highlight
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .align(Alignment.TopCenter)
+                .offset(y = 1.dp) // Inset by 1px
+                .background(if (isDark) GlassInsetTop else Color.White.copy(alpha = 0.5f))
+        )
+
+        // CSS: inset 0 -1px 0 rgba(255, 255, 255, 0.1) -> Bottom Inner Highlight
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .align(Alignment.BottomCenter)
+                .offset(y = (-1).dp) // Inset by 1px
+                .background(if (isDark) GlassInsetBottom else Color.White.copy(alpha = 0.2f))
+        )
+        
+        // CSS: inset 0 0 34px 17px rgba(255, 255, 255, 1.7) -> Strong Inner Glow
+        // Simulated with a radial gradient
         Box(
             modifier = Modifier
                 .matchParentSize()
                 .background(
-                    brush = Brush.linearGradient(
+                    brush = Brush.radialGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = if (isDark) 0.05f else 0.4f),
+                            if (isDark) GlassInnerGlow else Color.White.copy(alpha = 0.4f),
                             Color.Transparent
                         ),
-                        start = Offset(0f, 0f),
-                        end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                        center = Offset.Zero,
+                        radius = 800f // Large radius for soft glow
                     )
                 )
         )
@@ -181,48 +226,66 @@ fun GlassCard(
 /**
  * Glassmorphism Sheet for Bottom Sheets / Overlays
  */
+/**
+ * Glassmorphism Sheet for Bottom Sheets / Overlays
+ */
 @Composable
 fun GlassSheet(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
-    val containerColor = if (isDark) SurfaceGlass else SurfaceGlassLight
-    val borderColor = if (isDark) SurfaceGlassHighlight else SurfaceGlassHighlightLight
+    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
+    val containerColor = if (isDark) GlassBackground else GlassBackgroundLight
+    val borderColor = if (isDark) GlassBorder else GlassBorderLight
+    val topGradient = if (isDark) GlassGradientTop else GlassGradientTopLight
     val shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
     
     Box(
         modifier = modifier
             .shadow(
-                elevation = 24.dp,
+                elevation = 32.dp,
                 shape = shape,
-                ambientColor = Color.Black.copy(alpha = 0.2f),
-                spotColor = Color.Black.copy(alpha = 0.4f)
+                ambientColor = Color.Black.copy(alpha = 0.1f),
+                spotColor = Color.Black.copy(alpha = 0.1f)
             )
             .clip(shape)
             .background(containerColor)
             .border(
                 width = 1.dp,
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        borderColor.copy(alpha = 0.6f),
-                        borderColor.copy(alpha = 0.05f)
-                    )
-                ),
+                color = borderColor,
                 shape = shape
             )
     ) {
-        // Reflection gradient
+        // Top Gradient Border (simulated with Box)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(topGradient)
+                .align(Alignment.TopCenter)
+        )
+
+        // CSS: inset 0 1px 0 rgba(255, 255, 255, 0.5) -> Top Inner Highlight
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .align(Alignment.TopCenter)
+                .offset(y = 1.dp) // Inset by 1px
+                .background(if (isDark) GlassInsetTop else Color.White.copy(alpha = 0.5f))
+        )
+
+        // Inner Glow Simulation (Stronger)
         Box(
             modifier = Modifier
                 .matchParentSize()
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = if (isDark) 0.08f else 0.5f),
+                            if (isDark) GlassInnerGlow else Color.White.copy(alpha = 0.4f),
                             Color.Transparent
                         ),
-                        endY = 200f // Only top part has reflection
+                        endY = 400f
                     )
                 )
         )

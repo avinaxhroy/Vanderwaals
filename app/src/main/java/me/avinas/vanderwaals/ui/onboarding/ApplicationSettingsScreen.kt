@@ -1,5 +1,11 @@
 package me.avinas.vanderwaals.ui.onboarding
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -19,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -34,6 +42,7 @@ import me.avinas.vanderwaals.worker.ChangeInterval
 import me.avinas.vanderwaals.worker.WorkScheduler
 import java.time.LocalTime
 import me.avinas.vanderwaals.ui.theme.components.GlassCard
+import me.avinas.vanderwaals.ui.theme.components.GlassSheet
 
 /**
  * Application Settings Screen - Final screen in onboarding flow.
@@ -113,10 +122,8 @@ fun ApplicationSettingsScreen(
             )
         },
         bottomBar = {
-            Surface(
-                tonalElevation = 3.dp,
-                shadowElevation = 8.dp,
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+            GlassSheet(
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier
@@ -186,6 +193,11 @@ fun ApplicationSettingsScreen(
                                 .fillMaxWidth()
                                 .height(56.dp)
                                 .pressAnimation()
+                                .shadow(
+                                    elevation = 8.dp,
+                                    shape = RoundedCornerShape(16.dp),
+                                    spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                                )
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
@@ -209,27 +221,65 @@ fun ApplicationSettingsScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surface)
         ) {
-            // Ambient background for glassmorphism
-            val primaryColor = MaterialTheme.colorScheme.primary
-            val secondaryColor = MaterialTheme.colorScheme.secondary
-            val tertiaryColor = MaterialTheme.colorScheme.tertiary
-            
-            Canvas(modifier = Modifier.fillMaxSize().blur(60.dp)) {
-                drawCircle(
-                    color = primaryColor.copy(alpha = 0.3f),
-                    center = Offset(size.width * 0.1f, size.height * 0.2f),
-                    radius = size.minDimension * 0.5f
-                )
-                drawCircle(
-                    color = secondaryColor.copy(alpha = 0.3f),
-                    center = Offset(size.width * 0.9f, size.height * 0.5f),
-                    radius = size.minDimension * 0.6f
-                )
-                drawCircle(
-                    color = tertiaryColor.copy(alpha = 0.3f),
-                    center = Offset(size.width * 0.2f, size.height * 0.8f),
-                    radius = size.minDimension * 0.5f
-                )
+            // Dynamic Background Blobs
+            val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
+            val infiniteTransition = rememberInfiniteTransition(label = "blobs")
+
+            // Animate positions
+            val offset1 by infiniteTransition.animateFloat(
+                initialValue = 0f, targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(10000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ), label = "offset1"
+            )
+            val offset2 by infiniteTransition.animateFloat(
+                initialValue = 0f, targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(15000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ), label = "offset2"
+            )
+
+            Canvas(modifier = Modifier.fillMaxSize().blur(80.dp)) {
+                val w = size.width
+                val h = size.height
+
+                if (isDark) {
+                    // Dark Mode Blobs (Indigo/Rose/Sky)
+                    drawCircle(
+                        color = Color(0xFF5C6BC0).copy(alpha = 0.2f), // Indigo 400
+                        center = Offset(w * 0.2f + (offset1 * 100f), h * 0.2f),
+                        radius = 400.dp.toPx()
+                    )
+                    drawCircle(
+                        color = Color(0xFFEC407A).copy(alpha = 0.15f), // Rose 400
+                        center = Offset(w * 0.8f - (offset2 * 100f), h * 0.5f),
+                        radius = 350.dp.toPx()
+                    )
+                    drawCircle(
+                        color = Color(0xFF29B6F6).copy(alpha = 0.15f), // Sky 400
+                        center = Offset(w * 0.4f, h * 0.8f + (offset1 * 50f)),
+                        radius = 450.dp.toPx()
+                    )
+                } else {
+                    // Light Mode Blobs (Purple/Orange/Teal)
+                    drawCircle(
+                        color = Color(0xFFAB47BC).copy(alpha = 0.3f), // Purple 400
+                        center = Offset(w * 0.8f - (offset1 * 100f), h * 0.1f),
+                        radius = 500.dp.toPx()
+                    )
+                    drawCircle(
+                        color = Color(0xFFFFA726).copy(alpha = 0.25f), // Orange 400
+                        center = Offset(w * 0.1f + (offset2 * 100f), h * 0.6f),
+                        radius = 400.dp.toPx()
+                    )
+                    drawCircle(
+                        color = Color(0xFF26A69A).copy(alpha = 0.25f), // Teal 400
+                        center = Offset(w * 0.6f, h * 0.9f - (offset1 * 50f)),
+                        radius = 450.dp.toPx()
+                    )
+                }
             }
 
             Column(
@@ -311,12 +361,11 @@ fun ApplicationSettingsScreen(
                     if (changeInterval == ChangeInterval.DAILY) {
                         Spacer(modifier = Modifier.height(16.dp))
                         
-                        Card(
-                            onClick = { showTimePicker = true },
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                            ),
-                            modifier = Modifier.fillMaxWidth()
+                        GlassCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showTimePicker = true },
+                            contentPadding = PaddingValues(0.dp)
                         ) {
                             Row(
                                 modifier = Modifier

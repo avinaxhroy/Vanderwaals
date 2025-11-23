@@ -38,6 +38,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import android.app.WallpaperManager
 import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -85,6 +87,15 @@ import androidx.compose.animation.core.animateDpAsState
  * @see me.avinas.vanderwaals.ui.history.HistoryScreen
  * @see me.avinas.vanderwaals.ui.settings.SettingsScreen
  */
+// Mockup Colors for Blobs (Copied from SettingsScreen)
+private val DarkIndigo400 = Color(0xFF818CF8)
+private val DarkRose400 = Color(0xFFFB7185)
+private val DarkSky400 = Color(0xFF38BDF8)
+
+private val LightPurple400 = Color(0xFFC084FC)
+private val LightOrange400 = Color(0xFFFB923C)
+private val LightTeal400 = Color(0xFF2DD4BF)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
@@ -98,9 +109,6 @@ fun MainScreen(
     
     // Get device screen dimensions for SmartCrop
     val context = LocalContext.current
-    // CRITICAL: Use getDeviceScreenSize directly to match WallpaperChangeWorker logic
-    // This ensures the preview shows exactly what will be applied (SmartCrop to screen size)
-    // We ignore desiredMinimumWidth because Worker also ignores it to fix cropping issues
     val screenSize = remember { getDeviceScreenSize(context) }
     val screenWidth = screenSize.width
     val screenHeight = screenSize.height
@@ -114,6 +122,9 @@ fun MainScreen(
         animationSpec = tween(durationMillis = 300),
         label = "background_blur"
     )
+    
+    // Theme check for blobs
+    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
 
     Box(
         modifier = Modifier
@@ -160,13 +171,11 @@ fun MainScreen(
                     label = "wallpaper_transition"
                 ) { wallpaper ->
                     if (wallpaper != null) {
-                        // CRITICAL: Load the cropped file created by Worker for pixel-perfect preview matching
-                        // File path: cache/wallpapers/{wallpaperId}_cropped.jpg
                         val croppedFile = java.io.File(context.cacheDir, "wallpapers/${wallpaper.id}_cropped.jpg")
                         val imageSource = if (croppedFile.exists()) {
-                            croppedFile.absolutePath  // Load pre-cropped file
+                            croppedFile.absolutePath
                         } else {
-                            wallpaper.url  // Fallback to URL if cropped file doesn't exist yet
+                            wallpaper.url
                         }
                         
                         GlideImage(
@@ -176,12 +185,9 @@ fun MainScreen(
                                 alignment = Alignment.Center
                             ),
                             requestOptions = {
-                                // No transformation needed - file is already cropped!
                                 if (croppedFile.exists()) {
-                                    RequestOptions()  // Just load the cropped file as-is
+                                    RequestOptions()
                                 } else {
-                                    // Fallback: transform the URL (for first load before Worker runs)
-                                    // CRITICAL: Remember this transformation to avoid recreation on recomposition
                                     RequestOptions()
                                         .override(com.bumptech.glide.request.target.Target.SIZE_ORIGINAL)
                                         .transform(
@@ -194,7 +200,7 @@ fun MainScreen(
                             },
                             modifier = Modifier
                                 .fillMaxSize()
-                                .blur(blurRadius), // Apply animated blur here
+                                .blur(blurRadius),
                             loading = {
                                 Box(
                                     modifier = Modifier
@@ -221,7 +227,6 @@ fun MainScreen(
                             }
                         )
                     } else {
-                        // Placeholder when no wallpaper is set
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -236,7 +241,7 @@ fun MainScreen(
                                     imageVector = Icons.Default.AutoAwesome,
                                     contentDescription = null,
                                     modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.colorScheme.primary
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
                                     text = "No wallpaper set",
@@ -255,7 +260,7 @@ fun MainScreen(
             }
         }
 
-        // Vanderwaals branding logo - premium pill-shaped floating card
+        // Vanderwaals branding logo
         AnimatedVisibility(
             visible = !showOverlay && currentWallpaper != null,
             enter = fadeIn(animationSpec = tween(600)) + slideInVertically(
@@ -268,16 +273,14 @@ fun MainScreen(
             ) + scaleOut(targetScale = 0.9f, animationSpec = tween(350)),
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .statusBarsPadding() // Add status bar padding for edge-to-edge
-                .padding(top = 32.dp) // Increased top padding to ensure logo clears deep cutouts
+                .statusBarsPadding()
+                .padding(top = 32.dp)
         ) {
-            // Premium 3D effect with enhanced shadow layers
             Box(
                 modifier = Modifier
-                    .width(240.dp)  // Reduced width for better proportions
-                    .height(70.dp)  // Reduced height to match
+                    .width(240.dp)
+                    .height(70.dp)
             ) {
-                // Shadow layer 1 (deep background glow) - OPTIMIZED: Single blur layer
                 Box(
                     modifier = Modifier
                         .matchParentSize()
@@ -292,13 +295,12 @@ fun MainScreen(
                             ),
                             shape = RoundedCornerShape(44.dp)
                         )
-                        .blur(16.dp) // Reduced from 3 layers to 1 for performance
+                        .blur(16.dp)
                 )
                 
-                // Main pill-shaped card with vibrant gradient
                 Card(
                     modifier = Modifier.matchParentSize(),
-                    shape = RoundedCornerShape(44.dp),  // PILL SHAPE - circular ends!
+                    shape = RoundedCornerShape(44.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = Color.Transparent
                     ),
@@ -306,11 +308,11 @@ fun MainScreen(
                         width = 2.5.dp,
                         brush = Brush.horizontalGradient(
                             colors = listOf(
-                                Color(0xFFFBBF24).copy(alpha = 0.7f),  // Gold glow left
-                                Color(0xFFE879F9).copy(alpha = 0.8f),  // Fuchsia glow
-                                Color.White.copy(alpha = 0.6f),         // White center
-                                Color(0xFFA78BFA).copy(alpha = 0.8f),  // Purple glow
-                                Color(0xFF60A5FA).copy(alpha = 0.7f)   // Blue glow right
+                                Color(0xFFFBBF24).copy(alpha = 0.7f),
+                                Color(0xFFE879F9).copy(alpha = 0.8f),
+                                Color.White.copy(alpha = 0.6f),
+                                Color(0xFFA78BFA).copy(alpha = 0.8f),
+                                Color(0xFF60A5FA).copy(alpha = 0.7f)
                             )
                         )
                     ),
@@ -322,16 +324,15 @@ fun MainScreen(
                             .background(
                                 brush = Brush.horizontalGradient(
                                     colors = listOf(
-                                        Color(0xFF8B5CF6),  // Vibrant purple
-                                        Color(0xFFD946EF),  // Hot fuchsia
-                                        Color(0xFFEC4899),  // Bright pink
-                                        Color(0xFFF43F5E)   // Vibrant red-pink
+                                        Color(0xFF8B5CF6),
+                                        Color(0xFFD946EF),
+                                        Color(0xFFEC4899),
+                                        Color(0xFFF43F5E)
                                     )
                                 )
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        // Enhanced shine overlay with gradient
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -346,7 +347,6 @@ fun MainScreen(
                                 )
                         )
                         
-                        // Horizontal shimmer effect
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -361,12 +361,11 @@ fun MainScreen(
                                 )
                         )
                         
-                        // Logo with perfect spacing
                         Image(
                             painter = painterResource(id = R.drawable.vanderwaals_logo),
                             contentDescription = "Vanderwaals",
                             modifier = Modifier
-                                .fillMaxWidth(0.88f)  // Maximum visibility
+                                .fillMaxWidth(0.88f)
                                 .padding(horizontal = 20.dp, vertical = 14.dp),
                             contentScale = ContentScale.Fit,
                             alpha = 1.0f
@@ -389,222 +388,264 @@ fun MainScreen(
             ) + fadeOut(animationSpec = tween(200)),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            // Glassmorphism Bottom Sheet
-            GlassSheet(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .navigationBarsPadding() // Push up from nav bar
+                    .navigationBarsPadding()
             ) {
-                // Content Layer
-                Column(
-                    modifier = Modifier
-                        .padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                ) {
-                    // Primary Action: Change Now (Premium Gradient)
-                    Button(
-                        onClick = { 
-                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                            viewModel.changeNow() 
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(68.dp)
-                            .shadow(
-                                elevation = 16.dp,
-                                shape = RoundedCornerShape(24.dp),
-                                ambientColor = Color(0xFF7C3AED).copy(alpha = 0.5f),
-                                spotColor = Color(0xFF7C3AED).copy(alpha = 0.5f)
-                            ),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.Transparent,
-                            disabledContainerColor = Color.Gray.copy(alpha = 0.3f)
-                        ),
-                        contentPadding = PaddingValues(0.dp),
-                        shape = RoundedCornerShape(24.dp),
-                        enabled = !isLoading
-                    ) {
-                        // Gradient Container
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    brush = Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color(0xFF8B5CF6), // Violet
-                                            Color(0xFFD946EF)  // Fuchsia
-                                        )
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (isLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(28.dp),
-                                    color = Color.White,
-                                    strokeWidth = 3.dp
-                                )
-                            } else {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.AutoAwesome,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(26.dp),
-                                        tint = Color.White
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Text(
-                                        text = "Change Wallpaper",
-                                        style = MaterialTheme.typography.titleLarge.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            letterSpacing = 0.5.sp
-                                        ),
-                                        color = Color.White
-                                    )
-                                }
-                            }
-                        }
-                    }
+                // Dynamic Background Blobs behind the GlassSheet
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    val w = size.width
+                    val h = size.height
 
-                    // Secondary Actions: History & Settings
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        // History Button
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(56.dp)
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                                .clickable {
-                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-                                    viewModel.toggleOverlay()
-                                    onNavigateToHistory()
-                                }
-                                .border(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
-                                    RoundedCornerShape(20.dp)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.History,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "History",
-                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
-                                )
-                            }
-                        }
-
-                        // Settings Button
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(56.dp)
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                                .clickable {
-                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-                                    viewModel.toggleOverlay()
-                                    onNavigateToSettings()
-                                }
-                                .border(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
-                                    RoundedCornerShape(20.dp)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Settings",
-                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
-                                )
-                            }
-                        }
-                    }
-
-                    // Feedback buttons - CRITICAL for continuous learning
-                    if (currentWallpaper != null) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Do you like this wallpaper?",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(end = 12.dp)
-                            )
-                            
-                            // Like button
-                            IconButton(
-                                onClick = { 
-                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                    viewModel.likeCurrentWallpaper()
-                                    scope.launch { snackbarHostState.showSnackbar("Marked as liked") }
-                                },
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Favorite,
-                                    contentDescription = "Like",
-                                    tint = Color(0xFFEC4899),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            
-                            // Dislike button
-                            IconButton(
-                                onClick = { 
-                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                    viewModel.dislikeCurrentWallpaper()
-                                    scope.launch { snackbarHostState.showSnackbar("Marked as disliked") }
-                                },
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ThumbDown,
-                                    contentDescription = "Dislike",
-                                    tint = Color(0xFF60A5FA),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // Source attribution
-                    (currentWallpaper as? MainViewModel.MainUiState.Success)?.wallpaper?.let { wallpaper ->
-                        Text(
-                            text = "From ${wallpaper.source}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 4.dp)
+                    if (isDark) {
+                        drawCircle(
+                            color = DarkIndigo400.copy(alpha = 0.2f),
+                            center = Offset(w * 0.2f, h * 0.5f),
+                            radius = 200.dp.toPx()
                         )
+                        drawCircle(
+                            color = DarkRose400.copy(alpha = 0.15f),
+                            center = Offset(w * 0.8f, h * 0.2f),
+                            radius = 150.dp.toPx()
+                        )
+                        drawCircle(
+                            color = DarkSky400.copy(alpha = 0.15f),
+                            center = Offset(w * 0.5f, h * 0.8f),
+                            radius = 180.dp.toPx()
+                        )
+                    } else {
+                        drawCircle(
+                            color = LightPurple400.copy(alpha = 0.3f),
+                            center = Offset(w * 0.2f, h * 0.5f),
+                            radius = 250.dp.toPx()
+                        )
+                        drawCircle(
+                            color = LightOrange400.copy(alpha = 0.25f),
+                            center = Offset(w * 0.8f, h * 0.2f),
+                            radius = 200.dp.toPx()
+                        )
+                        drawCircle(
+                            color = LightTeal400.copy(alpha = 0.25f),
+                            center = Offset(w * 0.5f, h * 0.8f),
+                            radius = 220.dp.toPx()
+                        )
+                    }
+                }
+
+                // Glassmorphism Bottom Sheet
+                GlassSheet(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // Content Layer
+                    Column(
+                        modifier = Modifier
+                            .padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
+                        // Primary Action: Change Now (Premium Gradient)
+                        Button(
+                            onClick = { 
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                viewModel.changeNow() 
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(68.dp)
+                                .shadow(
+                                    elevation = 16.dp,
+                                    shape = RoundedCornerShape(24.dp),
+                                    ambientColor = Color(0xFF7C3AED).copy(alpha = 0.5f),
+                                    spotColor = Color(0xFF7C3AED).copy(alpha = 0.5f)
+                                ),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.Transparent,
+                                disabledContainerColor = Color.Gray.copy(alpha = 0.3f)
+                            ),
+                            contentPadding = PaddingValues(0.dp),
+                            shape = RoundedCornerShape(24.dp),
+                            enabled = !isLoading
+                        ) {
+                            // Gradient Container
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        brush = Brush.horizontalGradient(
+                                            colors = listOf(
+                                                Color(0xFF8B5CF6), // Violet
+                                                Color(0xFFD946EF)  // Fuchsia
+                                            )
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isLoading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(28.dp),
+                                        color = Color.White,
+                                        strokeWidth = 3.dp
+                                    )
+                                } else {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.AutoAwesome,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(26.dp),
+                                            tint = Color.White
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(
+                                            text = "Change Wallpaper",
+                                            style = MaterialTheme.typography.titleLarge.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.5.sp
+                                            ),
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Secondary Actions: History & Settings
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            // History Button using GlassCard
+                            me.avinas.vanderwaals.ui.theme.components.GlassCard(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(64.dp)
+                                    .clickable {
+                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                        viewModel.toggleOverlay()
+                                        onNavigateToHistory()
+                                    },
+                                contentPadding = PaddingValues(0.dp),
+                                shape = RoundedCornerShape(20.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.History,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = if (isDark) Color.White else Color(0xFF111827)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "History",
+                                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                                            color = if (isDark) Color.White else Color(0xFF111827)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Settings Button using GlassCard
+                            me.avinas.vanderwaals.ui.theme.components.GlassCard(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(64.dp)
+                                    .clickable {
+                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                        viewModel.toggleOverlay()
+                                        onNavigateToSettings()
+                                    },
+                                contentPadding = PaddingValues(0.dp),
+                                shape = RoundedCornerShape(20.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Settings,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = if (isDark) Color.White else Color(0xFF111827)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Settings",
+                                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                                            color = if (isDark) Color.White else Color(0xFF111827)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Feedback buttons
+                        if (currentWallpaper != null) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Do you like this wallpaper?",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(end = 12.dp)
+                                )
+                                
+                                // Like button
+                                IconButton(
+                                    onClick = { 
+                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                        viewModel.likeCurrentWallpaper()
+                                        scope.launch { snackbarHostState.showSnackbar("Marked as liked") }
+                                    },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Favorite,
+                                        contentDescription = "Like",
+                                        tint = Color(0xFFEC4899),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                
+                                // Dislike button
+                                IconButton(
+                                    onClick = { 
+                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                        viewModel.dislikeCurrentWallpaper()
+                                        scope.launch { snackbarHostState.showSnackbar("Marked as disliked") }
+                                    },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ThumbDown,
+                                        contentDescription = "Dislike",
+                                        tint = Color(0xFF60A5FA),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Source attribution
+                        (currentWallpaper as? MainViewModel.MainUiState.Success)?.wallpaper?.let { wallpaper ->
+                            Text(
+                                text = "From ${wallpaper.source}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp)
+                            )
+                        }
                     }
                 }
             }

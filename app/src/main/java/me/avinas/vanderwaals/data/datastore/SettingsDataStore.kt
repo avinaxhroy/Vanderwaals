@@ -54,7 +54,7 @@ class SettingsDataStore @Inject constructor(
                 bingEnabled = prefs[BING_ENABLED] ?: false,  // Disabled by default, only enabled in auto mode
                 onboardingCompleted = prefs[ONBOARDING_COMPLETED] ?: false,
                 lastSyncTimestamp = prefs[LAST_SYNC_TIMESTAMP] ?: 0L,
-                themeMode = prefs[THEME_MODE] ?: "light"
+                themeMode = prefs[THEME_MODE] ?: "system"
             )
         }
     
@@ -84,6 +84,10 @@ class SettingsDataStore @Inject constructor(
     
     suspend fun markOnboardingComplete() {
         context.dataStore.edit { it[ONBOARDING_COMPLETED] = true }
+    }
+
+    suspend fun resetOnboarding() {
+        context.dataStore.edit { it[ONBOARDING_COMPLETED] = false }
     }
     
     suspend fun updateLastSyncTimestamp(timestamp: Long) {

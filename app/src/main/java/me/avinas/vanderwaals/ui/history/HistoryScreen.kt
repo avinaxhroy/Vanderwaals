@@ -1,7 +1,14 @@
 package me.avinas.vanderwaals.ui.history
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -138,27 +145,65 @@ fun HistoryScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surface)
         ) {
-            // Ambient background for glassmorphism
-            val primaryColor = MaterialTheme.colorScheme.primary
-            val secondaryColor = MaterialTheme.colorScheme.secondary
-            val tertiaryColor = MaterialTheme.colorScheme.tertiary
-            
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                drawCircle(
-                    color = primaryColor.copy(alpha = 0.08f),
-                    center = Offset(size.width * 0.2f, size.height * 0.2f),
-                    radius = size.minDimension * 0.3f
-                )
-                drawCircle(
-                    color = secondaryColor.copy(alpha = 0.08f),
-                    center = Offset(size.width * 0.8f, size.height * 0.5f),
-                    radius = size.minDimension * 0.4f
-                )
-                drawCircle(
-                    color = tertiaryColor.copy(alpha = 0.08f),
-                    center = Offset(size.width * 0.3f, size.height * 0.8f),
-                    radius = size.minDimension * 0.35f
-                )
+            // Dynamic Background Blobs
+            val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
+            val infiniteTransition = rememberInfiniteTransition(label = "blobs")
+
+            // Animate positions
+            val offset1 by infiniteTransition.animateFloat(
+                initialValue = 0f, targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(10000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ), label = "offset1"
+            )
+            val offset2 by infiniteTransition.animateFloat(
+                initialValue = 0f, targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(15000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ), label = "offset2"
+            )
+
+            Canvas(modifier = Modifier.fillMaxSize().blur(80.dp)) {
+                val w = size.width
+                val h = size.height
+
+                if (isDark) {
+                    // Dark Mode Blobs (Indigo/Rose/Sky)
+                    drawCircle(
+                        color = Color(0xFF5C6BC0).copy(alpha = 0.2f), // Indigo 400
+                        center = Offset(w * 0.2f + (offset1 * 100f), h * 0.2f),
+                        radius = 400.dp.toPx()
+                    )
+                    drawCircle(
+                        color = Color(0xFFEC407A).copy(alpha = 0.15f), // Rose 400
+                        center = Offset(w * 0.8f - (offset2 * 100f), h * 0.5f),
+                        radius = 350.dp.toPx()
+                    )
+                    drawCircle(
+                        color = Color(0xFF29B6F6).copy(alpha = 0.15f), // Sky 400
+                        center = Offset(w * 0.4f, h * 0.8f + (offset1 * 50f)),
+                        radius = 450.dp.toPx()
+                    )
+                } else {
+                    // Light Mode Blobs (Purple/Orange/Teal)
+                    drawCircle(
+                        color = Color(0xFFAB47BC).copy(alpha = 0.3f), // Purple 400
+                        center = Offset(w * 0.8f - (offset1 * 100f), h * 0.1f),
+                        radius = 500.dp.toPx()
+                    )
+                    drawCircle(
+                        color = Color(0xFFFFA726).copy(alpha = 0.25f), // Orange 400
+                        center = Offset(w * 0.1f + (offset2 * 100f), h * 0.6f),
+                        radius = 400.dp.toPx()
+                    )
+                    drawCircle(
+                        color = Color(0xFF26A69A).copy(alpha = 0.25f), // Teal 400
+                        center = Offset(w * 0.6f, h * 0.9f - (offset1 * 50f)),
+                        radius = 450.dp.toPx()
+                    )
+                }
             }
 
             val uiState by viewModel.historyGroups.collectAsState()

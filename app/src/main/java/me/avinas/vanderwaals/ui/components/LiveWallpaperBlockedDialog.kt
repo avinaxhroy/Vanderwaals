@@ -236,7 +236,7 @@ fun LiveWallpaperInstructionsDialog(
                 imageVector = Icons.Default.Wallpaper,
                 contentDescription = null,
                 modifier = Modifier.size(40.dp),
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.onSurface // Changed from primary
             )
         },
         title = {

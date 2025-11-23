@@ -2,6 +2,7 @@ package me.avinas.vanderwaals.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -24,6 +25,8 @@ fun LoadingScreen(
     message: String = "Loading Wallpapers...",
     subMessage: String = "Please wait while we prepare your wallpapers",
     progress: Float? = null, // 0.0 to 1.0, null for indeterminate
+    isError: Boolean = false,
+    onRetry: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -33,11 +36,20 @@ fun LoadingScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(64.dp),
-            color = MaterialTheme.colorScheme.primary,
-            strokeWidth = 4.dp
-        )
+        if (!isError) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(64.dp),
+                color = MaterialTheme.colorScheme.primary,
+                strokeWidth = 4.dp
+            )
+        } else {
+            Icon(
+                imageVector = androidx.compose.material.icons.Icons.Default.CloudOff,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.error
+            )
+        }
         
         Spacer(modifier = Modifier.height(32.dp))
         
@@ -45,7 +57,7 @@ fun LoadingScreen(
             text = message,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
         )
         
@@ -59,8 +71,8 @@ fun LoadingScreen(
             modifier = Modifier.padding(horizontal = 32.dp)
         )
         
-        // Show progress bar if progress is available
-        if (progress != null) {
+        // Show progress bar if progress is available and not error
+        if (progress != null && !isError) {
             Spacer(modifier = Modifier.height(24.dp))
             
             Column(
@@ -86,6 +98,19 @@ fun LoadingScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Medium
                 )
+            }
+        }
+        
+        if (isError && onRetry != null) {
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            Button(
+                onClick = onRetry,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text("Retry Connection")
             }
         }
     }

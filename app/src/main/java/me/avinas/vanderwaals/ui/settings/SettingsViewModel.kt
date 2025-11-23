@@ -65,6 +65,7 @@ class SettingsViewModel @Inject constructor(
     private val workScheduler: me.avinas.vanderwaals.worker.WorkScheduler,
     private val settingsDataStore: me.avinas.vanderwaals.data.datastore.SettingsDataStore,
     private val syncWallpaperCatalogUseCase: me.avinas.vanderwaals.domain.usecase.SyncWallpaperCatalogUseCase,
+    private val userPreferenceDao: me.avinas.vanderwaals.data.dao.UserPreferenceDao,
     @param:ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -126,6 +127,37 @@ class SettingsViewModel @Inject constructor(
      */
     fun dismissAlarmPermissionDialog() {
         _needsAlarmPermission.value = false
+    }
+
+    /**
+     * Opens battery optimization settings.
+     */
+    fun openBatterySettings() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            try {
+                val intent = android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                android.util.Log.e("SettingsViewModel", "Failed to open battery settings", e)
+                _toastMessage.value = "Could not open battery settings"
+            }
+        }
+    }
+
+    /**
+     * Resets onboarding status and navigates to onboarding.
+     */
+    fun reopenOnboarding() {
+        viewModelScope.launch {
+            // Reset DataStore flag
+            settingsDataStore.resetOnboarding()
+            
+            // Clear User Preferences (this is what MainActivity checks)
+            userPreferenceDao.deleteAll()
+            
+            _toastMessage.value = "Restarting onboarding..."
+        }
     }
     
     init {
@@ -316,20 +348,27 @@ class SettingsViewModel @Inject constructor(
      * Updates the app theme mode.
      */
     fun updateThemeMode(themeMode: ThemeMode) {
+        android.util.Log.d("SettingsViewModel", "=== THEME UPDATE STARTED ===")
+        android.util.Log.d("SettingsViewModel", "Requested theme: $themeMode")
+        
         viewModelScope.launch {
             _themeMode.value = themeMode
+            android.util.Log.d("SettingsViewModel", "_themeMode updated to: $themeMode")
+            
             val themeString = when (themeMode) {
                 ThemeMode.LIGHT -> "light"
                 ThemeMode.DARK -> "dark"
                 ThemeMode.SYSTEM -> "system"
             }
-            android.util.Log.d("SettingsViewModel", "Updating theme mode to: $themeString")
+            
+            android.util.Log.d("SettingsViewModel", "Writing to DataStore: $themeString")
             try {
                 settingsDataStore.updateThemeMode(themeString)
-                android.util.Log.d("SettingsViewModel", "Theme mode updated in DataStore")
+                android.util.Log.d("SettingsViewModel", "✓ DataStore update completed")
             } catch (e: Exception) {
-                android.util.Log.e("SettingsViewModel", "Failed to update theme mode", e)
+                android.util.Log.e("SettingsViewModel", "✗ DataStore update failed", e)
             }
+            android.util.Log.d("SettingsViewModel", "=== THEME UPDATE FINISHED ===")
         }
     }
 

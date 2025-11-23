@@ -100,7 +100,7 @@ fun InitialSyncScreen(
                             modifier = Modifier
                                 .size(120.dp)
                                 .offset(y = cloudOffset.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = MaterialTheme.colorScheme.onSurface // Changed from primary
                         )
                         
                         Text(
@@ -201,7 +201,7 @@ fun InitialSyncScreen(
                             imageVector = Icons.Default.CloudDownload,
                             contentDescription = null,
                             modifier = Modifier.size(80.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = MaterialTheme.colorScheme.onSurface // Changed from primary
                         )
                         
                         Text(

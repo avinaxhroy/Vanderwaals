@@ -105,6 +105,7 @@ class InitializationViewModel @Inject constructor(
                 _loadingMessage.value = "Preparing Wallpapers"
                 _loadingSubMessage.value = "Setting up your wallpaper collection..."
                 _loadingProgress.value = 0.0f
+                _syncFailed.value = false
                 
                 if (!isDbInitialized) {
                     Log.d(TAG, "Database not initialized, waiting for download...")
@@ -159,34 +160,32 @@ class InitializationViewModel @Inject constructor(
                     
                     // Final check
                     if (!manifestRepository.isDatabaseInitialized()) {
-                        Log.w(TAG, "Initialization timeout - database still empty after 5 minutes")
+                        Log.w(TAG, "Initialization timeout or failure - database still empty")
                         _syncFailed.value = true
                         _loadingMessage.value = "Download Failed"
-                        _loadingSubMessage.value = "Network timeout. Please check your internet connection and retry from settings."
+                        _loadingSubMessage.value = "Network timeout. Please check your internet connection and retry."
                         _loadingProgress.value = null
-                        kotlinx.coroutines.delay(3000L) // Show error for 3 seconds
+                        // Do NOT set isInitialized = true here
+                        return@launch
                     }
                 }
                 
-                // Mark as initialized (even if download failed - allow app usage)
+                // Mark as initialized ONLY if successful
                 if (!_syncFailed.value) {
                     _loadingMessage.value = "All Set!"
                     _loadingSubMessage.value = "Opening your wallpaper collection..."
                     _loadingProgress.value = 1.0f
+                    kotlinx.coroutines.delay(500L) // Brief delay for visual feedback
+                    _isInitialized.value = true
+                    Log.d(TAG, "App initialization complete")
                 }
-                kotlinx.coroutines.delay(500L) // Brief delay for visual feedback
-                
-                _isInitialized.value = true
-                Log.d(TAG, "App initialization complete")
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Error during initialization", e)
-                // Still mark as initialized to avoid indefinite loading
                 _syncFailed.value = true
                 _loadingMessage.value = "Error"
-                _loadingSubMessage.value = "Please check your connection and retry from settings"
-                kotlinx.coroutines.delay(2000L)
-                _isInitialized.value = true
+                _loadingSubMessage.value = "Please check your connection and retry."
+                // Do NOT set isInitialized = true here
             }
         }
     }
@@ -197,6 +196,18 @@ class InitializationViewModel @Inject constructor(
     fun retryInitialization() {
         _isInitialized.value = false
         _syncFailed.value = false
+        
+        // Trigger sync again via WorkManager
+        val workRequest = androidx.work.OneTimeWorkRequestBuilder<me.avinas.vanderwaals.worker.CatalogSyncWorker>()
+            .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            .build()
+            
+        workManager.enqueueUniqueWork(
+            "catalog_sync_initial",
+            androidx.work.ExistingWorkPolicy.REPLACE,
+            workRequest
+        )
+        
         checkInitialization()
     }
 }

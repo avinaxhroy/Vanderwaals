@@ -207,9 +207,20 @@ fun VanderwaalsTheme(
         colorScheme = colorScheme,
         typography = VanderwaalsTypography,
         shapes = VanderwaalsShapes,
-        content = content
+        content = {
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalThemeIsDark provides darkTheme,
+                content = content
+            )
+        }
     )
 }
+
+/**
+ * CompositionLocal to provide the current theme mode (Dark/Light) to the app.
+ * This allows components to know the actual app theme, which may differ from the system theme.
+ */
+val LocalThemeIsDark = androidx.compose.runtime.compositionLocalOf { false }
 
 /**
  * Preview-friendly version of VanderwaalsTheme for Compose previews
