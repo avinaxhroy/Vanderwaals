@@ -75,3 +75,4 @@ scripts/.DS_Store
 # Lock files
 *.lock
 /.gradle
+/app/release
