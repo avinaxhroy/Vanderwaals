@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.bumptech.glide.load.resource.bitmap.CenterCrop
+import com.bumptech.glide.request.RequestOptions
 import com.skydoves.landscapist.glide.GlideImage
 import com.skydoves.landscapist.ImageOptions
 import me.avinas.vanderwaals.core.SmartCrop
@@ -98,9 +99,11 @@ fun ConfirmationGalleryScreen(
     
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0), // Disable default insets
         topBar = {
-            TopAppBar(
+            Column {
+                Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+                TopAppBar(
                 title = { },
                 navigationIcon = {
                     IconButton(onClick = {
@@ -116,10 +119,10 @@ fun ConfirmationGalleryScreen(
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent
-                ),
-                modifier = Modifier.statusBarsPadding()
+                )
             )
-        },
+        }
+    },
         bottomBar = {
             Surface(
                 tonalElevation = 3.dp,
@@ -129,7 +132,6 @@ fun ConfirmationGalleryScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .navigationBarsPadding()
                         .padding(24.dp)
                 ) {
                     Button(
@@ -167,6 +169,9 @@ fun ConfirmationGalleryScreen(
                             textAlign = TextAlign.Center
                         )
                     }
+                    
+                    // Manual bottom padding
+                    Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
                 }
             }
         }
@@ -381,10 +386,23 @@ private fun WallpaperCard(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             // Wallpaper Thumbnail
+            // Smart Thumbnail Logic
+            val thumbnailUrl = remember(wallpaper) {
+                when {
+                    wallpaper.thumbnailUrl.isNotEmpty() -> wallpaper.thumbnailUrl
+                    wallpaper.url.contains("images.unsplash.com") -> "${wallpaper.url}&w=400&q=80"
+                    wallpaper.url.contains("bing.com") -> "${wallpaper.url}&w=400"
+                    else -> wallpaper.url
+                }
+            }
+
             GlideImage(
-                imageModel = { wallpaper.thumbnailUrl.ifEmpty { wallpaper.url } },
+                imageModel = { thumbnailUrl },
                 modifier = Modifier.fillMaxSize(),
-                imageOptions = ImageOptions(contentScale = ContentScale.Crop)
+                imageOptions = ImageOptions(contentScale = ContentScale.Crop),
+                requestOptions = {
+                    RequestOptions().override(500)
+                }
             )
             
             // Like Icon (Top Right)

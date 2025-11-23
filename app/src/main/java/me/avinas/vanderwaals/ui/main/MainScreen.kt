@@ -273,7 +273,7 @@ fun MainScreen(
             ) + scaleOut(targetScale = 0.9f, animationSpec = tween(350)),
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .statusBarsPadding()
+                .statusBarsPadding() // Ensure logo doesn't overlap status bar
                 .padding(top = 32.dp)
         ) {
             Box(
@@ -391,7 +391,6 @@ fun MainScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .navigationBarsPadding()
             ) {
                 // Dynamic Background Blobs behind the GlassSheet
                 Canvas(modifier = Modifier.matchParentSize()) {
@@ -602,8 +601,10 @@ fun MainScreen(
                                 IconButton(
                                     onClick = { 
                                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                        viewModel.likeCurrentWallpaper()
-                                        scope.launch { snackbarHostState.showSnackbar("Marked as liked") }
+                                        viewModel.likeCurrentWallpaper(
+                                            onSuccess = { scope.launch { snackbarHostState.showSnackbar("Marked as liked") } },
+                                            onError = { error -> scope.launch { snackbarHostState.showSnackbar(error) } }
+                                        )
                                     },
                                     modifier = Modifier.size(40.dp)
                                 ) {
@@ -619,8 +620,10 @@ fun MainScreen(
                                 IconButton(
                                     onClick = { 
                                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                        viewModel.dislikeCurrentWallpaper()
-                                        scope.launch { snackbarHostState.showSnackbar("Marked as disliked") }
+                                        viewModel.dislikeCurrentWallpaper(
+                                            onSuccess = { scope.launch { snackbarHostState.showSnackbar("Marked as disliked") } },
+                                            onError = { error -> scope.launch { snackbarHostState.showSnackbar(error) } }
+                                        )
                                     },
                                     modifier = Modifier.size(40.dp)
                                 ) {
@@ -646,6 +649,9 @@ fun MainScreen(
                                     .padding(top = 4.dp)
                             )
                         }
+                        
+                        // Manual bottom padding for navigation bar
+                        Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
                     }
                 }
             }
@@ -689,6 +695,7 @@ fun MainScreen(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
                 .padding(bottom = 16.dp)
         )
     }

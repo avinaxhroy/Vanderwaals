@@ -119,9 +119,11 @@ fun UploadWallpaperScreen(
     
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0), // Disable default insets
         topBar = {
-            TopAppBar(
+            Column {
+                Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+                TopAppBar(
                 title = { },
                 navigationIcon = {
                     IconButton(onClick = {
@@ -137,10 +139,10 @@ fun UploadWallpaperScreen(
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent
-                ),
-                modifier = Modifier.statusBarsPadding()
+                )
             )
         }
+    }
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -212,7 +214,6 @@ fun UploadWallpaperScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .navigationBarsPadding()
             ) {
                 Column(
                     modifier = Modifier
@@ -256,43 +257,45 @@ fun UploadWallpaperScreen(
                         shape = RoundedCornerShape(16.dp),
                         contentPadding = PaddingValues(0.dp) // Custom content
                     ) {
-                        // Dashed border for "drop zone" feel
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val stroke = Stroke(
-                                width = 2.dp.toPx(),
-                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(20f, 20f), 0f)
-                            )
-                            drawRoundRect(
-                                color = primaryColor.copy(alpha = 0.3f),
-                                style = stroke,
-                                cornerRadius = CornerRadius(16.dp.toPx()),
-                                topLeft = Offset(8.dp.toPx(), 8.dp.toPx()),
-                                size = size.copy(width = size.width - 16.dp.toPx(), height = size.height - 16.dp.toPx())
-                            )
-                        }
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            // Dashed border for "drop zone" feel
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val stroke = Stroke(
+                                    width = 2.dp.toPx(),
+                                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(20f, 20f), 0f)
+                                )
+                                drawRoundRect(
+                                    color = primaryColor.copy(alpha = 0.3f),
+                                    style = stroke,
+                                    cornerRadius = CornerRadius(16.dp.toPx()),
+                                    topLeft = Offset(8.dp.toPx(), 8.dp.toPx()),
+                                    size = size.copy(width = size.width - 16.dp.toPx(), height = size.height - 16.dp.toPx())
+                                )
+                            }
 
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Upload,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                            
-                            Spacer(modifier = Modifier.height(16.dp))
-                            
-                            Text(
-                                text = "Tap to Upload",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Upload,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = primaryColor // Use primary color for better visibility
+                                )
+                                
+                                Spacer(modifier = Modifier.height(16.dp))
+                                
+                                Text(
+                                    text = "Tap to Upload",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = primaryColor // Use primary color for better visibility
+                                )
+                            }
                         }
                     }
                     
@@ -328,6 +331,9 @@ fun UploadWallpaperScreen(
                             )
                         }
                     }
+                    
+                    // Manual bottom padding
+                    Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
                 }
                 
                 // Loading Overlay

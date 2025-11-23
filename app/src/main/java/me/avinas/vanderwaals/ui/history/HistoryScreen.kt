@@ -137,7 +137,12 @@ fun HistoryScreen(
                 modifier = Modifier.statusBarsPadding()
             )
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        snackbarHost = { 
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+            ) 
+        },
         modifier = Modifier.fillMaxSize()
     ) { paddingValues ->
         Box(
@@ -251,7 +256,8 @@ fun HistoryScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(paddingValues)
-                                .navigationBarsPadding(),
+                                .fillMaxSize()
+                                .padding(paddingValues),
                             contentPadding = PaddingValues(vertical = 16.dp, horizontal = 20.dp),
                             verticalArrangement = Arrangement.spacedBy(24.dp)
                         ) {
@@ -300,6 +306,11 @@ fun HistoryScreen(
                                         }
                                     )
                                 }
+                            }
+                            
+                            
+                            item {
+                                Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
                             }
                         }
                     }
@@ -376,7 +387,13 @@ private fun HistoryItemCard(
             val imageModel = if (File(item.localCroppedPath).exists()) {
                 File(item.localCroppedPath)
             } else {
-                item.wallpaper.thumbnailUrl
+                // Smart Thumbnail Logic
+                when {
+                    item.wallpaper.thumbnailUrl.isNotEmpty() -> item.wallpaper.thumbnailUrl
+                    item.wallpaper.url.contains("images.unsplash.com") -> "${item.wallpaper.url}&w=200&q=80"
+                    item.wallpaper.url.contains("bing.com") -> "${item.wallpaper.url}&w=200"
+                    else -> item.wallpaper.url
+                }
             }
 
             GlideImage(

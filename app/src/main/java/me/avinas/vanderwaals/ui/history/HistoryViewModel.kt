@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import me.avinas.vanderwaals.data.dao.WallpaperHistoryDao
 import me.avinas.vanderwaals.data.entity.WallpaperHistory
 import me.avinas.vanderwaals.data.entity.WallpaperMetadata
+import me.avinas.vanderwaals.data.entity.WallpaperSummary
 import me.avinas.vanderwaals.data.repository.WallpaperRepository
 import me.avinas.vanderwaals.domain.usecase.FeedbackType
 import me.avinas.vanderwaals.domain.usecase.UpdatePreferencesUseCase
@@ -81,13 +82,15 @@ class HistoryViewModel @Inject constructor(
      */
     val historyGroups: StateFlow<HistoryUiState> =
         historyDao.getHistory()
-            .combine(wallpaperRepository.getAllWallpapers()) { historyList, wallpapers ->
+            .combine(wallpaperRepository.getAllWallpaperSummaries()) { historyList, wallpapers ->
                 // CRITICAL FIX: If we have history items but no wallpapers yet, it means metadata is still loading.
                 // Don't emit Success(empty) yet, wait for metadata.
                 if (historyList.isNotEmpty() && wallpapers.isEmpty()) {
                     HistoryUiState.Loading
                 } else {
-                    // Create map for quick wallpaper lookup
+                    // PERFORMANCE OPTIMIZATION: Use summaries without embeddings for UI display
+                    // Embeddings (576 floats) are only needed for feedback, not UI rendering
+                    // This reduces memory usage by ~87% (from ~2.3 KB to ~0.3 KB per wallpaper)
                     val wallpaperMap = wallpapers.associateBy { it.id }
                     
                     // Convert to UI state with timestamp tracking for grouping
@@ -145,7 +148,8 @@ class HistoryViewModel @Inject constructor(
                 val history = historyDao.getHistory().first().find { it.id == historyId }
                     ?: return@launch
                 
-                // Get the wallpaper metadata
+                // CRITICAL: Load full wallpaper with embedding for preference learning
+                // UI uses summaries, but feedback requires the 576-dimensional embedding
                 val wallpaper = wallpaperRepository.getAllWallpapers().first()
                     .find { it.id == history.wallpaperId }
                     ?: return@launch
@@ -185,7 +189,9 @@ class HistoryViewModel @Inject constructor(
     fun downloadWallpaper(wallpaperId: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
-                val wallpaper = wallpaperRepository.getAllWallpapers().first()
+                // PERFORMANCE: Use summaries for download, no embedding needed
+                // Note: getAllWallpaperSummaries() returns WallpaperMetadata with empty embeddings
+                val wallpaper = wallpaperRepository.getAllWallpaperSummaries().first()
                     .find { it.id == wallpaperId }
                     ?: return@launch
                 

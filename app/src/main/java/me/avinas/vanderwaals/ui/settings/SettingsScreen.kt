@@ -107,7 +107,12 @@ fun SettingsScreen(
                 modifier = Modifier.statusBarsPadding()
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { 
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+            ) 
+        }
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -165,8 +170,7 @@ fun SettingsScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
-                    .navigationBarsPadding(),
+                    .padding(paddingValues),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
@@ -754,6 +758,7 @@ fun SettingsScreen(
                 
                 item {
                     Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
                 }
             }
         }

@@ -277,102 +277,120 @@ class MainViewModel @Inject constructor(
      * Updates the preference vector and history with positive feedback.
      * This makes the algorithm show more wallpapers similar to this one.
      */
-    fun likeCurrentWallpaper() {
+    fun likeCurrentWallpaper(onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
                 val state = currentWallpaper.value
                 val wallpaper = (state as? MainUiState.Success)?.wallpaper
                 if (wallpaper == null) {
-                    _errorMessage.value = "No wallpaper to like"
+                    onError("No wallpaper to like")
+                    return@launch
+                }
+
+                // CRITICAL FIX: Load full wallpaper with embedding
+                // currentWallpaper uses summaries without embeddings for performance
+                // We need the full embedding (576 dimensions) for preference learning
+                val fullWallpaper = wallpaperRepository.getAllWallpapers().first()
+                    .find { it.id == wallpaper.id }
+                
+                if (fullWallpaper == null) {
+                    onError("Wallpaper not found in catalog")
                     return@launch
                 }
                 
-                // Update preferences with positive feedback
-                val result = updatePreferencesUseCase(wallpaper, FeedbackType.LIKE)
-                
+                if (fullWallpaper.embedding.isEmpty()) {
+                    onError("Wallpaper embedding not available")
+                    return@launch
+                }
+
+                val result = updatePreferencesUseCase(fullWallpaper, FeedbackType.LIKE)
+
                 result.fold(
                     onSuccess = {
-                        // Update history with feedback and context
                         val activeHistory = historyDao.getActiveWallpaper()
                         if (activeHistory != null) {
-                            // Capture contextual information
                             val context = me.avinas.vanderwaals.data.entity.FeedbackContext.fromCurrentState(
                                 application
                             )
-                            
-                            // Update history with feedback and context using repository
                             wallpaperRepository.updateHistoryWithContext(
                                 activeHistory.id,
                                 FeedbackType.LIKE,
                                 context
                             )
                         }
-                        
-                        // Show success message
-                        _errorMessage.value = "✓ Learning your taste"
                         android.util.Log.d("MainViewModel", "Liked wallpaper: ${wallpaper.id}, category: ${wallpaper.category}")
+                        onSuccess()
                     },
                     onFailure = { error ->
-                        _errorMessage.value = "Failed to record feedback"
                         android.util.Log.e("MainViewModel", "Failed to like wallpaper", error)
+                        onError(error.message ?: "Failed to record feedback")
                     }
                 )
             } catch (e: Exception) {
-                _errorMessage.value = "Error recording like: ${e.localizedMessage}"
                 android.util.Log.e("MainViewModel", "Exception in likeCurrentWallpaper", e)
+                onError(e.message ?: "Error recording like")
             }
         }
     }
-    
+
     /**
      * Records dislike feedback for the current wallpaper.
      * 
      * Updates the preference vector and history with negative feedback.
      * This makes the algorithm avoid wallpapers similar to this one.
      */
-    fun dislikeCurrentWallpaper() {
+    fun dislikeCurrentWallpaper(onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
                 val state = currentWallpaper.value
                 val wallpaper = (state as? MainUiState.Success)?.wallpaper
                 if (wallpaper == null) {
-                    _errorMessage.value = "No wallpaper to dislike"
+                    onError("No wallpaper to dislike")
+                    return@launch
+                }
+
+                // CRITICAL FIX: Load full wallpaper with embedding
+                // currentWallpaper uses summaries without embeddings for performance
+                // We need the full embedding (576 dimensions) for preference learning
+                val fullWallpaper = wallpaperRepository.getAllWallpapers().first()
+                    .find { it.id == wallpaper.id }
+                
+                if (fullWallpaper == null) {
+                    onError("Wallpaper not found in catalog")
                     return@launch
                 }
                 
-                // Update preferences with negative feedback
-                val result = updatePreferencesUseCase(wallpaper, FeedbackType.DISLIKE)
-                
+                if (fullWallpaper.embedding.isEmpty()) {
+                    onError("Wallpaper embedding not available")
+                    return@launch
+                }
+
+                val result = updatePreferencesUseCase(fullWallpaper, FeedbackType.DISLIKE)
+
                 result.fold(
                     onSuccess = {
-                        // Update history with feedback and context
                         val activeHistory = historyDao.getActiveWallpaper()
                         if (activeHistory != null) {
-                            // Capture contextual information
                             val context = me.avinas.vanderwaals.data.entity.FeedbackContext.fromCurrentState(
                                 application
                             )
-                            
-                            // Update history with feedback and context using repository
                             wallpaperRepository.updateHistoryWithContext(
                                 activeHistory.id,
                                 FeedbackType.DISLIKE,
                                 context
                             )
                         }
-                        
-                        // Show success message
-                        _errorMessage.value = "✓ Will show less like this"
-                        android.util.Log.d("MainViewModel", "Disliked wallpaper: ${wallpaper.id}, category: ${wallpaper.category}")
+                        android.util.Log.d("MainViewModel", "Disliked wallpaper: ${wallpaper.id}")
+                        onSuccess()
                     },
                     onFailure = { error ->
-                        _errorMessage.value = "Failed to record feedback"
                         android.util.Log.e("MainViewModel", "Failed to dislike wallpaper", error)
+                        onError(error.message ?: "Failed to record feedback")
                     }
                 )
             } catch (e: Exception) {
-                _errorMessage.value = "Error recording dislike: ${e.localizedMessage}"
                 android.util.Log.e("MainViewModel", "Exception in dislikeCurrentWallpaper", e)
+                onError(e.message ?: "Error recording dislike")
             }
         }
     }

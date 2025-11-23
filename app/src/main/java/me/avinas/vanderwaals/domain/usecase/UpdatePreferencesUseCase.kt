@@ -138,24 +138,23 @@ class UpdatePreferencesUseCase @Inject constructor(
             // First DISLIKE should be ignored (can't learn what to avoid without knowing what they like)
             val isVectorEmpty = currentPreferences.preferenceVector.isEmpty()
             
-            if (isVectorEmpty && feedback == FeedbackType.DISLIKE) {
-                // Can't process dislike without a preference vector
-                // User needs to like something first to establish their preferences
-                android.util.Log.d("UpdatePreferences", 
-                    "Skipping dislike for Auto Mode (no preference vector yet). User must like something first."
-                )
-                return Result.failure(
-                    IllegalStateException("Cannot process dislike in Auto Mode without any likes. Like a wallpaper first to establish preferences.")
-                )
-            }
-            
             // Step 3: Initialize or get current vector
-            val currentVector = if (isVectorEmpty && feedback == FeedbackType.LIKE) {
-                // First like in Auto Mode: Initialize preference vector from this wallpaper
-                android.util.Log.d("UpdatePreferences", 
-                    "Auto Mode FIRST LIKE - initializing preference vector from wallpaper ${wallpaper.id}"
-                )
-                wallpaper.embedding.clone()
+            val currentVector = if (isVectorEmpty) {
+                if (feedback == FeedbackType.LIKE) {
+                    // First like in Auto Mode: Initialize preference vector from this wallpaper
+                    android.util.Log.d("UpdatePreferences", 
+                        "Auto Mode FIRST LIKE - initializing preference vector from wallpaper ${wallpaper.id}"
+                    )
+                    wallpaper.embedding.clone()
+                } else {
+                    // First dislike in Auto Mode: Initialize with zero vector
+                    // This allows the negative update to work: 0 - lr * embedding = -lr * embedding
+                    // Resulting in a vector pointing AWAY from the disliked wallpaper
+                    android.util.Log.d("UpdatePreferences", 
+                        "Auto Mode FIRST DISLIKE - initializing with zero vector to enable negative learning"
+                    )
+                    FloatArray(EXPECTED_EMBEDDING_SIZE) // Zero-filled array
+                }
             } else {
                 currentPreferences.preferenceVector
             }
