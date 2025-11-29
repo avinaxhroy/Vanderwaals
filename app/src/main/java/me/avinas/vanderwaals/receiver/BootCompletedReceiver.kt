@@ -119,9 +119,15 @@ class BootCompletedReceiver : BroadcastReceiver() {
                     
                     // Parse interval and reschedule
                     when (settings.changeInterval) {
-                        "15min", "unlock" -> {
+                        "unlock" -> {
                             workScheduler.scheduleWallpaperChange(
-                                interval = ChangeInterval.EVERY_15_MINUTES,
+                                interval = ChangeInterval.EVERY_UNLOCK,
+                                targetScreen = settings.applyTo
+                            )
+                        }
+                        "15min" -> {
+                            workScheduler.scheduleWallpaperChange(
+                                interval = ChangeInterval.FIFTEEN_MINUTES,
                                 targetScreen = settings.applyTo
                             )
                         }

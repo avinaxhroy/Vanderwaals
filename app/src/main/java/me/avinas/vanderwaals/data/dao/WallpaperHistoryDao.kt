@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.MapColumn
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 import me.avinas.vanderwaals.data.entity.WallpaperHistory
@@ -262,6 +263,7 @@ interface WallpaperHistoryDao {
      * dao.setFeedback(historyId, WallpaperHistory.FEEDBACK_DISLIKE)
      * ```
      */
+    @Transaction
     @Query("UPDATE wallpaper_history SET userFeedback = :feedback WHERE id = :id")
     suspend fun setFeedback(id: Long, feedback: String)
     
@@ -282,6 +284,7 @@ interface WallpaperHistoryDao {
      * dao.setFeedbackWithContext(historyId, WallpaperHistory.FEEDBACK_LIKE, contextJson)
      * ```
      */
+    @Transaction
     @Query("UPDATE wallpaper_history SET userFeedback = :feedback, feedbackContext = :feedbackContext WHERE id = :id")
     suspend fun setFeedbackWithContext(id: Long, feedback: String, feedbackContext: String?)
     

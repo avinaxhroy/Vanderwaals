@@ -3,6 +3,7 @@ package me.avinas.vanderwaals.data.repository
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.avinas.vanderwaals.core.NetworkRetry
 import me.avinas.vanderwaals.data.dao.WallpaperMetadataDao
 import me.avinas.vanderwaals.data.entity.WallpaperMetadata
 import me.avinas.vanderwaals.network.BingArchiveService
@@ -85,8 +86,10 @@ class BingWallpaperRepository @Inject constructor(
         Log.d(TAG, "Starting Bing daily sync...")
         
         try {
-            // Fetch last 8 days from Bing API
-            val response = bingArchiveService.getDailyWallpaper(count = DAILY_FETCH_COUNT)
+            // Fetch last 8 days from Bing API with retry logic
+            val response = NetworkRetry.retryWithBackoff {
+                bingArchiveService.getDailyWallpaper(count = DAILY_FETCH_COUNT)
+            }
             
             if (!response.isSuccessful) {
                 val errorMessage = "HTTP ${response.code()}: ${response.message()}"
@@ -210,11 +213,14 @@ class BingWallpaperRepository @Inject constructor(
                 
                 for (year in yearsToFetch) {
                     try {
-                        val response = bingArchiveService.getArchiveManifestYear(
-                            country = region.country,
-                            language = region.language,
-                            year = year
-                        )
+                        // Fetch archive data with retry logic
+                        val response = NetworkRetry.retryWithBackoff {
+                            bingArchiveService.getArchiveManifestYear(
+                                country = region.country,
+                                language = region.language,
+                                year = year
+                            )
+                        }
                         
                         if (!response.isSuccessful) {
                             if (response.code() == 404) {

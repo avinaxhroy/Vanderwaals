@@ -28,6 +28,8 @@ import androidx.room.PrimaryKey
  * **Database Indexes:**
  * - `wallpaperId`: Fast lookup for checking if wallpaper was previously applied
  * - `appliedAt`: Enables efficient chronological sorting and time-based queries
+ * - `userFeedback`: Optimizes queries filtering by feedback (likes, dislikes) - added in v7
+ * - `removedAt`: Optimizes queries for active wallpaper (WHERE removedAt IS NULL) - added in v7
  * 
  * **User Feedback Values:**
  * - "like": User explicitly liked the wallpaper (heart icon)
@@ -46,7 +48,9 @@ import androidx.room.PrimaryKey
     tableName = "wallpaper_history",
     indices = [
         Index(value = ["wallpaperId"]),
-        Index(value = ["appliedAt"])
+        Index(value = ["appliedAt"]),
+        Index(value = ["userFeedback"]),
+        Index(value = ["removedAt"])
     ]
 )
 data class WallpaperHistory(

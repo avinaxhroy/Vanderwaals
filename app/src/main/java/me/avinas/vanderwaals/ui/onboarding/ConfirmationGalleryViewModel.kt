@@ -261,6 +261,35 @@ class ConfirmationGalleryViewModel @Inject constructor(
     fun resetFinishState() {
         _finishState.value = FinishState.Idle
     }
+    
+    /**
+     * Reset all state for back navigation.
+     * 
+     * Called when user navigates back to UploadWallpaperScreen.
+     * Clears all selections and data so user can start fresh if they
+     * upload a different wallpaper.
+     */
+    fun resetStateForBackNavigation() {
+        android.util.Log.d("ConfirmationGalleryViewModel", "Resetting state for back navigation")
+        _displayedWallpapers.value = emptyList()
+        _likedWallpapers.value = emptySet()
+        _dislikedWallpapers.value = emptySet()
+        _canContinue.value = false
+        _finishState.value = FinishState.Idle
+        allWallpapers = emptyList()
+        currentOffset = 0
+        originalEmbedding = null
+    }
+    
+    /**
+     * Check if this screen has been initialized with wallpapers.
+     * Used to determine if user is returning to an initialized screen.
+     * 
+     * @return true if wallpapers have been loaded
+     */
+    fun hasWallpapers(): Boolean {
+        return allWallpapers.isNotEmpty()
+    }
 }
 
 /**

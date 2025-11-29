@@ -88,7 +88,7 @@ import me.avinas.vanderwaals.data.entity.WallpaperMetadata
         me.avinas.vanderwaals.data.entity.ColorPreference::class,
         me.avinas.vanderwaals.data.entity.CompositionPreference::class
     ],
-    version = 6,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -178,7 +178,7 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
         /**
          * Current database version.
          */
-        const val DATABASE_VERSION = 6
+        const val DATABASE_VERSION = 8
         
         /**
          * Migration from database version 1 to version 2.
@@ -227,6 +227,13 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
                 // Store as TEXT (JSON array) for consistency with other FloatArray columns
                 database.execSQL(
                     "ALTER TABLE user_preferences ADD COLUMN momentumVector TEXT NOT NULL DEFAULT '[]'"
+                )
+                
+                // Add originalEmbedding column to user_preferences
+                // This column stores the prime reference from upload/category (Personalize) or empty (Auto)
+                // Store as TEXT (JSON array) for consistency with other FloatArray columns
+                database.execSQL(
+                    "ALTER TABLE user_preferences ADD COLUMN originalEmbedding TEXT NOT NULL DEFAULT '[]'"
                 )
                 
                 // Create category_preferences table
@@ -342,6 +349,88 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
         }
         
         /**
+         * Migration from database version 6 to version 7.
+         * 
+         * Changes:
+         * - Added performance indexes on frequently queried columns
+         * - Optimizes wallpaper_history queries filtering by userFeedback
+         * - Optimizes wallpaper_history queries filtering active wallpapers (removedAt IS NULL)
+         * - Optimizes download_queue queries ordering by priority + filtering by downloaded status
+         * 
+         * Migration path: v6 (basic indexes) -> v7 (enhanced performance indexes)
+         * 
+         * For existing data:
+         * - Indexes are created on existing data without modification
+         * - Queries will automatically benefit from new indexes
+         * - No data transformation required
+         */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add index on wallpaper_history.userFeedback
+                // Optimizes queries filtering by feedback (likes, dislikes)
+                // Used by: getEntriesWithFeedback(), feedback analytics
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_wallpaper_history_userFeedback " +
+                    "ON wallpaper_history(userFeedback)"
+                )
+                
+                // Add index on wallpaper_history.removedAt
+                // Optimizes queries for active wallpaper (WHERE removedAt IS NULL)
+                // Used by: getActiveWallpaper(), getActiveWallpaperFlow()
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_wallpaper_history_removedAt " +
+                    "ON wallpaper_history(removedAt)"
+                )
+                
+                // Add composite index on download_queue(downloaded, priority)
+                // Optimizes queries ordering by priority while filtering by downloaded status
+                // Used by: getTopUndownloaded(), queue management
+                // SQLite will use this for covering index queries (index-only scans)
+                // Note: Room's @Index annotation doesn't support DESC, so we create index without it
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_download_queue_downloaded_priority " +
+                    "ON download_queue(downloaded, priority)"
+                )
+            }
+        }
+        
+        /**
+         * Migration from database version 7 to version 8.
+         * 
+         * Changes:
+         * - Added composite indexes on wallpaper_metadata for complex filter queries
+         * - Index on (category, brightness) for category-specific brightness filtering
+         * - Index on (source, brightness) for source-specific brightness filtering
+         * 
+         * Migration path: v7 (single-column indexes) → v8 (+ composite indexes)
+         * 
+         * For existing data:
+         * - Indexes are created on existing data without modification
+         * - Queries will automatically benefit from new composite indexes
+         * - No data transformation required
+         * - Single-column indexes remain for backward compatibility
+         */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add composite index on wallpaper_metadata(category, brightness)
+                // Optimizes queries filtering by both category and brightness range
+                // Used by: getByCategoryAndBrightnessRange(), contextual filtering
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_wallpaper_metadata_category_brightness " +
+                    "ON wallpaper_metadata(category, brightness)"
+                )
+                
+                // Add composite index on wallpaper_metadata(source, brightness)
+                // Optimizes queries filtering by both source and brightness range
+                // Used by: getBySourceAndBrightnessRange(), source-specific contextual filtering
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_wallpaper_metadata_source_brightness " +
+                    "ON wallpaper_metadata(source, brightness)"
+                )
+            }
+        }
+        
+        /**
          * Array of database migrations.
          * 
          * Add new migrations here when incrementing version:
@@ -358,7 +447,9 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
             MIGRATION_2_3,
             MIGRATION_3_4,
             MIGRATION_4_5,
-            MIGRATION_5_6
+            MIGRATION_5_6,
+            MIGRATION_6_7,
+            MIGRATION_7_8
         )
         
         /**

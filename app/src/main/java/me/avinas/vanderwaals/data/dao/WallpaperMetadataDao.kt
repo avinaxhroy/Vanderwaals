@@ -165,6 +165,46 @@ interface WallpaperMetadataDao {
     suspend fun getByBrightnessRange(minBrightness: Int, maxBrightness: Int): List<WallpaperMetadata>
     
     /**
+     * Retrieves wallpapers by category within a brightness range.
+     * 
+     * Uses composite index on (category, brightness) for optimal performance.
+     * Useful for contextual filtering like "dark gruvbox wallpapers for night mode".
+     * 
+     * @param category Category name to filter by
+     * @param minBrightness Minimum brightness (0-100)
+     * @param maxBrightness Maximum brightness (0-100)
+     * @return List of wallpapers matching category and brightness range
+     * 
+     * Example:
+     * ```kotlin
+     * // Get dark gruvbox wallpapers for night
+     * val darkGruvbox = dao.getByCategoryAndBrightnessRange("gruvbox", 0, 50)
+     * ```
+     */
+    @Query("SELECT * FROM wallpaper_metadata WHERE category = :category AND brightness BETWEEN :minBrightness AND :maxBrightness")
+    suspend fun getByCategoryAndBrightnessRange(category: String, minBrightness: Int, maxBrightness: Int): List<WallpaperMetadata>
+    
+    /**
+     * Retrieves wallpapers by source within a brightness range.
+     * 
+     * Uses composite index on (source, brightness) for optimal performance.
+     * Useful for filtering like "bright Bing wallpapers for daytime".
+     * 
+     * @param source Source identifier ("github" or "bing")
+     * @param minBrightness Minimum brightness (0-100)
+     * @param maxBrightness Maximum brightness (0-100)
+     * @return List of wallpapers matching source and brightness range
+     * 
+     * Example:
+     * ```kotlin
+     * // Get bright Bing wallpapers for daytime
+     * val brightBing = dao.getBySourceAndBrightnessRange("bing", 50, 100)
+     * ```
+     */
+    @Query("SELECT * FROM wallpaper_metadata WHERE source = :source AND brightness BETWEEN :minBrightness AND :maxBrightness")
+    suspend fun getBySourceAndBrightnessRange(source: String, minBrightness: Int, maxBrightness: Int): List<WallpaperMetadata>
+    
+    /**
      * Retrieves a single wallpaper by ID.
      * 
      * @param id Wallpaper ID

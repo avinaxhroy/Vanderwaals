@@ -68,6 +68,7 @@ class SelectNextWallpaperUseCase @Inject constructor(
     private val compositionPreferenceRepository: me.avinas.vanderwaals.data.repository.CompositionPreferenceRepository,
     private val similarityCalculator: SimilarityCalculator,
     private val settingsDataStore: me.avinas.vanderwaals.data.datastore.SettingsDataStore,
+    private val dailyPlaylistManager: me.avinas.vanderwaals.data.repository.DailyPlaylistManager,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) {
     private val colorAnalyzer = me.avinas.vanderwaals.algorithm.ColorAnalyzer
@@ -139,7 +140,7 @@ class SelectNextWallpaperUseCase @Inject constructor(
      * }
      * ```
      */
-    suspend operator fun invoke(): Result<WallpaperMetadata> {
+    suspend operator fun invoke(excludeWallpaperId: String? = null): Result<WallpaperMetadata> {
         return try {
             // Step 1: Get user preferences, or create defaults if not initialized
             // Use direct database read (not Flow) to avoid cached values
@@ -185,6 +186,37 @@ class SelectNextWallpaperUseCase @Inject constructor(
             // Step 2: Get settings to check enabled sources
             val settings = settingsDataStore.settings.first()
             
+            // CRITICAL: Check for Daily Playlist (Every Unlock mode)
+            if (settings.changeInterval == "unlock") {
+                var nextId = dailyPlaylistManager.getNextWallpaperId()
+                
+                // If the selected ID matches the excluded one, try getting the next one
+                if (nextId != null && nextId == excludeWallpaperId) {
+                    android.util.Log.d("SelectNextWallpaper", "Selected ID $nextId matches excluded ID, skipping to next...")
+                    nextId = dailyPlaylistManager.getNextWallpaperId()
+                }
+                
+                if (nextId != null) {
+                    // Get the wallpaper metadata for this ID
+                    // We need a way to get a single wallpaper. 
+                    // Since we don't have getWallpaperById, we can find it in downloaded list or all list.
+                    // Ideally we should have getWallpaperById in repository.
+                    // For now, let's try to find it in downloaded wallpapers first.
+                    val downloaded = wallpaperRepository.getDownloadedWallpapers().first()
+                    val match = downloaded.find { it.id == nextId }
+                    
+                    if (match != null) {
+                        android.util.Log.d("SelectNextWallpaper", "Selected from Daily Playlist: ${match.id}")
+                        return Result.success(match)
+                    } else {
+                         android.util.Log.w("SelectNextWallpaper", "Playlist item $nextId not found in downloaded wallpapers")
+                         // Fallback to normal selection if file missing
+                    }
+                } else {
+                    android.util.Log.d("SelectNextWallpaper", "Daily Playlist empty or not initialized")
+                }
+            }
+            
             // Step 3: Get downloaded wallpapers (only those ready for display)
             val allDownloadedWallpapers = wallpaperRepository.getDownloadedWallpapers().first()
             
@@ -205,7 +237,7 @@ class SelectNextWallpaperUseCase @Inject constructor(
             }
             
             val downloadedWallpapers = allDownloadedWallpapers.filter { wallpaper ->
-                wallpaper.source in enabledSources
+                wallpaper.source in enabledSources && wallpaper.id != excludeWallpaperId
             }
             
             if (downloadedWallpapers.isEmpty()) {

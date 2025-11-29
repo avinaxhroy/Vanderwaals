@@ -95,7 +95,7 @@ class DeviceUnlockReceiver : BroadcastReceiver() {
                 val intervalSetting = settings.changeInterval
                 
                 if (intervalSetting != "unlock") {
-                    Log.d(TAG, "Skipping change - user interval is '$intervalSetting', not 'unlock'")
+                    Log.d(TAG, "Skipping change - user interval is '$intervalSetting'")
                     return@launch
                 }
                 
@@ -112,6 +112,7 @@ class DeviceUnlockReceiver : BroadcastReceiver() {
                     "lock_screen" -> "lock"
                     "home_screen" -> "home"
                     "both" -> "both"
+                    "both_different" -> "both_different"
                     else -> "both"  // Default to both if not set
                 }
                 

@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -357,6 +358,43 @@ fun ApplicationSettingsScreen(
                         }
                     }
                     
+                    // Rate Limit and Battery Warning Note for Every Unlock
+                    if (changeInterval == ChangeInterval.EVERY_UNLOCK) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp)
+                                .background(
+                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "Battery Notice",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                                Text(
+                                    text = "Changes are limited to once per minute to save battery. This mode may increase battery usage with frequent unlocks.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                    
                     // Time Picker for Daily
                     if (changeInterval == ChangeInterval.DAILY) {
                         Spacer(modifier = Modifier.height(16.dp))
@@ -390,36 +428,36 @@ fun ApplicationSettingsScreen(
                 }
             }
         }
-        
-        // Time Picker Dialog
-        if (showTimePicker) {
-            TimePickerDialog(
-                initialTime = dailyTime,
-                onDismiss = { showTimePicker = false },
-                onConfirm = { time ->
-                    viewModel.setDailyTime(time)
-                    showTimePicker = false
-                }
-            )
-        }
-        
-        // Alarm Permission Dialog
-        if (needsAlarmPermission) {
-            AlarmPermissionDialog(viewModel = viewModel)
-        }
-        
-        // Error Snackbar
-        if (startState is StartState.Error) {
-            Snackbar(
-                modifier = Modifier.padding(16.dp),
-                action = {
-                    TextButton(onClick = { viewModel.resetStartState() }) {
-                        Text("Dismiss")
-                    }
-                }
-            ) {
-                Text((startState as StartState.Error).message)
+    }
+    
+    // Time Picker Dialog
+    if (showTimePicker) {
+        TimePickerDialog(
+            initialTime = dailyTime,
+            onDismiss = { showTimePicker = false },
+            onConfirm = { time ->
+                viewModel.setDailyTime(time)
+                showTimePicker = false
             }
+        )
+    }
+    
+    // Alarm Permission Dialog
+    if (needsAlarmPermission) {
+        AlarmPermissionDialog(viewModel = viewModel)
+    }
+    
+    // Error Snackbar
+    if (startState is StartState.Error) {
+        Snackbar(
+            modifier = Modifier.padding(16.dp),
+            action = {
+                TextButton(onClick = { viewModel.resetStartState() }) {
+                    Text("Dismiss")
+                }
+            }
+        ) {
+            Text((startState as StartState.Error).message)
         }
     }
 }
@@ -431,9 +469,6 @@ fun ApplicationSettingsScreen(
  * @param description Section description
  * @param content Section content
  */
-
-// ... (imports remain the same)
-
 @Composable
 private fun SettingsSection(
     title: String,

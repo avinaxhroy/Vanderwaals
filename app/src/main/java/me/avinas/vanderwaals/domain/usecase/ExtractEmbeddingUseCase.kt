@@ -3,6 +3,7 @@ package me.avinas.vanderwaals.domain.usecase
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import me.avinas.vanderwaals.algorithm.EmbeddingExtractor
 import javax.inject.Inject
@@ -146,34 +147,15 @@ class ExtractEmbeddingUseCase @Inject constructor(
     private fun loadBitmapFromUri(uri: Uri): android.graphics.Bitmap? {
         return try {
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                // First, decode bounds to check image size
-                val options = BitmapFactory.Options().apply {
-                    inJustDecodeBounds = true
-                }
-                BitmapFactory.decodeStream(inputStream, null, options)
-                
-                // Calculate sample size to downsample large images
-                // Target size: 1024x1024 (sufficient for embedding extraction)
-                val sampleSize = calculateSampleSize(
-                    options.outWidth,
-                    options.outHeight,
+                // Use BitmapManager for safe bitmap loading with OOM protection
+                me.avinas.vanderwaals.core.BitmapManager.loadBitmapFromStream(
+                    inputStream = inputStream,
                     maxWidth = 1024,
                     maxHeight = 1024
                 )
-                
-                // Decode actual bitmap with sampling
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    BitmapFactory.decodeStream(
-                        stream,
-                        null,
-                        BitmapFactory.Options().apply {
-                            inSampleSize = sampleSize
-                            inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
-                        }
-                    )
-                }
             }
         } catch (e: Exception) {
+            Log.e("ExtractEmbeddingUseCase", "Error loading bitmap from URI", e)
             null
         }
     }

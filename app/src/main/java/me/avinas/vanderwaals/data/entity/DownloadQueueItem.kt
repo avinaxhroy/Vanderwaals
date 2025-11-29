@@ -28,6 +28,7 @@ import androidx.room.PrimaryKey
  * **Database Indexes:**
  * - `priority`: Enables fast sorting by priority (descending)
  * - `downloaded`: Allows filtering between downloaded and pending items
+ * - `(downloaded, priority)`: Composite index for covering queries - added in v7
  * 
  * @property wallpaperId Reference to WallpaperMetadata.id (primary key)
  * @property priority Similarity/appeal score (0.0 to 1.0, higher is better)
@@ -38,7 +39,8 @@ import androidx.room.PrimaryKey
     tableName = "download_queue",
     indices = [
         Index(value = ["priority"]),
-        Index(value = ["downloaded"])
+        Index(value = ["downloaded"]),
+        Index(value = ["downloaded", "priority"])
     ]
 )
 data class DownloadQueueItem(

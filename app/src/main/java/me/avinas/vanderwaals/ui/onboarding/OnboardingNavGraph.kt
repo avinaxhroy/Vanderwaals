@@ -32,6 +32,11 @@ import androidx.navigation.compose.rememberNavController
  * - UploadWallpaperViewModel: Shares similar wallpapers with ConfirmationGallery
  * - ModeSelectionViewModel: Shared across onboarding to track selected mode
  * 
+ * **Back Navigation Data Handling:**
+ * - UploadWallpaper → ModeSelection: Clears upload data
+ * - ConfirmationGallery → UploadWallpaper: Clears confirmation data, preserves upload results for reuse
+ * - ApplicationSettings → Previous: Navigates to correct previous screen based on flow
+ * 
  * @param onOnboardingComplete Callback when onboarding finishes
  */
 @Composable
@@ -74,6 +79,8 @@ fun OnboardingNavGraph(
                 },
                 onBackPressed = {
                     android.util.Log.d("OnboardingNav", "UPLOAD_WALLPAPER back pressed")
+                    // Reset state completely when going back to mode selection
+                    uploadViewModel.resetState()
                     navController.popBackStack()
                 },
                 viewModel = uploadViewModel
@@ -112,6 +119,16 @@ fun OnboardingNavGraph(
                 },
                 onBackPressed = {
                     android.util.Log.d("OnboardingNav", "CONFIRMATION_GALLERY back pressed")
+                    
+                    // CRITICAL: Reset confirmation state when going back
+                    // User might want to upload a different wallpaper
+                    confirmationViewModel.resetStateForBackNavigation()
+                    
+                    // CRITICAL: Reset upload state to Initial to prevent auto-navigation
+                    // back to confirmation gallery. The similar wallpapers are preserved
+                    // in case user wants to continue without making changes.
+                    uploadViewModel.resetStateForBackNavigation()
+                    
                     navController.popBackStack()
                 },
                 viewModel = confirmationViewModel
@@ -130,6 +147,21 @@ fun OnboardingNavGraph(
                     // Navigate back - always goes to previous screen in backstack
                     android.util.Log.d("OnboardingNav", "APPLICATION_SETTINGS back pressed")
                     android.util.Log.d("OnboardingNav", "Previous entry: ${navController.previousBackStackEntry?.destination?.route}")
+                    android.util.Log.d("OnboardingNav", "Selected mode: $selectedMode")
+                    
+                    // If coming from Personalize flow, we need to check if we should
+                    // reset the ConfirmationGallery state
+                    val previousRoute = navController.previousBackStackEntry?.destination?.route
+                    if (previousRoute == OnboardingRoutes.CONFIRMATION_GALLERY) {
+                        // Get the confirmation gallery entry and reset its finish state
+                        // Note: Cannot use try-catch around composable, so we handle NavController errors
+                        val confirmEntry = runCatching { navController.getBackStackEntry(OnboardingRoutes.CONFIRMATION_GALLERY) }.getOrNull()
+                        if (confirmEntry != null) {
+                            // Reset confirmation state via saved state handle since we can't use hiltViewModel in callback
+                            confirmEntry.savedStateHandle["resetFinishState"] = true
+                            android.util.Log.d("OnboardingNav", "Signaled ConfirmationGallery to reset finish state")
+                        }
+                    }
                     
                     // Just pop - navController handles the backstack
                     val popped = navController.popBackStack()

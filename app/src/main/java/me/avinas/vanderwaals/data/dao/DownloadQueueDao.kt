@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 import me.avinas.vanderwaals.data.entity.DownloadQueueItem
@@ -74,6 +75,7 @@ interface DownloadQueueDao {
      * dao.insertAll(reranked)
      * ```
      */
+    @Transaction
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<DownloadQueueItem>)
     
@@ -276,6 +278,7 @@ interface DownloadQueueDao {
      * Use to clean up the queue after wallpapers have been successfully
      * downloaded and cached.
      */
+    @Transaction
     @Query("DELETE FROM download_queue WHERE downloaded = 1")
     suspend fun deleteDownloaded()
     

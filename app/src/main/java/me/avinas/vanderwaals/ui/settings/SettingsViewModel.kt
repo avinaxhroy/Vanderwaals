@@ -8,6 +8,7 @@ import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -87,6 +88,9 @@ class SettingsViewModel @Inject constructor(
     private val _toastMessage = MutableStateFlow<String?>(null)
     private val _needsAlarmPermission = MutableStateFlow(false)
     private val _themeMode = MutableStateFlow(ThemeMode.SYSTEM)
+    private val _dailyPlaylistSize = MutableStateFlow(15)
+    private val _isPlaylistDownloading = MutableStateFlow(false)
+    private val _playlistDownloadProgress = MutableStateFlow(PlaylistDownloadProgress())
     
     // Public toast message flow
     val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
@@ -167,7 +171,8 @@ class SettingsViewModel @Inject constructor(
                 _mode.value = settings.mode
                 
                 _interval.value = when (settings.changeInterval) {
-                    "unlock", "15min" -> ChangeInterval.EVERY_15_MINUTES  // Support old "unlock" value
+                    "unlock" -> ChangeInterval.EVERY_UNLOCK
+                    "15min" -> ChangeInterval.FIFTEEN_MINUTES
                     "hourly" -> ChangeInterval.HOURLY
                     "daily" -> ChangeInterval.DAILY
                     "never" -> ChangeInterval.NEVER
@@ -182,6 +187,7 @@ class SettingsViewModel @Inject constructor(
                     "lock_screen" -> ApplyTo.LOCK_SCREEN
                     "home_screen" -> ApplyTo.HOME_SCREEN
                     "both" -> ApplyTo.BOTH
+                    "both_different" -> ApplyTo.BOTH_DIFFERENT
                     else -> ApplyTo.BOTH
                 }
                 
@@ -199,12 +205,74 @@ class SettingsViewModel @Inject constructor(
                     "dark" -> ThemeMode.DARK
                     else -> ThemeMode.SYSTEM
                 }
+                
+                _dailyPlaylistSize.value = settings.dailyPlaylistSize
             }
+        }
+        
+        // Observe Daily Playlist Worker status (both scheduled and manual)
+        viewModelScope.launch {
+            workManager.getWorkInfosByTagLiveData("manual_playlist_download")
+                .asFlow()
+                .collect { workInfos ->
+                    val runningWork = workInfos?.find { 
+                        it.state == androidx.work.WorkInfo.State.RUNNING 
+                    }
+                    
+                    if (runningWork != null) {
+                        _isPlaylistDownloading.value = true
+                        
+                        // Extract progress from worker
+                        val downloadedCount = runningWork.progress.getInt(
+                            me.avinas.vanderwaals.worker.DailyPlaylistWorker.KEY_DOWNLOADED_COUNT, 0
+                        )
+                        val totalCount = runningWork.progress.getInt(
+                            me.avinas.vanderwaals.worker.DailyPlaylistWorker.KEY_TOTAL_COUNT, 0
+                        )
+                        val status = runningWork.progress.getString(
+                            me.avinas.vanderwaals.worker.DailyPlaylistWorker.KEY_STATUS
+                        ) ?: ""
+                        
+                        _playlistDownloadProgress.value = PlaylistDownloadProgress(
+                            downloadedCount = downloadedCount,
+                            totalCount = totalCount,
+                            status = status
+                        )
+                    } else {
+                        // Check if work succeeded
+                        val succeededWork = workInfos?.find { 
+                            it.state == androidx.work.WorkInfo.State.SUCCEEDED 
+                        }
+                        
+                        if (succeededWork != null) {
+                            val downloadedCount = succeededWork.outputData.getInt(
+                                me.avinas.vanderwaals.worker.DailyPlaylistWorker.KEY_DOWNLOADED_COUNT, 0
+                            )
+                            val appliedId = succeededWork.outputData.getString(
+                                me.avinas.vanderwaals.worker.DailyPlaylistWorker.KEY_APPLIED_WALLPAPER_ID
+                            )
+                            
+                            // Only show toast if we haven't shown it for this specific work ID yet
+                            // or simply prune it to avoid showing it again
+                            if (downloadedCount > 0) {
+                                val appliedMsg = if (!appliedId.isNullOrEmpty()) " Wallpaper applied!" else ""
+                                _toastMessage.value = "Downloaded $downloadedCount wallpapers!$appliedMsg"
+                                
+                                // Prune work to prevent showing this message again on next screen open
+                                workManager.pruneWork()
+                            }
+                        }
+                        
+                        _isPlaylistDownloading.value = false
+                        _playlistDownloadProgress.value = PlaylistDownloadProgress()
+                    }
+                }
         }
     }
     
     /**
      * Combined settings state for the UI.
+     * CRITICAL: All StateFlows that affect UI must be included in combine() to trigger recomposition.
      */
     val settings: StateFlow<SettingsState> = combine(
         _mode,
@@ -214,7 +282,11 @@ class SettingsViewModel @Inject constructor(
         _sourcesEnabled,
         _lastSyncTimestamp,
         _cacheRefreshTrigger,
-        _themeMode
+        _themeMode,
+        _dailyPlaylistSize,
+        combine(_isPlaylistDownloading, _playlistDownloadProgress) { downloading, progress -> 
+            Pair(downloading, progress) 
+        }
     ) { values: Array<Any?> ->
         val mode = values[0] as String
         val interval = values[1] as ChangeInterval
@@ -225,6 +297,11 @@ class SettingsViewModel @Inject constructor(
         val lastSync = values[5] as Long
         // values[6] is cacheRefreshTrigger
         val themeMode = values[7] as ThemeMode
+        val dailyPlaylistSize = values[8] as Int
+        @Suppress("UNCHECKED_CAST")
+        val downloadState = values[9] as Pair<Boolean, PlaylistDownloadProgress>
+        val isPlaylistDownloading = downloadState.first
+        val downloadProgress = downloadState.second
         
         SettingsState(
             mode = mode,
@@ -234,7 +311,10 @@ class SettingsViewModel @Inject constructor(
             sourcesEnabled = sources,
             cacheSize = calculateCacheSize(),
             lastSynced = formatLastSyncTime(lastSync),
-            themeMode = themeMode
+            themeMode = themeMode,
+            dailyPlaylistSize = dailyPlaylistSize,
+            isPlaylistDownloading = isPlaylistDownloading,
+            playlistDownloadProgress = downloadProgress
         )
     }.flowOn(Dispatchers.IO) // CRITICAL: Move heavy calculation to IO thread
     .stateIn(
@@ -251,7 +331,10 @@ class SettingsViewModel @Inject constructor(
             ),
             cacheSize = "Calculating...",
             lastSynced = "Never synced",
-            themeMode = ThemeMode.SYSTEM
+            themeMode = ThemeMode.SYSTEM,
+            dailyPlaylistSize = 15,
+            isPlaylistDownloading = false,
+            playlistDownloadProgress = PlaylistDownloadProgress()
         )
     )
 
@@ -281,7 +364,8 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _interval.value = interval
             val intervalString = when (interval) {
-                ChangeInterval.EVERY_15_MINUTES -> "15min"
+                ChangeInterval.EVERY_UNLOCK -> "unlock"
+                ChangeInterval.FIFTEEN_MINUTES -> "15min"
                 ChangeInterval.HOURLY -> "hourly"
                 ChangeInterval.DAILY -> "daily"
                 ChangeInterval.NEVER -> "never"
@@ -323,6 +407,7 @@ class SettingsViewModel @Inject constructor(
                 ApplyTo.LOCK_SCREEN -> "lock_screen"
                 ApplyTo.HOME_SCREEN -> "home_screen"
                 ApplyTo.BOTH -> "both"
+                ApplyTo.BOTH_DIFFERENT -> "both_different"
             }
             settingsDataStore.updateApplyTo(applyToString)
             
@@ -369,6 +454,42 @@ class SettingsViewModel @Inject constructor(
                 android.util.Log.e("SettingsViewModel", "✗ DataStore update failed", e)
             }
             android.util.Log.d("SettingsViewModel", "=== THEME UPDATE FINISHED ===")
+        }
+    }
+
+    /**
+     * Updates daily playlist size.
+     */
+    fun updateDailyPlaylistSize(size: Int) {
+        viewModelScope.launch {
+            _dailyPlaylistSize.value = size
+            settingsDataStore.updateDailyPlaylistSize(size)
+        }
+    }
+
+    /**
+     * Triggers immediate download of daily playlist.
+     * Called when user applies "Every Unlock" mode from settings.
+     * 
+     * This ensures wallpapers are available immediately instead of waiting until 2 AM
+     * when the scheduled DailyPlaylistWorker normally runs.
+     */
+    fun triggerDailyPlaylistDownload() {
+        viewModelScope.launch {
+            android.util.Log.d("SettingsViewModel", "Triggering immediate daily playlist download")
+            _isPlaylistDownloading.value = true
+            
+            val playlistRequest = OneTimeWorkRequestBuilder<me.avinas.vanderwaals.worker.DailyPlaylistWorker>()
+                .setConstraints(
+                    androidx.work.Constraints.Builder()
+                        .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                        .build()
+                )
+                .addTag("manual_playlist_download")
+                .build()
+            
+            workManager.enqueue(playlistRequest)
+            _toastMessage.value = "Downloading daily playlist..."
         }
     }
 
@@ -496,18 +617,20 @@ class SettingsViewModel @Inject constructor(
                 ApplyTo.LOCK_SCREEN -> "lock"
                 ApplyTo.HOME_SCREEN -> "home"
                 ApplyTo.BOTH -> "both"
+                ApplyTo.BOTH_DIFFERENT -> "both_different"
             }
             
             // Convert UI ChangeInterval to Worker ChangeInterval
             val workerInterval = when (_interval.value) {
-                ChangeInterval.EVERY_15_MINUTES -> me.avinas.vanderwaals.worker.ChangeInterval.EVERY_15_MINUTES
+                ChangeInterval.EVERY_UNLOCK -> me.avinas.vanderwaals.worker.ChangeInterval.EVERY_UNLOCK
+                ChangeInterval.FIFTEEN_MINUTES -> me.avinas.vanderwaals.worker.ChangeInterval.FIFTEEN_MINUTES
                 ChangeInterval.HOURLY -> me.avinas.vanderwaals.worker.ChangeInterval.HOURLY
                 ChangeInterval.DAILY -> me.avinas.vanderwaals.worker.ChangeInterval.DAILY
                 ChangeInterval.NEVER -> me.avinas.vanderwaals.worker.ChangeInterval.NEVER
             }
             
-            when (_interval.value) {
-                ChangeInterval.EVERY_15_MINUTES -> {
+            val result = when (_interval.value) {
+                ChangeInterval.EVERY_UNLOCK -> {
                     workScheduler.scheduleWallpaperChange(
                         interval = workerInterval,
                         targetScreen = targetScreen
@@ -527,11 +650,34 @@ class SettingsViewModel @Inject constructor(
                         targetScreen = targetScreen
                     )
                 }
+                ChangeInterval.FIFTEEN_MINUTES -> {
+                    workScheduler.scheduleWallpaperChange(
+                        interval = workerInterval,
+                        targetScreen = targetScreen
+                    )
+                }
                 ChangeInterval.NEVER -> {
                     workScheduler.scheduleWallpaperChange(
                         interval = workerInterval,
                         targetScreen = targetScreen
                     )
+                }
+            }
+            
+            // Handle scheduling result
+            when (result) {
+                is me.avinas.vanderwaals.worker.SchedulingResult.Success -> {
+                    // Success - no message needed
+                }
+                is me.avinas.vanderwaals.worker.SchedulingResult.PermissionDenied -> {
+                    _toastMessage.value = result.message
+                    _needsAlarmPermission.value = true
+                }
+                is me.avinas.vanderwaals.worker.SchedulingResult.BatteryOptimizationWarning -> {
+                    _toastMessage.value = result.message
+                }
+                is me.avinas.vanderwaals.worker.SchedulingResult.Error -> {
+                    _toastMessage.value = "Error: ${result.message}"
                 }
             }
         }
@@ -549,21 +695,48 @@ data class SettingsState(
     val sourcesEnabled: Map<String, Boolean>,
     val cacheSize: String,
     val lastSynced: String,
-    val themeMode: ThemeMode
+    val themeMode: ThemeMode,
+    val dailyPlaylistSize: Int,
+    val isPlaylistDownloading: Boolean,
+    val playlistDownloadProgress: PlaylistDownloadProgress = PlaylistDownloadProgress()
 )
+
+/**
+ * Progress state for playlist download.
+ */
+data class PlaylistDownloadProgress(
+    val downloadedCount: Int = 0,
+    val totalCount: Int = 0,
+    val status: String = ""
+) {
+    val progressText: String
+        get() = if (totalCount > 0) "$downloadedCount/$totalCount downloaded" else "Starting download..."
+    
+    val isApplying: Boolean
+        get() = status == me.avinas.vanderwaals.worker.DailyPlaylistWorker.STATUS_APPLYING
+}
 
 // Enums for settings
 enum class ChangeInterval(val displayName: String) {
-    EVERY_15_MINUTES("Every 15 Minutes"),
+    EVERY_UNLOCK("Every Unlock"),
+    FIFTEEN_MINUTES("15 Minutes"),
     HOURLY("Hourly"),
     DAILY("Daily"),
     NEVER("Never")
 }
 
+// Extension to convert LiveData to Flow
+fun <T> androidx.lifecycle.LiveData<T>.asFlow(): kotlinx.coroutines.flow.Flow<T> = kotlinx.coroutines.flow.callbackFlow {
+    val observer = androidx.lifecycle.Observer<T> { value -> trySend(value) }
+    observeForever(observer)
+    awaitClose { removeObserver(observer) }
+}
+
 enum class ApplyTo(val displayName: String) {
     LOCK_SCREEN("Lock Screen"),
     HOME_SCREEN("Home Screen"),
-    BOTH("Both")
+    BOTH("Both"),
+    BOTH_DIFFERENT("Both But Different")
 }
 
 data class DailyTime(

@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import me.avinas.vanderwaals.core.InputValidator
+import me.avinas.vanderwaals.core.NetworkRetry
+import me.avinas.vanderwaals.core.ValidationResult
 import me.avinas.vanderwaals.data.dao.DownloadQueueDao
 import me.avinas.vanderwaals.data.dao.WallpaperHistoryDao
 import me.avinas.vanderwaals.data.dao.WallpaperMetadataDao
@@ -58,7 +61,8 @@ class WallpaperRepositoryImpl @Inject constructor(
     private val downloadQueueDao: DownloadQueueDao,
     private val wallpaperHistoryDao: WallpaperHistoryDao,
     private val okHttpClient: OkHttpClient,
-    private val segmentedDownloader: me.avinas.vanderwaals.network.SegmentedDownloader
+    private val segmentedDownloader: me.avinas.vanderwaals.network.SegmentedDownloader,
+    private val database: me.avinas.vanderwaals.data.VanderwaalsDatabase
 ) : WallpaperRepository {
     
     /**
@@ -161,15 +165,18 @@ class WallpaperRepositoryImpl @Inject constructor(
     
     override suspend fun recordWallpaperApplied(wallpaper: WallpaperMetadata): Long {
         return withContext(Dispatchers.IO) {
-            val historyEntry = WallpaperHistory(
-                wallpaperId = wallpaper.id,
-                appliedAt = System.currentTimeMillis(),
-                removedAt = null,
-                userFeedback = null,
-                downloadedToStorage = false
-            )
-            
-            wallpaperHistoryDao.insert(historyEntry)
+            // Use transaction to ensure history insert is atomic
+            me.avinas.vanderwaals.data.TransactionHelper.withTransaction(database) {
+                val historyEntry = WallpaperHistory(
+                    wallpaperId = wallpaper.id,
+                    appliedAt = System.currentTimeMillis(),
+                    removedAt = null,
+                    userFeedback = null,
+                    downloadedToStorage = false
+                )
+                
+                wallpaperHistoryDao.insert(historyEntry)
+            }
         }
     }
     
@@ -190,16 +197,19 @@ class WallpaperRepositoryImpl @Inject constructor(
         context: me.avinas.vanderwaals.data.entity.FeedbackContext
     ) {
         withContext(Dispatchers.IO) {
-            val feedbackString = when (feedback) {
-                FeedbackType.LIKE -> WallpaperHistory.FEEDBACK_LIKE
-                FeedbackType.DISLIKE -> WallpaperHistory.FEEDBACK_DISLIKE
+            // Use transaction to ensure feedback and context are updated atomically
+            me.avinas.vanderwaals.data.TransactionHelper.withTransaction(database) {
+                val feedbackString = when (feedback) {
+                    FeedbackType.LIKE -> WallpaperHistory.FEEDBACK_LIKE
+                    FeedbackType.DISLIKE -> WallpaperHistory.FEEDBACK_DISLIKE
+                }
+                
+                // Convert FeedbackContext to JSON string using Converters
+                val converters = me.avinas.vanderwaals.data.entity.Converters(com.google.gson.Gson())
+                val contextJson = converters.fromFeedbackContext(context)
+                
+                wallpaperHistoryDao.setFeedbackWithContext(historyId, feedbackString, contextJson)
             }
-            
-            // Convert FeedbackContext to JSON string using Converters
-            val converters = me.avinas.vanderwaals.data.entity.Converters(com.google.gson.Gson())
-            val contextJson = converters.fromFeedbackContext(context)
-            
-            wallpaperHistoryDao.setFeedbackWithContext(historyId, feedbackString, contextJson)
         }
     }
     
@@ -210,26 +220,40 @@ class WallpaperRepositoryImpl @Inject constructor(
     override suspend fun downloadWallpaper(wallpaper: WallpaperMetadata): Result<File> {
         return withContext(Dispatchers.IO) {
             try {
-                // Step 1: Check if file already exists
+                // Step 1: Validate input
+                when (val idResult = InputValidator.validateWallpaperId(wallpaper.id)) {
+                    is ValidationResult.Invalid -> {
+                        return@withContext Result.failure(
+                            IllegalArgumentException("Invalid wallpaper ID: ${idResult.reason}")
+                        )
+                    }
+                    is ValidationResult.Valid -> { /* Continue */ }
+                }
+                
+                when (val urlResult = InputValidator.validateUrl(wallpaper.url)) {
+                    is ValidationResult.Invalid -> {
+                        return@withContext Result.failure(
+                            IllegalArgumentException("Invalid wallpaper URL: ${urlResult.reason}")
+                        )
+                    }
+                    is ValidationResult.Valid -> { /* Continue */ }
+                }
+                
+                // Step 2: Check if file already exists
                 val targetFile = getWallpaperFile(wallpaper)
                 if (targetFile.exists() && targetFile.length() > 0) {
                     return@withContext Result.success(targetFile)
                 }
                 
-                // Step 2: Check cache size before downloading
+                // Step 3: Check cache size before downloading
                 ensureCacheSpace()
                 
-                // Step 3: Execute download using SegmentedDownloader
-                // This handles both standard and segmented downloads automatically
-                val result = segmentedDownloader.download(wallpaper.url, targetFile)
-                
-                if (result.isFailure) {
-                    return@withContext Result.failure(
-                        result.exceptionOrNull() ?: IOException("Download failed")
-                    )
+                // Step 4: Execute download with retry logic
+                val result = NetworkRetry.retryWithBackoff {
+                    segmentedDownloader.download(wallpaper.url, targetFile)
                 }
                 
-                Result.success(targetFile)
+                result
                 
             } catch (e: IOException) {
                 // Network or file I/O error
@@ -248,25 +272,25 @@ class WallpaperRepositoryImpl @Inject constructor(
     override suspend fun deleteWallpaper(wallpaper: WallpaperMetadata): Result<Unit> {
         return withContext(Dispatchers.IO) {
             try {
-                val file = getWallpaperFile(wallpaper)
-                
-                if (file.exists()) {
-                    if (file.delete()) {
-                        // Update download queue status
-                        val queueItem = downloadQueueDao.getByWallpaperId(wallpaper.id)
-                        if (queueItem != null) {
-                            val updatedItem = queueItem.copy(downloaded = false)
-                            downloadQueueDao.update(updatedItem)
+                // Use transaction to ensure file delete and queue update are atomic
+                me.avinas.vanderwaals.data.TransactionHelper.withTransaction(database) {
+                    val file = getWallpaperFile(wallpaper)
+                    
+                    if (file.exists()) {
+                        if (file.delete()) {
+                            // Update download queue status
+                            val queueItem = downloadQueueDao.getByWallpaperId(wallpaper.id)
+                            if (queueItem != null) {
+                                val updatedItem = queueItem.copy(downloaded = false)
+                                downloadQueueDao.update(updatedItem)
+                            }
+                        } else {
+                            throw IOException("Failed to delete file: ${file.path}")
                         }
-                        
-                        Result.success(Unit)
-                    } else {
-                        Result.failure(IOException("Failed to delete file: ${file.path}"))
                     }
-                } else {
-                    // File doesn't exist, consider it a success
-                    Result.success(Unit)
                 }
+                
+                Result.success(Unit)
                 
             } catch (e: Exception) {
                 Result.failure(
@@ -300,34 +324,37 @@ class WallpaperRepositoryImpl @Inject constructor(
         val cacheSize = calculateCacheSize()
         
         if (cacheSize > MAX_CACHE_SIZE_BYTES) {
-            val targetSize = (MAX_CACHE_SIZE_BYTES * 0.8).toLong() // 80% of max
-            val amountToDelete = cacheSize - targetSize
-            
-            // Get all cached files sorted by last modified (oldest first)
-            val cachedFiles = wallpaperCacheDir.listFiles()
-                ?.filter { it.extension == "jpg" }
-                ?.sortedBy { it.lastModified() }
-                ?: return
-            
-            var deletedSize = 0L
-            val deletedIds = mutableListOf<String>()
-            
-            for (file in cachedFiles) {
-                if (deletedSize >= amountToDelete) break
+            // Use transaction to ensure file deletions and queue updates are atomic
+            me.avinas.vanderwaals.data.TransactionHelper.withTransaction(database) {
+                val targetSize = (MAX_CACHE_SIZE_BYTES * 0.8).toLong() // 80% of max
+                val amountToDelete = cacheSize - targetSize
                 
-                deletedSize += file.length()
-                val wallpaperId = file.nameWithoutExtension
-                deletedIds.add(wallpaperId)
+                // Get all cached files sorted by last modified (oldest first)
+                val cachedFiles = wallpaperCacheDir.listFiles()
+                    ?.filter { it.extension == "jpg" }
+                    ?.sortedBy { it.lastModified() }
+                    ?: return@withTransaction
                 
-                file.delete()
-            }
-            
-            // Update download queue for deleted files
-            deletedIds.forEach { id ->
-                val queueItem = downloadQueueDao.getByWallpaperId(id)
-                if (queueItem != null) {
-                    val updatedItem = queueItem.copy(downloaded = false)
-                    downloadQueueDao.update(updatedItem)
+                var deletedSize = 0L
+                val deletedIds = mutableListOf<String>()
+                
+                for (file in cachedFiles) {
+                    if (deletedSize >= amountToDelete) break
+                    
+                    deletedSize += file.length()
+                    val wallpaperId = file.nameWithoutExtension
+                    deletedIds.add(wallpaperId)
+                    
+                    file.delete()
+                }
+                
+                // Update download queue for deleted files
+                deletedIds.forEach { id ->
+                    val queueItem = downloadQueueDao.getByWallpaperId(id)
+                    if (queueItem != null) {
+                        val updatedItem = queueItem.copy(downloaded = false)
+                        downloadQueueDao.update(updatedItem)
+                    }
                 }
             }
         }

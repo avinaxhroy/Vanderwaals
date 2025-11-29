@@ -34,6 +34,9 @@ class SettingsDataStore @Inject constructor(
         private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         private val LAST_SYNC_TIMESTAMP = androidx.datastore.preferences.core.longPreferencesKey("last_sync_timestamp")
         private val THEME_MODE = stringPreferencesKey("theme_mode")
+        private val DAILY_PLAYLIST_SIZE = androidx.datastore.preferences.core.intPreferencesKey("daily_playlist_size")
+        private val LAST_PLAYLIST_UPDATE = androidx.datastore.preferences.core.longPreferencesKey("last_playlist_update")
+        private val DAILY_PLAYLIST_ENABLED = booleanPreferencesKey("daily_playlist_enabled")
     }
     
     val settings: Flow<Settings> = context.dataStore.data
@@ -54,7 +57,9 @@ class SettingsDataStore @Inject constructor(
                 bingEnabled = prefs[BING_ENABLED] ?: false,  // Disabled by default, only enabled in auto mode
                 onboardingCompleted = prefs[ONBOARDING_COMPLETED] ?: false,
                 lastSyncTimestamp = prefs[LAST_SYNC_TIMESTAMP] ?: 0L,
-                themeMode = prefs[THEME_MODE] ?: "system"
+                themeMode = prefs[THEME_MODE] ?: "system",
+                dailyPlaylistSize = prefs[DAILY_PLAYLIST_SIZE] ?: 15,
+                lastPlaylistUpdate = prefs[LAST_PLAYLIST_UPDATE] ?: 0L
             )
         }
     
@@ -97,6 +102,18 @@ class SettingsDataStore @Inject constructor(
     suspend fun updateThemeMode(themeMode: String) {
         context.dataStore.edit { it[THEME_MODE] = themeMode }
     }
+
+    suspend fun updateDailyPlaylistEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[DAILY_PLAYLIST_ENABLED] = enabled }
+    }
+
+    suspend fun updateDailyPlaylistSize(size: Int) {
+        context.dataStore.edit { it[DAILY_PLAYLIST_SIZE] = size }
+    }
+
+    suspend fun updateLastPlaylistUpdate(timestamp: Long) {
+        context.dataStore.edit { it[LAST_PLAYLIST_UPDATE] = timestamp }
+    }
 }
 
 data class Settings(
@@ -108,5 +125,7 @@ data class Settings(
     val bingEnabled: Boolean,
     val onboardingCompleted: Boolean,
     val lastSyncTimestamp: Long,
-    val themeMode: String
+    val themeMode: String,
+    val dailyPlaylistSize: Int,
+    val lastPlaylistUpdate: Long
 )

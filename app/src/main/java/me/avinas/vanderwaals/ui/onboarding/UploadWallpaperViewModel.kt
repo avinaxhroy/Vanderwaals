@@ -79,11 +79,13 @@ class UploadWallpaperViewModel @Inject constructor(
         viewModelScope.launch {
             _uploadState.value = UploadState.Extracting
             
+            var bitmap: android.graphics.Bitmap? = null
+            
             try {
-                // Load bitmap for enhanced analysis
-                val bitmap = withContext(Dispatchers.IO) {
+                // Load bitmap for enhanced analysis using BitmapManager
+                bitmap = withContext(Dispatchers.IO) {
                     context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                        BitmapFactory.decodeStream(inputStream)
+                        me.avinas.vanderwaals.core.BitmapManager.loadBitmapFromStream(inputStream)
                     }
                 }
                 
@@ -108,24 +110,29 @@ class UploadWallpaperViewModel @Inject constructor(
                         
                         // Extract enhanced features (color, composition, mood)
                         val analysis = withContext(Dispatchers.IO) {
-                            enhancedImageAnalyzer.analyze(bitmap)
+                            // Create local val for smart cast
+                            val bitmapForAnalysis = bitmap ?: return@withContext null
+                            enhancedImageAnalyzer.analyze(bitmapForAnalysis)
                         }
                         _userImageAnalysis.value = analysis
                         
                         // Find similar wallpapers using BOTH embedding and enhanced analysis
                         findSimilarWallpapers(embedding, analysis)
                         
-                        // Clean up bitmap
-                        bitmap.recycle()
+                        // Clean up bitmap using BitmapManager
+                        me.avinas.vanderwaals.core.BitmapManager.recycleSafely(bitmap)
+                        bitmap = null
                     },
                     onFailure = { error ->
-                        bitmap.recycle()
+                        me.avinas.vanderwaals.core.BitmapManager.recycleSafely(bitmap)
+                        bitmap = null
                         _uploadState.value = UploadState.Error(
                             error.message ?: "Failed to process image"
                         )
                     }
                 )
             } catch (e: Exception) {
+                me.avinas.vanderwaals.core.BitmapManager.recycleSafely(bitmap)
                 _uploadState.value = UploadState.Error(
                     "Error loading image: ${e.message}"
                 )
@@ -368,6 +375,46 @@ class UploadWallpaperViewModel @Inject constructor(
         _uploadState.value = UploadState.Initial
         _similarWallpapers.value = emptyList()
         _userEmbedding.value = null
+    }
+    
+    /**
+     * Reset state for back navigation from ConfirmationGallery.
+     * 
+     * This resets the upload state to allow user to:
+     * - Upload a different wallpaper
+     * - Select a different style sample
+     * 
+     * CRITICAL: Does NOT clear similarWallpapers or userEmbedding
+     * so that if user goes forward again without making changes,
+     * they can continue with previous results.
+     * 
+     * Only resets uploadState from Success → Initial to prevent
+     * auto-navigation back to ConfirmationGallery.
+     */
+    fun resetStateForBackNavigation() {
+        android.util.Log.d("UploadWallpaperViewModel", "Resetting state for back navigation")
+        _uploadState.value = UploadState.Initial
+    }
+    
+    /**
+     * Check if results are already available (user navigated back then forward).
+     * If results exist, can navigate directly to confirmation gallery.
+     * 
+     * @return true if similar wallpapers were already found
+     */
+    fun hasExistingResults(): Boolean {
+        return _similarWallpapers.value.isNotEmpty() && _userEmbedding.value != null
+    }
+    
+    /**
+     * Re-trigger success state if results already exist.
+     * Used when user navigates back then forward without making changes.
+     */
+    fun useExistingResults() {
+        if (hasExistingResults()) {
+            android.util.Log.d("UploadWallpaperViewModel", "Using existing results: ${_similarWallpapers.value.size} wallpapers")
+            _uploadState.value = UploadState.Success(_similarWallpapers.value.size)
+        }
     }
 }
 

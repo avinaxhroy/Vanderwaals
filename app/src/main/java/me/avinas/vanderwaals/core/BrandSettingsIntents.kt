@@ -200,37 +200,84 @@ object BrandSettingsIntents {
      * @return true if successful
      */
     private fun openSamsungWallpaperServices(context: Context): Boolean {
-        return try {
-            // Samsung-specific intent for wallpaper services
-            val intent = Intent("com.samsung.android.app.aodservice.settings.LOCKSCREEN_SERVICES").apply {
+        // Try multiple Samsung-specific intents in order of preference
+        val intentsToTry = listOf(
+            // Samsung Lock Screen settings (most direct path to wallpaper services)
+            "com.samsung.android.app.routines.LOCK_SCREEN_SETTINGS",
+            // AOD Lock screen services
+            "com.samsung.android.app.aodservice.settings.LOCKSCREEN_SERVICES",
+            // Samsung Settings Lock Screen
+            "com.samsung.settings.LOCK_SCREEN_SETTINGS",
+            // Direct component for Lock Screen settings
+            "android.settings.LOCK_SCREEN_SETTINGS"
+        )
+        
+        for (action in intentsToTry) {
+            try {
+                val intent = Intent(action).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+                Log.d(TAG, "Samsung settings opened with action: $action")
+                return true
+            } catch (e: Exception) {
+                Log.d(TAG, "Samsung intent failed: $action")
+                continue
+            }
+        }
+        
+        // Try opening Samsung Settings app directly to Lock Screen section
+        try {
+            val intent = Intent().apply {
+                setClassName(
+                    "com.android.settings",
+                    "com.android.settings.Settings\$LockScreenSettingsActivity"
+                )
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
-            true
-        } catch (e: ActivityNotFoundException) {
-            Log.d(TAG, "Samsung wallpaper services intent not found")
-            false
+            Log.d(TAG, "Samsung Lock Screen settings opened via component")
+            return true
         } catch (e: Exception) {
-            Log.e(TAG, "Error opening Samsung wallpaper services", e)
-            false
+            Log.d(TAG, "Samsung component intent failed")
         }
+        
+        Log.d(TAG, "All Samsung wallpaper services intents failed")
+        return false
     }
     
     /**
      * Opens Samsung wallpaper settings.
      * 
+     * Note: We avoid ACTION_WALLPAPER_SETTINGS as it opens the wallpaper picker
+     * ("Choose Wallpaper from") instead of the settings to disable live wallpapers.
+     * 
      * @param context Application context
      * @return true if successful
      */
     private fun openSamsungWallpaperSettings(context: Context): Boolean {
-        return try {
-            val intent = Intent("android.settings.WALLPAPER_SETTINGS").apply {
+        // Try to open Lock Screen settings first (where Wallpaper services is located)
+        try {
+            val intent = Intent(Settings.ACTION_DISPLAY_SETTINGS).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
+            Log.d(TAG, "Samsung Display settings opened")
+            return true
+        } catch (e: Exception) {
+            Log.d(TAG, "Samsung Display settings not available")
+        }
+        
+        // Last resort: open main Settings
+        return try {
+            val intent = Intent(Settings.ACTION_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            Log.d(TAG, "Samsung main settings opened")
             true
         } catch (e: Exception) {
-            Log.d(TAG, "Samsung wallpaper settings not available")
+            Log.d(TAG, "Samsung settings not available")
             false
         }
     }

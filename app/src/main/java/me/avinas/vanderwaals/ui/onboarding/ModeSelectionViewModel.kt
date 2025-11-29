@@ -58,6 +58,16 @@ class ModeSelectionViewModel @Inject constructor(
             }
         }
     }
+    
+    /**
+     * Reset mode selection.
+     * 
+     * Called when user navigates back from subsequent screens to
+     * allow them to select a different mode.
+     */
+    fun resetModeSelection() {
+        _selectedMode.value = null
+    }
 }
 
 /**

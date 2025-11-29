@@ -27,11 +27,17 @@ class PreferenceRepositoryImpl(
     }
 
     override suspend fun insertUserPreferences(preferences: UserPreferences) {
-        userPreferenceDao.insert(preferences)
+        // Use retryable transaction for insert to handle potential conflicts
+        me.avinas.vanderwaals.data.TransactionHelper.withRetryableTransaction(database) {
+            userPreferenceDao.insert(preferences)
+        }
     }
 
     override suspend fun updateUserPreferences(preferences: UserPreferences) {
-        userPreferenceDao.update(preferences)
+        // Use retryable transaction for update to handle potential conflicts
+        me.avinas.vanderwaals.data.TransactionHelper.withRetryableTransaction(database) {
+            userPreferenceDao.update(preferences)
+        }
     }
 }
 

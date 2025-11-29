@@ -22,6 +22,8 @@ import androidx.room.TypeConverters
  * - `category`: Enables fast filtering by wallpaper category
  * - `source`: Allows efficient querying by content source
  * - `brightness`: Supports brightness-based filtering
+ * - `category + brightness`: Composite index for combined category and brightness filters
+ * - `source + brightness`: Composite index for combined source and brightness filters
  * 
  * **Type Converters:**
  * - Uses [Converters] to serialize `colors` (List<String>) and `embedding` (FloatArray)
@@ -43,7 +45,10 @@ import androidx.room.TypeConverters
         Index(value = ["category"]),
         Index(value = ["source"]),
         Index(value = ["brightness"]),
-        Index(value = ["contrast"])
+        Index(value = ["contrast"]),
+        // Composite indexes for complex filters
+        Index(value = ["category", "brightness"]),
+        Index(value = ["source", "brightness"])
     ]
 )
 @TypeConverters(Converters::class)

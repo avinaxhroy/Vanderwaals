@@ -140,19 +140,26 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * Checks if live wallpaper is active and updates dialog state.
+     * Checks if live wallpaper is blocking after a wallpaper change failure.
+     * 
+     * This uses the post-failure detection approach which is more reliable:
+     * - Only called when a wallpaper change actually fails
+     * - Avoids false positives from manufacturer-specific system services
+     * - Works across all devices without needing brand-specific exclusions
      */
     fun checkForLiveWallpaper() {
         try {
-            if (me.avinas.vanderwaals.core.LiveWallpaperDetector.isLiveWallpaperActive(application)) {
-                val (isBlocking, serviceName) = me.avinas.vanderwaals.core.LiveWallpaperDetector.isKnownBlockingService(application)
+            // Use post-failure detection - more reliable across all devices
+            val (isBlocking, serviceName) = me.avinas.vanderwaals.core.LiveWallpaperDetector.detectBlockingAfterFailure(application)
+            
+            if (isBlocking) {
+                // Get package name for settings navigation
                 val packageName = me.avinas.vanderwaals.core.LiveWallpaperDetector.getLiveWallpaperPackageName(application)
-                val displayName = serviceName ?: me.avinas.vanderwaals.core.LiveWallpaperDetector.getLiveWallpaperDisplayName(application)
                 
-                _liveWallpaperInfo.value = displayName to packageName
+                _liveWallpaperInfo.value = (serviceName ?: "Live Wallpaper") to packageName
                 _showLiveWallpaperDialog.value = true
                 
-                android.util.Log.d("MainViewModel", "Live wallpaper detected: $displayName ($packageName)")
+                android.util.Log.d("MainViewModel", "Live wallpaper blocking detected: $serviceName ($packageName)")
             }
         } catch (e: Exception) {
             android.util.Log.e("MainViewModel", "Error checking for live wallpaper", e)
@@ -191,8 +198,9 @@ class MainViewModel @Inject constructor(
 
     init {
         // Current wallpaper is now reactive via StateFlow above
-        // Check for live wallpaper on init
-        checkForLiveWallpaper()
+        // Note: We don't check for live wallpaper on init anymore.
+        // Instead, we detect it only when a wallpaper change actually fails.
+        // This avoids false positives from manufacturer-specific system services.
     }
 
     /**

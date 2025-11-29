@@ -30,6 +30,17 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
+ * Result of scheduling operations.
+ * Used to communicate scheduling success or failure back to ViewModels.
+ */
+sealed class SchedulingResult {
+    object Success : SchedulingResult()
+    data class PermissionDenied(val message: String) : SchedulingResult()
+    data class BatteryOptimizationWarning(val message: String) : SchedulingResult()
+    data class Error(val message: String) : SchedulingResult()
+}
+
+/**
  * Manages WorkManager initialization and scheduling for Vanderwaals workers.
  * 
  * Responsibilities:
@@ -89,6 +100,7 @@ class WorkScheduler @Inject constructor(
     fun initializePeriodicWorkers() {
         scheduleManifestSync()
         scheduleCleanup()
+        scheduleDailyPlaylist()
     }
     
     /**
@@ -179,6 +191,36 @@ class WorkScheduler @Inject constructor(
             cleanupWork
         )
     }
+
+    /**
+     * Schedules daily playlist download worker.
+     * 
+     * Runs once a day, preferably when charging and on WiFi.
+     */
+    private fun scheduleDailyPlaylist() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.UNMETERED)
+            .setRequiresBatteryNotLow(true)
+            .setRequiresStorageNotLow(true)
+            .build()
+        
+        val playlistWork = PeriodicWorkRequestBuilder<DailyPlaylistWorker>(
+            repeatInterval = 1,
+            repeatIntervalTimeUnit = TimeUnit.DAYS
+        )
+            .setConstraints(constraints)
+            .setInitialDelay(
+                calculateDelayUntilTime(LocalTime.of(2, 0)), // Run at 2 AM
+                TimeUnit.MILLISECONDS
+            )
+            .build()
+        
+        workManager.enqueueUniquePeriodicWork(
+            DailyPlaylistWorker.WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            playlistWork
+        )
+    }
     
     /**
      * Schedules wallpaper change worker based on user's preferred interval.
@@ -186,12 +228,13 @@ class WorkScheduler @Inject constructor(
      * @param interval Change interval (EVERY_UNLOCK, HOURLY, DAILY, NEVER)
      * @param time Time of day for daily changes (optional)
      * @param targetScreen Target screen (home, lock, both)
+     * @return SchedulingResult indicating success or failure reason
      */
     fun scheduleWallpaperChange(
         interval: ChangeInterval,
         time: LocalTime? = null,
         targetScreen: String = WallpaperChangeWorker.TARGET_BOTH
-    ) {
+    ): SchedulingResult {
         android.util.Log.d(TAG, "========================================")
         android.util.Log.d(TAG, "scheduleWallpaperChange called")
         android.util.Log.d(TAG, "  Interval: ${interval.displayName}")
@@ -202,24 +245,36 @@ class WorkScheduler @Inject constructor(
         // Cancel any existing wallpaper change work
         cancelWallpaperChange()
         
-        when (interval) {
+        return when (interval) {
             ChangeInterval.NEVER -> {
                 android.util.Log.d(TAG, "Auto-change disabled - no work scheduled")
+                stopWallpaperMonitorService()
+                SchedulingResult.Success
             }
             
-            ChangeInterval.EVERY_15_MINUTES -> {
-                android.util.Log.d(TAG, "Scheduling 15-minute wallpaper change for target: $targetScreen")
-                scheduleRepeatingAlarm(15 * 60 * 1000L, targetScreen) // 15 minutes in milliseconds
+            ChangeInterval.EVERY_UNLOCK -> {
+                android.util.Log.d(TAG, "Interval is Every Unlock - starting WallpaperMonitorService")
+                // Start foreground service to monitor unlock events
+                startWallpaperMonitorService()
+                SchedulingResult.Success
             }
             
             ChangeInterval.HOURLY -> {
                 android.util.Log.d(TAG, "Scheduling hourly wallpaper change for target: $targetScreen")
+                stopWallpaperMonitorService() // Ensure service is stopped
                 scheduleRepeatingAlarm(60 * 60 * 1000L, targetScreen) // 1 hour in milliseconds
+            }
+
+            ChangeInterval.FIFTEEN_MINUTES -> {
+                android.util.Log.d(TAG, "Scheduling 15-minute wallpaper change for target: $targetScreen")
+                stopWallpaperMonitorService() // Ensure service is stopped
+                scheduleRepeatingAlarm(15 * 60 * 1000L, targetScreen) // 15 minutes in milliseconds
             }
             
             ChangeInterval.DAILY -> {
                 val changeTime = time ?: LocalTime.of(9, 0) // Default 9 AM
                 android.util.Log.d(TAG, "Scheduling daily wallpaper change at ${changeTime.hour}:${changeTime.minute} for target: $targetScreen")
+                stopWallpaperMonitorService() // Ensure service is stopped
                 scheduleDailyWallpaperChange(changeTime, targetScreen)
             }
         }
@@ -306,15 +361,17 @@ class WorkScheduler @Inject constructor(
      * ✅ Survives app restart and device reboot
      * 
      * CRITICAL FIX 2: Removed network constraint so it runs offline.
+     * 
+     * @return SchedulingResult indicating success or failure reason
      */
-    private fun scheduleDailyWallpaperChange(time: LocalTime, targetScreen: String) {
+    private fun scheduleDailyWallpaperChange(time: LocalTime, targetScreen: String): SchedulingResult {
         android.util.Log.d(TAG, "Calculating daily schedule:")
         android.util.Log.d(TAG, "  Target time: ${time.hour}:${String.format("%02d", time.minute)}")
         
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
         if (alarmManager == null) {
             android.util.Log.e(TAG, "AlarmManager not available!")
-            return
+            return SchedulingResult.Error("AlarmManager not available on this device")
         }
         
         // Check if we have permission to schedule exact alarms (Android 12+)
@@ -322,20 +379,24 @@ class WorkScheduler @Inject constructor(
             if (!alarmManager.canScheduleExactAlarms()) {
                 android.util.Log.e(TAG, "❌ SCHEDULE_EXACT_ALARM permission not granted! Alarms will not fire at exact time.")
                 android.util.Log.e(TAG, "   User needs to grant this permission in Settings > Apps > Vanderwaals > Alarms & reminders")
-                // Continue anyway - alarm will still be set but may not fire exactly on time
+                return SchedulingResult.PermissionDenied(
+                    "For daily changes at exact time, please grant alarm permission in Settings"
+                )
             } else {
                 android.util.Log.d(TAG, "✅ SCHEDULE_EXACT_ALARM permission granted")
             }
         }
         
-        // Check battery optimization status
+        // Check battery optimization status - warn but don't fail
         val batteryOptimizationExempt = me.avinas.vanderwaals.core.BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
-        if (!batteryOptimizationExempt) {
+        val hasBatteryWarning = if (!batteryOptimizationExempt) {
             android.util.Log.w(TAG, "⚠️ Battery optimization is ENABLED - alarms may be delayed or skipped")
             android.util.Log.w(TAG, "   Recommend disabling battery optimization for reliable alarm execution")
             android.util.Log.w(TAG, "   Settings > Apps > Vanderwaals > Battery > Unrestricted")
+            true
         } else {
             android.util.Log.d(TAG, "✅ Battery optimization disabled - alarms will run reliably")
+            false
         }
         
         // Cancel any existing alarms for daily change
@@ -388,14 +449,22 @@ class WorkScheduler @Inject constructor(
             android.util.Log.d(TAG, "  Alarm time (ms): ${calendar.timeInMillis}")
             android.util.Log.d(TAG, "  Current time (ms): ${System.currentTimeMillis()}")
             android.util.Log.d(TAG, "  Delay: $delayMinutes minutes")
+            
+            android.util.Log.d(TAG, "Scheduled daily wallpaper change at ${time.hour}:${String.format("%02d", time.minute)} for target: $targetScreen (using AlarmManager)")
+            android.util.Log.d(TAG, "  First run: ~$delayMinutes minutes from now")
+            android.util.Log.d(TAG, "  Subsequent runs: Every 24 hours at exactly ${time.hour}:${String.format("%02d", time.minute)}")
+            
+            return if (hasBatteryWarning) {
+                SchedulingResult.BatteryOptimizationWarning(
+                    "Scheduled successfully. Note: Battery optimization may delay or skip changes. Disable in Settings for best reliability."
+                )
+            } else {
+                SchedulingResult.Success
+            }
         } catch (e: Exception) {
             android.util.Log.e(TAG, "❌ Failed to set alarm: ${e.message}", e)
-            return
+            return SchedulingResult.Error("Failed to schedule alarm: ${e.message}")
         }
-        
-        android.util.Log.d(TAG, "Scheduled daily wallpaper change at ${time.hour}:${String.format("%02d", time.minute)} for target: $targetScreen (using AlarmManager)")
-        android.util.Log.d(TAG, "  First run: ~$delayMinutes minutes from now")
-        android.util.Log.d(TAG, "  Subsequent runs: Every 24 hours at exactly ${time.hour}:${String.format("%02d", time.minute)}")
     }
     
     /**
@@ -406,12 +475,13 @@ class WorkScheduler @Inject constructor(
      * 
      * @param intervalMillis Interval in milliseconds (900000 for 15min, 3600000 for 1hr)
      * @param targetScreen Target screen (home, lock, both)
+     * @return SchedulingResult indicating success or failure reason
      */
-    private fun scheduleRepeatingAlarm(intervalMillis: Long, targetScreen: String) {
+    private fun scheduleRepeatingAlarm(intervalMillis: Long, targetScreen: String): SchedulingResult {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
         if (alarmManager == null) {
             android.util.Log.e(TAG, "AlarmManager not available!")
-            return
+            return SchedulingResult.Error("AlarmManager not available on this device")
         }
         
         // Check if we have permission to schedule exact alarms (Android 12+)
@@ -419,18 +489,22 @@ class WorkScheduler @Inject constructor(
             if (!alarmManager.canScheduleExactAlarms()) {
                 android.util.Log.e(TAG, "❌ SCHEDULE_EXACT_ALARM permission not granted!")
                 android.util.Log.e(TAG, "   User needs to grant this permission in Settings")
-                return
+                return SchedulingResult.PermissionDenied(
+                    "For reliable ${intervalMillis / 60000}-minute changes, please grant exact alarm permission in Settings"
+                )
             } else {
                 android.util.Log.d(TAG, "✅ SCHEDULE_EXACT_ALARM permission granted")
             }
         }
         
-        // Check battery optimization status
+        // Check battery optimization status - warn but don't fail
         val batteryOptimizationExempt = me.avinas.vanderwaals.core.BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
-        if (!batteryOptimizationExempt) {
+        val hasBatteryWarning = if (!batteryOptimizationExempt) {
             android.util.Log.w(TAG, "⚠️ Battery optimization is ENABLED - alarms may be delayed")
+            true
         } else {
             android.util.Log.d(TAG, "✅ Battery optimization disabled")
+            false
         }
         
         val alarmIntent = Intent(context, WallpaperAlarmReceiver::class.java).apply {
@@ -467,8 +541,17 @@ class WorkScheduler @Inject constructor(
             android.util.Log.d(TAG, "  Target screen: $targetScreen")
             android.util.Log.d(TAG, "  First run: ~5 seconds from now")
             android.util.Log.d(TAG, "  Subsequent runs: Every $intervalMinutes minutes")
+            
+            return if (hasBatteryWarning) {
+                SchedulingResult.BatteryOptimizationWarning(
+                    "Scheduled successfully. Note: Battery optimization may delay changes. Disable in Settings for best reliability."
+                )
+            } else {
+                SchedulingResult.Success
+            }
         } catch (e: Exception) {
             android.util.Log.e(TAG, "❌ Failed to set repeating alarm: ${e.message}", e)
+            return SchedulingResult.Error("Failed to schedule alarm: ${e.message}")
         }
     }
     
@@ -514,6 +597,7 @@ class WorkScheduler @Inject constructor(
      */
     fun cancelWallpaperChange() {
         workManager.cancelUniqueWork(WallpaperChangeWorker.WORK_NAME)
+        stopWallpaperMonitorService()
     }
     
     /**
@@ -585,7 +669,9 @@ class WorkScheduler @Inject constructor(
         workManager.cancelUniqueWork(CatalogSyncWorker.WORK_NAME)
         workManager.cancelUniqueWork(CleanupWorker.WORK_NAME)
         workManager.cancelUniqueWork(WallpaperChangeWorker.WORK_NAME)
+        workManager.cancelUniqueWork(WallpaperChangeWorker.WORK_NAME)
         workManager.cancelUniqueWork(BatchDownloadWorker.WORK_NAME)
+        workManager.cancelUniqueWork(DailyPlaylistWorker.WORK_NAME)
     }
     
     /**
@@ -609,6 +695,36 @@ class WorkScheduler @Inject constructor(
         
         return Duration.between(now, target).toMillis()
     }
+    
+    /**
+     * Starts the WallpaperMonitorService.
+     */
+    private fun startWallpaperMonitorService() {
+        try {
+            val intent = Intent(context, me.avinas.vanderwaals.service.WallpaperMonitorService::class.java)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+            android.util.Log.d(TAG, "✅ WallpaperMonitorService started")
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "❌ Failed to start WallpaperMonitorService", e)
+        }
+    }
+
+    /**
+     * Stops the WallpaperMonitorService.
+     */
+    private fun stopWallpaperMonitorService() {
+        try {
+            val intent = Intent(context, me.avinas.vanderwaals.service.WallpaperMonitorService::class.java)
+            context.stopService(intent)
+            android.util.Log.d(TAG, "⏹️ WallpaperMonitorService stopped")
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "❌ Failed to stop WallpaperMonitorService", e)
+        }
+    }
 }
 
 /**
@@ -616,16 +732,20 @@ class WorkScheduler @Inject constructor(
  */
 enum class ChangeInterval(val displayName: String) {
     /**
-     * Change wallpaper every 15 minutes (WorkManager minimum interval).
-     * CRITICAL FIX: Changed from "Every Unlock" to "Every 15 Minutes"
-     * because WorkManager cannot schedule work with interval less than 15 minutes.
+     * Change wallpaper on every unlock.
+     * Relies on DeviceUnlockReceiver.
      */
-    EVERY_15_MINUTES("Every 15 Minutes"),
+    EVERY_UNLOCK("Every Unlock"),
     
     /**
      * Change wallpaper every hour.
      */
     HOURLY("Hourly"),
+
+    /**
+     * Change wallpaper every 15 minutes.
+     */
+    FIFTEEN_MINUTES("15 Minutes"),
     
     /**
      * Change wallpaper once per day at specific time.

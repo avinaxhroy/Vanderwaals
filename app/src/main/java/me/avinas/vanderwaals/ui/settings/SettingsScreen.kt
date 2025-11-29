@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -104,7 +105,9 @@ fun SettingsScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent
                 ),
-                modifier = Modifier.statusBarsPadding()
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(horizontal = 8.dp, vertical = 16.dp)
             )
         },
         snackbarHost = { 
@@ -356,6 +359,166 @@ fun SettingsScreen(
                                 }
                             }
 
+                            // Playlist Size Slider for Every Unlock
+                            if (settings.interval == ChangeInterval.EVERY_UNLOCK) {
+                                HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
+                                
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Daily Playlist Size",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Medium,
+                                            color = if (isDark) Color.White else Color(0xFF111827)
+                                        )
+                                        Text(
+                                            text = "${settings.dailyPlaylistSize} wallpapers",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isDark) DarkIndigo400 else LightPrimary
+                                        )
+                                    }
+                                    
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    
+                                    Slider(
+                                        value = settings.dailyPlaylistSize.toFloat(),
+                                        onValueChange = { viewModel.updateDailyPlaylistSize(it.toInt()) },
+                                        valueRange = 10f..50f,
+                                        steps = 39,
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = if (isDark) DarkIndigo400 else LightPrimary,
+                                            activeTrackColor = if (isDark) DarkIndigo400 else LightPrimary,
+                                            inactiveTrackColor = if (isDark) Color.Gray.copy(alpha = 0.3f) else Color(0xFFE5E7EB)
+                                        )
+                                    )
+                                    
+                                    Text(
+                                        text = "A fresh set of wallpapers is downloaded daily and rotated on unlock.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (isDark) Color.Gray else Color(0xFF6B7280),
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                    
+                                    // Battery and cooldown warning note
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(
+                                                color = if (isDark) Color(0xFFF59E0B).copy(alpha = 0.1f) else Color(0xFFFEF3C7),
+                                                shape = RoundedCornerShape(8.dp)
+                                            )
+                                            .padding(12.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.Top
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = if (isDark) Color(0xFFF59E0B) else Color(0xFFD97706),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Column {
+                                            Text(
+                                                text = "Battery Notice",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (isDark) Color(0xFFF59E0B) else Color(0xFFD97706)
+                                            )
+                                            Text(
+                                                text = "This mode has a 1-minute cooldown between changes to save battery. Frequent wallpaper changes may increase battery usage.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (isDark) Color.Gray else Color(0xFF6B7280)
+                                            )
+                                        }
+                                    }
+                                }
+                                
+                                // Progress Indicator with actual count
+                                if (settings.isPlaylistDownloading) {
+                                    HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(16.dp),
+                                                strokeWidth = 2.dp,
+                                                color = if (isDark) DarkIndigo400 else LightPrimary
+                                            )
+                                            Text(
+                                                text = if (settings.playlistDownloadProgress.isApplying) 
+                                                    "Applying wallpaper..." 
+                                                else 
+                                                    settings.playlistDownloadProgress.progressText,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (isDark) Color.White else Color(0xFF111827),
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                        
+                                        // Show progress bar if we have total count
+                                        if (settings.playlistDownloadProgress.totalCount > 0) {
+                                            LinearProgressIndicator(
+                                                progress = { 
+                                                    settings.playlistDownloadProgress.downloadedCount.toFloat() / 
+                                                        settings.playlistDownloadProgress.totalCount.toFloat() 
+                                                },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(4.dp)
+                                                    .clip(RoundedCornerShape(2.dp)),
+                                                color = if (isDark) DarkIndigo400 else LightPrimary,
+                                                trackColor = if (isDark) Color.Gray.copy(alpha = 0.3f) else Color(0xFFE5E7EB)
+                                            )
+                                        }
+                                    }
+                                }
+                                
+                                // Apply Button - triggers immediate playlist download
+                                if (!settings.isPlaylistDownloading) {
+                                    HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
+                                    Button(
+                                        onClick = { viewModel.triggerDailyPlaylistDownload() },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (isDark) DarkIndigo400 else LightPrimary,
+                                            contentColor = Color.White
+                                        ),
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(vertical = 12.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Download,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Download Playlist Now",
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
+
                             if (settings.interval == ChangeInterval.DAILY) {
                                 HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
                                 Row(
@@ -390,6 +553,7 @@ fun SettingsScreen(
                         }
                     }
                 }
+
 
                 // BATTERY & PERFORMANCE Section
                 item {
@@ -952,14 +1116,16 @@ fun SegmentedControl(
                         }
                     )
                     .clickable { onItemSelected(index) }
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = 12.dp, horizontal = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = item,
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Medium,
-                    color = if (isSelected) Color.White else (if (isDark) Color.Gray else Color(0xFF4B5563))
+                    color = if (isSelected) Color.White else (if (isDark) Color.Gray else Color(0xFF4B5563)),
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
                 )
             }
         }

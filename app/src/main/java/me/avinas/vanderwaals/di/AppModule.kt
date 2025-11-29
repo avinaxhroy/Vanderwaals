@@ -62,7 +62,8 @@ object AppModule {
         downloadQueueDao: DownloadQueueDao,
         wallpaperHistoryDao: WallpaperHistoryDao,
         okHttpClient: OkHttpClient,
-        segmentedDownloader: me.avinas.vanderwaals.network.SegmentedDownloader
+        segmentedDownloader: me.avinas.vanderwaals.network.SegmentedDownloader,
+        database: VanderwaalsDatabase
     ): WallpaperRepository {
         return WallpaperRepositoryImpl(
             context,
@@ -70,7 +71,8 @@ object AppModule {
             downloadQueueDao,
             wallpaperHistoryDao,
             okHttpClient,
-            segmentedDownloader
+            segmentedDownloader,
+            database
         )
     }
     

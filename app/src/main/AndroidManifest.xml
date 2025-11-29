@@ -52,11 +52,10 @@
             </intent-filter>
         </activity>
         
-        <!-- DeviceUnlockReceiver - REMOVED: Changed "Every Unlock" to "Every 15 Minutes"
-             because WorkManager has a 15-minute minimum interval.
-             Keeping the receiver disabled to avoid user confusion.
+        <!-- DeviceUnlockReceiver - DISABLED: Replaced by WallpaperMonitorService
+             which runs as a foreground service to reliably receive ACTION_USER_PRESENT
+             on Android 8.0+ (API 26+).
         -->
-        <!--
         <receiver android:name="me.avinas.vanderwaals.receiver.DeviceUnlockReceiver"
             android:enabled="false"
             android:exported="false">
@@ -64,7 +63,14 @@
                 <action android:name="android.intent.action.USER_PRESENT" />
             </intent-filter>
         </receiver>
-        -->
+
+        <!-- WallpaperMonitorService - Foreground Service for "Every Unlock" -->
+        <!-- CRITICAL: Must be foreground service to receive ACTION_USER_PRESENT -->
+        <service
+            android:name=".service.WallpaperMonitorService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         
         <!-- BootCompletedReceiver - Reschedules workers after device reboot -->
         <!-- CRITICAL: Ensures auto-change feature works after phone restart -->

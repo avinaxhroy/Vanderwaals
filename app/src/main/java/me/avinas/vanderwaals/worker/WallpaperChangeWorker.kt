@@ -2,10 +2,18 @@ package me.avinas.vanderwaals.worker
 
 import android.app.WallpaperManager
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.BitmapFactory
+import android.os.BatteryManager
 import android.util.Log
 import androidx.hilt.work.HiltWorker
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import dagger.assisted.Assisted
@@ -16,6 +24,7 @@ import me.avinas.vanderwaals.data.repository.PreferenceRepository
 import me.avinas.vanderwaals.data.repository.WallpaperRepository
 import me.avinas.vanderwaals.domain.usecase.SelectNextWallpaperUseCase
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 /**
  * WorkManager worker for automatic wallpaper rotation.
@@ -55,7 +64,8 @@ class WallpaperChangeWorker @AssistedInject constructor(
     private val wallpaperRepository: WallpaperRepository,
     private val preferenceRepository: PreferenceRepository,
     private val engagementTracker: me.avinas.vanderwaals.domain.usecase.UserEngagementTracker,
-    private val processImplicitFeedbackUseCase: me.avinas.vanderwaals.domain.usecase.ProcessImplicitFeedbackUseCase
+    private val processImplicitFeedbackUseCase: me.avinas.vanderwaals.domain.usecase.ProcessImplicitFeedbackUseCase,
+    private val findCachedWallpaperUseCase: me.avinas.vanderwaals.domain.usecase.FindCachedWallpaperUseCase
 ) : CoroutineWorker(appContext, workerParams) {
     
     companion object {
@@ -87,6 +97,7 @@ class WallpaperChangeWorker @AssistedInject constructor(
         const val TARGET_HOME = "home"
         const val TARGET_LOCK = "lock"
         const val TARGET_BOTH = "both"
+        const val TARGET_BOTH_DIFFERENT = "both_different"
         
         /**
          * Mode values.
@@ -99,10 +110,32 @@ class WallpaperChangeWorker @AssistedInject constructor(
          * Used to determine if implicit feedback should be processed.
          */
         const val KEY_IS_MANUAL_CHANGE = "is_manual_change"
+        
+        /**
+         * Unique work name for retry when network becomes available.
+         */
+        const val RETRY_WORK_NAME = "wallpaper_retry_when_online"
+        
+        /**
+         * Battery threshold below which background work should be skipped.
+         * When battery is below 20%, we skip non-essential background work.
+         */
+        private const val BATTERY_THRESHOLD_PERCENT = 20
     }
     
     override suspend fun doWork(): Result {
         return try {
+            // BATTERY CHECK: Skip background work if battery is critically low
+            // This respects user's battery life while still allowing manual changes
+            val isManualChange = inputData.getBoolean(KEY_IS_MANUAL_CHANGE, false)
+            if (!isManualChange && isBatteryLow()) {
+                Log.d(TAG, "Skipping auto-change: Battery below ${BATTERY_THRESHOLD_PERCENT}%")
+                // Return success to not retry immediately - next scheduled run will check again
+                return Result.success(
+                    workDataOf("skipped_reason" to "battery_low")
+                )
+            }
+            
             // CRITICAL FIX: Always load current Apply To setting from DataStore
             // This ensures we respect the latest user preference, even if WorkManager
             // data is stale or was scheduled before the user changed settings
@@ -114,6 +147,7 @@ class WallpaperChangeWorker @AssistedInject constructor(
                 "lock_screen" -> TARGET_LOCK
                 "home_screen" -> TARGET_HOME
                 "both" -> TARGET_BOTH
+                "both_different" -> TARGET_BOTH_DIFFERENT
                 else -> TARGET_BOTH
             }
             
@@ -134,13 +168,39 @@ class WallpaperChangeWorker @AssistedInject constructor(
             }
             
         } catch (e: Exception) {
-            Log.e(TAG, "Error changing wallpaper", e)
+            // Use ErrorHandler for consistent error handling
+            val (error, action) = me.avinas.vanderwaals.core.ErrorHandler.handleWorkerError(
+                exception = e,
+                context = "WallpaperChange",
+                attemptCount = runAttemptCount,
+                metadata = mapOf(
+                    "mode" to (inputData.getString(KEY_MODE) ?: "unknown"),
+                    "is_manual" to inputData.getBoolean(KEY_IS_MANUAL_CHANGE, false)
+                )
+            )
             
-            // Retry once on failure
-            if (runAttemptCount == 0) {
-                Result.retry()
-            } else {
-                Result.failure()
+            when (action) {
+                is me.avinas.vanderwaals.core.ErrorRecoveryAction.Retry -> Result.retry()
+                is me.avinas.vanderwaals.core.ErrorRecoveryAction.RetryWithBackoff -> {
+                    // WorkManager doesn't support custom backoff, but log for debugging
+                    Log.d(TAG, "Retrying with backoff delay: ${action.delayMs}ms")
+                    Result.retry()
+                }
+                is me.avinas.vanderwaals.core.ErrorRecoveryAction.Fail -> {
+                    val errorData = me.avinas.vanderwaals.core.ErrorHandler.createWorkDataForError(
+                        error = error,
+                        attemptCount = runAttemptCount,
+                        additionalData = mapOf("failure_reason" to action.reason)
+                    )
+                    Result.failure(androidx.work.workDataOf(*errorData.map { it.key to it.value }.toTypedArray()))
+                }
+                is me.avinas.vanderwaals.core.ErrorRecoveryAction.SkipAndContinue -> {
+                    Result.success(workDataOf("skipped_reason" to action.reason))
+                }
+                is me.avinas.vanderwaals.core.ErrorRecoveryAction.FallbackToCache -> {
+                    // Already handled in download logic
+                    Result.retry()
+                }
             }
         }
     }
@@ -179,6 +239,11 @@ class WallpaperChangeWorker @AssistedInject constructor(
             preferences = savedPreferences
         }
         
+        // Handle "Both But Different" mode - apply different wallpapers to home and lock screen
+        if (targetScreen == TARGET_BOTH_DIFFERENT) {
+            return applyBothDifferentWallpapers()
+        }
+        
         // Step 2: Select next wallpaper using algorithm
         val wallpaperResult = selectNextWallpaperUseCase()
         
@@ -196,15 +261,40 @@ class WallpaperChangeWorker @AssistedInject constructor(
         
         val wallpaper = wallpaperResult.getOrNull()!!
         
-        // Step 3: Download wallpaper if not cached
-        val downloadResult = wallpaperRepository.downloadWallpaper(wallpaper)
+        // Step 3: Download wallpaper if not cached (with offline fallback)
+        var downloadResult = wallpaperRepository.downloadWallpaper(wallpaper)
+        var wallpaperFile: File? = null
+        var selectedWallpaper = wallpaper
         
         if (downloadResult.isFailure) {
-            Log.e(TAG, "Failed to download wallpaper: ${downloadResult.exceptionOrNull()?.message}")
-            return Result.retry()
+            val downloadError = downloadResult.exceptionOrNull()
+            Log.w(TAG, "Failed to download wallpaper ${wallpaper.id}: ${downloadError?.message}")
+            
+            // OFFLINE FALLBACK: Try to find a different wallpaper that's already cached on disk
+            Log.d(TAG, "Attempting offline fallback - searching for cached wallpapers...")
+            
+            val cachedWallpaperResult = findCachedWallpaperUseCase(excludeWallpaperId = wallpaper.id)
+            
+            if (cachedWallpaperResult != null) {
+                val (cachedWallpaper, cachedFile) = cachedWallpaperResult
+                Log.d(TAG, "Offline fallback successful - using cached wallpaper: ${cachedWallpaper.id}")
+                selectedWallpaper = cachedWallpaper
+                wallpaperFile = cachedFile
+                
+                // Schedule a retry when internet becomes available to download new wallpapers
+                // This ensures we refresh the cache when connectivity is restored
+                scheduleRetryWhenOnline(targetScreen)
+            } else {
+                // No cached wallpapers available - schedule retry when network is available
+                Log.e(TAG, "No cached wallpapers available for offline fallback")
+                scheduleRetryWhenOnline(targetScreen)
+                return Result.success(
+                    workDataOf("skipped_reason" to "no_cache_no_network")
+                )
+            }
+        } else {
+            wallpaperFile = downloadResult.getOrNull()!!
         }
-        
-        val wallpaperFile = downloadResult.getOrNull()!!
         
         // Step 3.5: Process implicit feedback for previous wallpaper (ONLY if manual change)
         // Check if this is a manual change (triggered by "Change Now" button)
@@ -255,7 +345,7 @@ class WallpaperChangeWorker @AssistedInject constructor(
         }
         
         // Step 4: Apply wallpaper to specified screen(s)
-        val applied = applyWallpaperToScreen(wallpaperFile, targetScreen)
+        val applied = applyWallpaperToScreen(wallpaperFile!!, targetScreen)
         
         if (!applied) {
             Log.e(TAG, "Failed to apply wallpaper")
@@ -263,8 +353,8 @@ class WallpaperChangeWorker @AssistedInject constructor(
         }
         
         // Step 5: Record wallpaper application in history
-        val historyId = wallpaperRepository.recordWallpaperApplied(wallpaper)
-        Log.d(TAG, "Applied wallpaper ${wallpaper.id}, history ID: $historyId")
+        val historyId = wallpaperRepository.recordWallpaperApplied(selectedWallpaper)
+        Log.d(TAG, "Applied wallpaper ${selectedWallpaper.id}, history ID: $historyId")
         
         // Step 6: Smart pre-download next wallpapers
         try {
@@ -285,35 +375,189 @@ class WallpaperChangeWorker @AssistedInject constructor(
         
         // Step 7: Return success with wallpaper ID
         return Result.success(
-            workDataOf(KEY_WALLPAPER_ID to wallpaper.id)
+            workDataOf(KEY_WALLPAPER_ID to selectedWallpaper.id)
+        )
+    }
+    
+    /**
+     * Applies two different wallpapers - one to home screen and one to lock screen.
+     * 
+     * This function selects two different wallpapers using the Vanderwaals algorithm
+     * and applies them separately to home and lock screens.
+     * 
+     * @return Result indicating success or failure
+     */
+    private suspend fun applyBothDifferentWallpapers(): Result {
+        Log.d(TAG, "Applying 'Both But Different' - selecting two different wallpapers")
+        
+        // Process implicit feedback for previous wallpapers (if manual change)
+        val isManualChange = inputData.getBoolean(KEY_IS_MANUAL_CHANGE, false)
+        if (isManualChange) {
+            // Mark previous active wallpapers as removed
+            val previousHistory = wallpaperRepository.getHistory().first().firstOrNull { it.isActive() }
+            if (previousHistory != null) {
+                wallpaperRepository.markWallpaperRemoved(previousHistory.id, System.currentTimeMillis())
+                val updatedHistory = wallpaperRepository.getHistoryEntry(previousHistory.id)
+                if (updatedHistory != null) {
+                    processImplicitFeedbackUseCase(updatedHistory)
+                }
+            }
+        } else {
+            val previousHistory = wallpaperRepository.getHistory().first().firstOrNull { it.isActive() }
+            if (previousHistory != null) {
+                wallpaperRepository.markWallpaperRemoved(previousHistory.id, System.currentTimeMillis())
+            }
+        }
+        
+        // Step 1: Select first wallpaper for home screen
+        val homeWallpaperResult = selectNextWallpaperUseCase()
+        if (homeWallpaperResult.isFailure) {
+            val error = homeWallpaperResult.exceptionOrNull()
+            Log.e(TAG, "Failed to select home wallpaper: ${error?.message}")
+            return if (error?.message?.contains("No wallpapers available") == true) {
+                Result.success()
+            } else {
+                Result.retry()
+            }
+        }
+        val homeWallpaper = homeWallpaperResult.getOrNull()!!
+        
+        // Step 2: Select second (different) wallpaper for lock screen
+        // Step 2: Select second (different) wallpaper for lock screen
+        val lockWallpaperResult = selectNextWallpaperUseCase(excludeWallpaperId = homeWallpaper.id)
+        if (lockWallpaperResult.isFailure) {
+            val error = lockWallpaperResult.exceptionOrNull()
+            Log.e(TAG, "Failed to select lock wallpaper: ${error?.message}")
+            // Fall back to using the same wallpaper for both if only one available
+            Log.w(TAG, "Falling back to same wallpaper for both screens")
+        }
+        val lockWallpaper = lockWallpaperResult.getOrNull() ?: homeWallpaper
+        
+        Log.d(TAG, "Selected wallpapers - Home: ${homeWallpaper.id}, Lock: ${lockWallpaper.id}")
+        
+        // Step 3: Download home wallpaper (with offline fallback)
+        var actualHomeWallpaper = homeWallpaper
+        var homeWallpaperFile: File
+        
+        val homeDownloadResult = wallpaperRepository.downloadWallpaper(homeWallpaper)
+        if (homeDownloadResult.isFailure) {
+            Log.w(TAG, "Failed to download home wallpaper: ${homeDownloadResult.exceptionOrNull()?.message}")
+            
+            // OFFLINE FALLBACK for home wallpaper
+            val cachedHomeResult = findCachedWallpaperUseCase(excludeWallpaperId = homeWallpaper.id)
+            if (cachedHomeResult != null) {
+                val (cachedWallpaper, cachedFile) = cachedHomeResult
+                Log.d(TAG, "Offline fallback for home - using cached: ${cachedWallpaper.id}")
+                actualHomeWallpaper = cachedWallpaper
+                homeWallpaperFile = cachedFile
+                
+                // Schedule retry when online to refresh cache
+                scheduleRetryWhenOnline(TARGET_BOTH_DIFFERENT)
+            } else {
+                Log.e(TAG, "No cached wallpapers available for home screen fallback")
+                scheduleRetryWhenOnline(TARGET_BOTH_DIFFERENT)
+                return Result.success(
+                    workDataOf("skipped_reason" to "no_cache_no_network")
+                )
+            }
+        } else {
+            homeWallpaperFile = homeDownloadResult.getOrNull()!!
+        }
+        
+        // Step 4: Download lock wallpaper (with offline fallback)
+        var actualLockWallpaper = lockWallpaper
+        var lockWallpaperFile: File
+        
+        if (lockWallpaper.id != homeWallpaper.id) {
+            val lockDownloadResult = wallpaperRepository.downloadWallpaper(lockWallpaper)
+            if (lockDownloadResult.isFailure) {
+                Log.w(TAG, "Failed to download lock wallpaper: ${lockDownloadResult.exceptionOrNull()?.message}")
+                
+                // OFFLINE FALLBACK for lock wallpaper
+                val cachedLockResult = findCachedWallpaperUseCase(excludeWallpaperId = actualHomeWallpaper.id)
+                if (cachedLockResult != null) {
+                    val (cachedWallpaper, cachedFile) = cachedLockResult
+                    Log.d(TAG, "Offline fallback for lock - using cached: ${cachedWallpaper.id}")
+                    actualLockWallpaper = cachedWallpaper
+                    lockWallpaperFile = cachedFile
+                } else {
+                    // Fall back to using same as home if no other cached available
+                    Log.w(TAG, "No different cached wallpaper for lock, using same as home")
+                    actualLockWallpaper = actualHomeWallpaper
+                    lockWallpaperFile = homeWallpaperFile
+                }
+            } else {
+                lockWallpaperFile = lockDownloadResult.getOrNull()!!
+            }
+        } else {
+            lockWallpaperFile = homeWallpaperFile
+        }
+        
+        // Step 5: Apply wallpaper to home screen
+        val homeApplied = applyWallpaperToScreen(homeWallpaperFile, TARGET_HOME)
+        if (!homeApplied) {
+            Log.e(TAG, "Failed to apply home wallpaper")
+            return Result.retry()
+        }
+        
+        // Step 6: Apply wallpaper to lock screen
+        val lockApplied = applyWallpaperToScreen(lockWallpaperFile, TARGET_LOCK)
+        if (!lockApplied) {
+            Log.e(TAG, "Failed to apply lock wallpaper")
+            return Result.retry()
+        }
+        
+        // Step 7: Record both wallpaper applications in history
+        val homeHistoryId = wallpaperRepository.recordWallpaperApplied(actualHomeWallpaper)
+        Log.d(TAG, "Applied home wallpaper ${actualHomeWallpaper.id}, history ID: $homeHistoryId")
+        
+        if (actualLockWallpaper.id != actualHomeWallpaper.id) {
+            val lockHistoryId = wallpaperRepository.recordWallpaperApplied(actualLockWallpaper)
+            Log.d(TAG, "Applied lock wallpaper ${actualLockWallpaper.id}, history ID: $lockHistoryId")
+        }
+        
+        // Step 8: Smart pre-download next wallpapers
+        try {
+            val queueResult = queueNextWallpapersUseCase()
+            queueResult.fold(
+                onSuccess = { count ->
+                    Log.d(TAG, "Queued $count wallpapers for pre-download")
+                },
+                onFailure = { error ->
+                    Log.w(TAG, "Failed to queue next wallpapers: ${error.message}")
+                }
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception during pre-download queue: ${e.message}")
+        }
+        
+        // Return success with home wallpaper ID
+        return Result.success(
+            workDataOf(KEY_WALLPAPER_ID to actualHomeWallpaper.id)
         )
     }
     
     /**
      * Applies wallpaper file to the specified screen(s) with SmartCrop processing.
      * 
+     * Uses a "try then verify" approach for live wallpaper detection:
+     * 1. Attempt to apply the wallpaper
+     * 2. Verify the change was successful
+     * 3. If failed, check if live wallpaper is blocking
+     * 
      * @param wallpaperFile File containing the wallpaper image
      * @param targetScreen Target screen: "home", "lock", or "both"
      * @return true if successfully applied, false otherwise
      */
     private suspend fun applyWallpaperToScreen(wallpaperFile: File, targetScreen: String): Boolean {
+        var originalBitmap: android.graphics.Bitmap? = null
+        var processedBitmap: android.graphics.Bitmap? = null
+        
         return try {
-            // CRITICAL: Check for live wallpaper BEFORE attempting to apply
-            // Live wallpaper services (Glance, Dynamic Wallpaper) prevent setBitmap() from working
-            if (me.avinas.vanderwaals.core.LiveWallpaperDetector.isLiveWallpaperActive(applicationContext)) {
-                val (isBlocking, serviceName) = me.avinas.vanderwaals.core.LiveWallpaperDetector.isKnownBlockingService(applicationContext)
-                val packageName = me.avinas.vanderwaals.core.LiveWallpaperDetector.getLiveWallpaperPackageName(applicationContext)
-                
-                Log.e(TAG, "Live wallpaper detected: $serviceName ($packageName) - blocking wallpaper change")
-                
-                // Return false to indicate failure - UI will detect this and show dialog
-                return false
-            }
-            
             val wallpaperManager = WallpaperManager.getInstance(applicationContext)
-            val originalBitmap = BitmapFactory.decodeFile(wallpaperFile.absolutePath)
-
-
+            
+            // Use BitmapManager for safe bitmap loading with OOM protection
+            originalBitmap = me.avinas.vanderwaals.core.BitmapManager.loadBitmap(wallpaperFile)
             
             if (originalBitmap == null) {
                 Log.e(TAG, "Failed to decode wallpaper file")
@@ -327,7 +571,7 @@ class WallpaperChangeWorker @AssistedInject constructor(
             val screenSize = me.avinas.vanderwaals.core.getDeviceScreenSize(applicationContext)
             
             // Apply SmartCrop to actual screen dimensions (matches preview)
-            val processedBitmap = me.avinas.vanderwaals.core.SmartCrop.smartCropBitmap(
+            processedBitmap = me.avinas.vanderwaals.core.SmartCrop.smartCropBitmap(
                 source = originalBitmap,
                 targetWidth = screenSize.width,
                 targetHeight = screenSize.height,
@@ -347,9 +591,10 @@ class WallpaperChangeWorker @AssistedInject constructor(
                 // Continue anyway - we still have the bitmap in memory
             }
             
-            // Recycle original bitmap to save memory
+            // Recycle original bitmap to save memory using BitmapManager
             if (processedBitmap !== originalBitmap) {
-                originalBitmap.recycle()
+                me.avinas.vanderwaals.core.BitmapManager.recycleSafely(originalBitmap)
+                originalBitmap = null // Clear reference
             }
             
             when (targetScreen) {
@@ -398,7 +643,22 @@ class WallpaperChangeWorker @AssistedInject constructor(
                 }
             }
             
-            processedBitmap.recycle()
+            // Recycle processed bitmap after successful application
+            me.avinas.vanderwaals.core.BitmapManager.recycleSafely(processedBitmap)
+            processedBitmap = null // Clear reference
+            
+            // VERIFICATION: Check if wallpaper was actually applied
+            // Live wallpapers silently ignore setBitmap() calls, so we need to verify
+            // by checking if a live wallpaper is still active after our attempt
+            val wallpaperInfo = wallpaperManager.wallpaperInfo
+            if (wallpaperInfo != null) {
+                // A live wallpaper is still active - our setBitmap was ignored
+                val (isBlocking, serviceName) = me.avinas.vanderwaals.core.LiveWallpaperDetector.detectBlockingAfterFailure(applicationContext)
+                if (isBlocking) {
+                    Log.e(TAG, "Wallpaper change blocked by live wallpaper: $serviceName")
+                    return false
+                }
+            }
             
             // Record wallpaper change for engagement tracking
             engagementTracker.recordWallpaperChange()
@@ -409,6 +669,109 @@ class WallpaperChangeWorker @AssistedInject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Error applying wallpaper", e)
             false
+        } finally {
+            // Ensure bitmaps are recycled even if exception occurs
+            me.avinas.vanderwaals.core.BitmapManager.recycleSafely(originalBitmap)
+            me.avinas.vanderwaals.core.BitmapManager.recycleSafely(processedBitmap)
+        }
+    }
+    
+    
+    /**
+     * Checks if the device battery is below the threshold for background work.
+     * 
+     * When battery is below 20%, we should avoid non-essential background work
+     * to preserve user's battery life. Manual wallpaper changes are still allowed.
+     * 
+     * @return true if battery is below threshold, false otherwise
+     */
+    private fun isBatteryLow(): Boolean {
+        return try {
+            val batteryStatus = applicationContext.registerReceiver(
+                null,
+                IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            )
+            
+            if (batteryStatus == null) {
+                Log.w(TAG, "Could not get battery status, assuming battery is OK")
+                return false
+            }
+            
+            val level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+            val scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+            
+            if (level == -1 || scale == -1) {
+                Log.w(TAG, "Invalid battery level data, assuming battery is OK")
+                return false
+            }
+            
+            val batteryPercent = (level * 100) / scale
+            val isCharging = batteryStatus.getIntExtra(BatteryManager.EXTRA_STATUS, -1) == 
+                BatteryManager.BATTERY_STATUS_CHARGING ||
+                batteryStatus.getIntExtra(BatteryManager.EXTRA_STATUS, -1) == 
+                BatteryManager.BATTERY_STATUS_FULL
+            
+            // Don't skip if device is charging
+            if (isCharging) {
+                Log.d(TAG, "Device is charging, battery check passed")
+                return false
+            }
+            
+            val isLow = batteryPercent < BATTERY_THRESHOLD_PERCENT
+            if (isLow) {
+                Log.d(TAG, "Battery is low: $batteryPercent% (threshold: $BATTERY_THRESHOLD_PERCENT%)")
+            }
+            isLow
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking battery level", e)
+            false // Assume battery is OK if we can't check
+        }
+    }
+    
+    /**
+     * Schedules a one-time work request to run when internet becomes available.
+     * 
+     * This is used after offline fallback to ensure we eventually:
+     * 1. Download new wallpapers to refresh the cache
+     * 2. Apply a fresh wallpaper if we had to skip due to no cache/no network
+     * 
+     * The work has constraints:
+     * - Network connectivity required
+     * - Battery not low (will wait until charged if battery is critical)
+     * - Delayed by 5 minutes to avoid immediate retries in unstable network conditions
+     * 
+     * @param targetScreen The target screen for wallpaper application
+     */
+    private fun scheduleRetryWhenOnline(targetScreen: String) {
+        try {
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiresBatteryNotLow(true)
+                .build()
+            
+            val inputData = workDataOf(
+                KEY_TARGET_SCREEN to targetScreen,
+                KEY_MODE to MODE_VANDERWAALS,
+                KEY_IS_MANUAL_CHANGE to false
+            )
+            
+            val retryWork = OneTimeWorkRequestBuilder<WallpaperChangeWorker>()
+                .setConstraints(constraints)
+                .setInputData(inputData)
+                .setInitialDelay(5, TimeUnit.MINUTES) // Delay to avoid rapid retries
+                .build()
+            
+            WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+                RETRY_WORK_NAME,
+                ExistingWorkPolicy.REPLACE, // Replace any existing retry work
+                retryWork
+            )
+            
+            Log.d(TAG, "Scheduled retry work for when network becomes available (with 5 min delay)")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to schedule retry work", e)
         }
     }
 }

@@ -46,13 +46,14 @@ object CompositionAnalyzer {
             return CompositionAnalysis.empty()
         }
         
-        // Load bitmap with downsampling for performance
-        val options = BitmapFactory.Options().apply {
-            inSampleSize = 4 // 1/4 size for faster analysis
-        }
-        
+        // Load bitmap with OOM protection using BitmapManager
+        // Downsample to 1/4 size for faster analysis
         val bitmap = try {
-            BitmapFactory.decodeFile(imageFile.absolutePath, options)
+            me.avinas.vanderwaals.core.BitmapManager.loadBitmap(
+                file = imageFile,
+                maxWidth = 1024,  // 1/4 size for performance
+                maxHeight = 1024
+            )
         } catch (e: Exception) {
             return CompositionAnalysis.empty()
         }
@@ -62,7 +63,7 @@ object CompositionAnalyzer {
         }
         
         val result = analyzeBitmap(bitmap)
-        bitmap.recycle()
+        me.avinas.vanderwaals.core.BitmapManager.recycleSafely(bitmap)
         return result
     }
     

@@ -58,11 +58,14 @@ class ApplicationSettingsViewModel @Inject constructor(
     private val _applyTo = MutableStateFlow(ApplyTo.BOTH)
     val applyTo: StateFlow<ApplyTo> = _applyTo.asStateFlow()
     
-    private val _changeInterval = MutableStateFlow(ChangeInterval.EVERY_15_MINUTES)
+    private val _changeInterval = MutableStateFlow(ChangeInterval.EVERY_UNLOCK)
     val changeInterval: StateFlow<ChangeInterval> = _changeInterval.asStateFlow()
     
     private val _dailyTime = MutableStateFlow(LocalTime.of(9, 0))
     val dailyTime: StateFlow<LocalTime> = _dailyTime.asStateFlow()
+    
+    private val _dailyPlaylistSize = MutableStateFlow(15)
+    val dailyPlaylistSize: StateFlow<Int> = _dailyPlaylistSize.asStateFlow()
     
     private val _startState = MutableStateFlow<StartState>(StartState.Idle)
     val startState: StateFlow<StartState> = _startState.asStateFlow()
@@ -95,6 +98,10 @@ class ApplicationSettingsViewModel @Inject constructor(
      */
     fun setDailyTime(time: LocalTime) {
         _dailyTime.value = time
+    }
+    
+    fun setDailyPlaylistSize(size: Int) {
+        _dailyPlaylistSize.value = size
     }
     
     /**
@@ -175,11 +182,13 @@ class ApplicationSettingsViewModel @Inject constructor(
                     ApplyTo.LOCK_SCREEN -> "lock_screen"
                     ApplyTo.HOME_SCREEN -> "home_screen"
                     ApplyTo.BOTH -> "both"
+                    ApplyTo.BOTH_DIFFERENT -> "both_different"
                 }
                 
                 // Set wallpaper change interval
                 val intervalString = when (_changeInterval.value) {
-                    ChangeInterval.EVERY_15_MINUTES -> "15min"
+                    ChangeInterval.EVERY_UNLOCK -> "unlock"
+                    ChangeInterval.FIFTEEN_MINUTES -> "15min"
                     ChangeInterval.HOURLY -> "hourly"
                     ChangeInterval.DAILY -> "daily"
                     ChangeInterval.NEVER -> "never"
@@ -188,6 +197,7 @@ class ApplicationSettingsViewModel @Inject constructor(
                 // Save settings
                 settingsDataStore.updateApplyTo(applyToString)
                 settingsDataStore.updateInterval(intervalString, _dailyTime.value)
+                settingsDataStore.updateDailyPlaylistSize(_dailyPlaylistSize.value)
                 settingsDataStore.markOnboardingComplete()
                 
                 // Add small delay to ensure database transaction completes
@@ -213,27 +223,70 @@ class ApplicationSettingsViewModel @Inject constructor(
                     ApplyTo.LOCK_SCREEN -> "lock"
                     ApplyTo.HOME_SCREEN -> "home"
                     ApplyTo.BOTH -> "both"
+                    ApplyTo.BOTH_DIFFERENT -> "both_different"
+                }
+                
+                // Schedule Daily Playlist if "Every Unlock" is selected
+                if (_changeInterval.value == ChangeInterval.EVERY_UNLOCK) {
+                    _startState.value = StartState.Starting("Downloading daily playlist...", 0.75f)
+                    // Trigger immediate download for playlist
+                    val playlistRequest = OneTimeWorkRequestBuilder<me.avinas.vanderwaals.worker.DailyPlaylistWorker>()
+                        .setConstraints(
+                            androidx.work.Constraints.Builder()
+                                .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                                .build()
+                        )
+                        .addTag("initial_playlist_download")
+                        .build()
+                    workManager.enqueue(playlistRequest)
+                    
+                    // Wait a bit for download to start/progress
+                    delay(1000L)
                 }
                 
                 when (_changeInterval.value) {
-                    ChangeInterval.EVERY_15_MINUTES -> {
+                    ChangeInterval.EVERY_UNLOCK -> {
                         workScheduler.scheduleWallpaperChange(
-                            interval = ChangeInterval.EVERY_15_MINUTES,
+                            interval = ChangeInterval.EVERY_UNLOCK,
                             targetScreen = targetScreen
                         )
                     }
                     ChangeInterval.DAILY -> {
-                        workScheduler.scheduleWallpaperChange(
+                        val schedulingResult = workScheduler.scheduleWallpaperChange(
                             interval = ChangeInterval.DAILY,
                             time = LocalTime.of(_dailyTime.value.hour, _dailyTime.value.minute),
                             targetScreen = targetScreen
                         )
+                        // Handle permission denial for daily alarms
+                        if (schedulingResult is me.avinas.vanderwaals.worker.SchedulingResult.PermissionDenied) {
+                            _needsAlarmPermission.value = true
+                            _startState.value = StartState.Error(schedulingResult.message)
+                            return@launch
+                        }
                     }
                     ChangeInterval.HOURLY -> {
-                        workScheduler.scheduleWallpaperChange(
+                        val schedulingResult = workScheduler.scheduleWallpaperChange(
                             interval = ChangeInterval.HOURLY,
                             targetScreen = targetScreen
                         )
+                        // Handle permission denial for hourly alarms
+                        if (schedulingResult is me.avinas.vanderwaals.worker.SchedulingResult.PermissionDenied) {
+                            _needsAlarmPermission.value = true
+                            _startState.value = StartState.Error(schedulingResult.message)
+                            return@launch
+                        }
+                    }
+                    ChangeInterval.FIFTEEN_MINUTES -> {
+                        val schedulingResult = workScheduler.scheduleWallpaperChange(
+                            interval = ChangeInterval.FIFTEEN_MINUTES,
+                            targetScreen = targetScreen
+                        )
+                        // Handle permission denial for 15-minute alarms
+                        if (schedulingResult is me.avinas.vanderwaals.worker.SchedulingResult.PermissionDenied) {
+                            _needsAlarmPermission.value = true
+                            _startState.value = StartState.Error(schedulingResult.message)
+                            return@launch
+                        }
                     }
                     ChangeInterval.NEVER -> {
                         workScheduler.scheduleWallpaperChange(
@@ -284,6 +337,19 @@ class ApplicationSettingsViewModel @Inject constructor(
     }
     
     /**
+     * Reset state for back navigation.
+     * 
+     * Resets the start state to Idle so user can modify settings
+     * and try again. Does NOT reset user's setting selections
+     * (applyTo, changeInterval, dailyTime) - those are preserved.
+     */
+    fun resetStateForBackNavigation() {
+        android.util.Log.d("ApplicationSettingsVM", "Resetting state for back navigation")
+        _startState.value = StartState.Idle
+        _needsAlarmPermission.value = false
+    }
+    
+    /**
      * Opens alarm permission settings.
      */
     fun openAlarmPermissionSettings() {
@@ -315,7 +381,8 @@ class ApplicationSettingsViewModel @Inject constructor(
 enum class ApplyTo(val displayName: String) {
     LOCK_SCREEN("Lock Screen"),
     HOME_SCREEN("Home Screen"),
-    BOTH("Both")
+    BOTH("Both"),
+    BOTH_DIFFERENT("Both But Different")
 }
 
 /**
