@@ -44,6 +44,8 @@
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <!-- Disable fitsSystemWindows to enable manual WindowInsets handling -->
         <item name="android:fitsSystemWindows">false</item>
+        <!-- Allow window to extend into display cutout area -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
         
         <!-- === TEXT COLORS === -->
         <item name="android:textColorPrimary">@color/text_primary_light</item>

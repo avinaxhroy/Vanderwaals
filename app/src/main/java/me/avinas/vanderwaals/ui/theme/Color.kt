@@ -204,3 +204,15 @@ val GlassGradientLeftLight = Brush.verticalGradient(
 )
 
 
+
+// === MOCKUP COLORS - For Blobs ===
+val DarkIndigo400 = Color(0xFF818CF8)
+val DarkRose400 = Color(0xFFFB7185)
+val DarkSky400 = Color(0xFF38BDF8)
+val DarkBackground = Color(0xFF111827)
+
+val LightPurple400 = Color(0xFFC084FC)
+val LightOrange400 = Color(0xFFFB923C)
+val LightTeal400 = Color(0xFF2DD4BF)
+val LightBackground = Color(0xFFF6F8F7)
+val LightPrimary = Color(0xFF13EC6D)

@@ -11,6 +11,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -95,33 +100,7 @@ fun ApplicationSettingsScreen(
     
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            TopAppBar(
-                title = { },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        android.util.Log.d("ApplicationSettingsScreen", "Back icon clicked!")
-                        android.util.Log.d("ApplicationSettingsScreen", "About to call onBackPressed")
-                        try {
-                            onBackPressed()
-                            android.util.Log.d("ApplicationSettingsScreen", "Called onBackPressed successfully")
-                        } catch (e: Exception) {
-                            android.util.Log.e("ApplicationSettingsScreen", "ERROR calling onBackPressed!", e)
-                        }
-                    }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                windowInsets = WindowInsets(0, 0, 0, 0),
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                ),
-                modifier = Modifier.statusBarsPadding()
-            )
-        },
+
         bottomBar = {
             GlassSheet(
                 modifier = Modifier.fillMaxWidth()
@@ -427,6 +406,32 @@ fun ApplicationSettingsScreen(
                     }
                 }
             }
+            // TopAppBar Overlay
+            TopAppBar(
+                title = { },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        try {
+                            onBackPressed()
+                        } catch (e: Exception) {
+                            android.util.Log.e("ApplicationSettingsScreen", "ERROR calling onBackPressed!", e)
+                        }
+                    }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                },
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
+                ),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(vertical = 16.dp)
+            )
         }
     }
     

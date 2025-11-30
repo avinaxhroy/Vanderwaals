@@ -95,7 +95,9 @@ fun AnalyticsScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent
                 ),
-                modifier = Modifier.statusBarsPadding()
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(vertical = 16.dp)
             )
         }
     ) { paddingValues ->
@@ -775,7 +777,8 @@ private fun RecommendationImpactCard(state: AnalyticsState) {
                 
                 CircularScoreIndicator(
                     score = state.averageSimilarityScore,
-                    size = 64.dp
+                    size = 64.dp,
+                    isPercentage = true
                 )
             }
 
@@ -1203,7 +1206,8 @@ private fun CircularScoreIndicator(
     size: androidx.compose.ui.unit.Dp,
     strokeWidth: androidx.compose.ui.unit.Dp = 4.dp,
     color: Color = MaterialTheme.colorScheme.primary,
-    showPercentage: Boolean = true
+    showPercentage: Boolean = true,
+    isPercentage: Boolean = false
 ) {
     Box(contentAlignment = Alignment.Center) {
         // Background circle to ensure visibility
@@ -1213,8 +1217,8 @@ private fun CircularScoreIndicator(
                 .border(strokeWidth, color.copy(alpha = 0.2f), CircleShape)
         )
         
-        // Normalize score to 0-1 range (score is 0-100 for percentage mode, 0-1 for direct mode)
-        val normalizedScore = if (score > 1f) {
+        // Normalize score to 0-1 range
+        val normalizedScore = if (isPercentage) {
             (score / 100f).coerceIn(0f, 1f)
         } else {
             score.coerceIn(0f, 1f)
@@ -1229,10 +1233,11 @@ private fun CircularScoreIndicator(
             strokeCap = androidx.compose.ui.graphics.StrokeCap.Round,
         )
         
-        // Display score as text in the center (only if showPercentage is true)
-        if (showPercentage && score > 1f) {
+        // Display score as text in the center
+        if (showPercentage) {
+            val displayValue = if (isPercentage) score.toInt() else (score * 100).toInt()
             Text(
-                text = "${score.toInt()}%",
+                text = "$displayValue%",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
                 color = color

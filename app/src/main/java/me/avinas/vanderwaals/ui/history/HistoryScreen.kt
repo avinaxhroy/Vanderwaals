@@ -15,6 +15,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -112,38 +117,8 @@ fun HistoryScreen(
     }
 
     Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "History",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                windowInsets = WindowInsets(0, 0, 0, 0),
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                ),
-                modifier = Modifier.statusBarsPadding()
-            )
-        },
-        snackbarHost = { 
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-            ) 
-        },
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -213,6 +188,12 @@ fun HistoryScreen(
 
             val uiState by viewModel.historyGroups.collectAsState()
             
+            // Calculate top padding for content (StatusBar + TopAppBar height)
+            // Use safeDrawing to account for cutouts and status bars
+            val statusBarHeight = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
+            val topBarHeight = 64.dp // Standard M3 TopAppBar height
+            val contentTopPadding = statusBarHeight + topBarHeight + 16.dp
+
             when (val state = uiState) {
                 is HistoryViewModel.HistoryUiState.Loading -> {
                     // Loading state
@@ -255,10 +236,13 @@ fun HistoryScreen(
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(paddingValues)
-                                .fillMaxSize()
                                 .padding(paddingValues),
-                            contentPadding = PaddingValues(vertical = 16.dp, horizontal = 20.dp),
+                            contentPadding = PaddingValues(
+                                top = contentTopPadding,
+                                bottom = 16.dp,
+                                start = 20.dp,
+                                end = 20.dp
+                            ),
                             verticalArrangement = Arrangement.spacedBy(24.dp)
                         ) {
                             historyGroups.forEach { (dateHeader, items) ->
@@ -316,6 +300,33 @@ fun HistoryScreen(
                     }
                 }
             }
+
+            // TopAppBar Overlay
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "History",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                },
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
+                ),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(vertical = 16.dp)
+            )
         }
 
         // Full-screen preview dialog

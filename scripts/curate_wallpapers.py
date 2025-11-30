@@ -33,6 +33,9 @@ import hashlib
 import logging
 import argparse
 import tempfile
+import signal
+import atexit
+import time
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Set
 from datetime import datetime
@@ -138,6 +141,151 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ============================================================================
+# RESOURCE MANAGER
+# ============================================================================
+
+class ResourceManager:
+    """Manage global resources and cleanup."""
+    
+    def __init__(self):
+        self.temp_dirs = []
+        self.signal_received = False
+    
+    def register_signal_handlers(self):
+        """Register handlers for graceful shutdown."""
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+        atexit.register(self.cleanup)
+    
+    def _signal_handler(self, signum, frame):
+        """Handle shutdown signals."""
+        logger.warning(f"Received signal {signum}, initiating graceful shutdown...")
+        self.signal_received = True
+        self.cleanup()
+        sys.exit(130 if signum == signal.SIGINT else 143)
+    
+    def cleanup(self):
+        """Clean up all resources."""
+        if hasattr(self, '_cleaned') and self._cleaned:
+            return
+        
+        logger.info("Cleaning up resources...")
+        
+        # Clean up temp directories
+        for temp_dir in self.temp_dirs:
+            if temp_dir.exists():
+                try:
+                    shutil.rmtree(temp_dir)
+                    logger.debug(f"Removed temp directory: {temp_dir}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove temp directory {temp_dir}: {e}")
+        
+        # Clear TensorFlow session
+        try:
+            import tensorflow as tf
+            tf.keras.backend.clear_session()
+            logger.debug("Cleared TensorFlow session")
+        except Exception as e:
+            logger.debug(f"TensorFlow cleanup: {e}")
+        
+        self._cleaned = True
+
+# Global resource manager
+resource_manager = ResourceManager()
+
+# ============================================================================
+# VALIDATION
+# ============================================================================
+
+def validate_configuration() -> List[str]:
+    """Validate script configuration before processing.
+    
+    Returns:
+        List of validation error messages (empty if valid)
+    """
+    errors = []
+    
+    # Validate repositories configuration
+    if not REPOSITORIES:
+        errors.append("No repositories configured")
+        return errors
+    
+    for idx, repo in enumerate(REPOSITORIES):
+        required_keys = ['url', 'branch', 'name']
+        for key in required_keys:
+            if key not in repo:
+                errors.append(f"Repository {idx} missing required key: {key}")
+        
+        # Validate URL format
+        if 'url' in repo and not repo['url'].startswith(('https://', 'git@')):
+            errors.append(f"Repository {idx} has invalid URL: {repo['url']}")
+        
+        # Validate name format
+        if 'name' in repo and '/' not in repo['name']:
+            errors.append(f"Repository {idx} name should be 'owner/repo': {repo['name']}")
+    
+    # Validate file size limits
+    if MAX_FILE_SIZE <= 0:
+        errors.append(f"MAX_FILE_SIZE must be positive: {MAX_FILE_SIZE}")
+    
+    # Validate resolution
+    if len(MIN_RESOLUTION) != 2 or any(x <= 0 for x in MIN_RESOLUTION):
+        errors.append(f"MIN_RESOLUTION must be (width, height) with positive values: {MIN_RESOLUTION}")
+    
+    # Check disk space
+    try:
+        stat = os.statvfs(str(OUTPUT_DIR))
+        free_space_gb = (stat.f_bavail * stat.f_frsize) / (1024**3)
+        if free_space_gb < 2:  # Require at least 2GB free
+            errors.append(f"Insufficient disk space: {free_space_gb:.1f}GB free (need 2GB minimum)")
+    except Exception as e:
+        logger.warning(f"Could not check disk space: {e}")
+    
+    return errors
+
+def validate_manifest(manifest: Dict) -> List[str]:
+    """Validate manifest structure before saving.
+    
+    Returns:
+        List of validation error messages (empty if valid)
+    """
+    errors = []
+    
+    required_keys = ['version', 'last_updated', 'model_version', 'embedding_dim', 'total_wallpapers', 'wallpapers']
+    for key in required_keys:
+        if key not in manifest:
+            errors.append(f"Manifest missing required key: {key}")
+    
+    # Validate wallpapers
+    if 'wallpapers' in manifest:
+        if not isinstance(manifest['wallpapers'], list):
+            errors.append("Manifest 'wallpapers' must be a list")
+        elif len(manifest['wallpapers']) == 0:
+            errors.append("Manifest has no wallpapers")
+        else:
+            # Validate first wallpaper as sample
+            sample = manifest['wallpapers'][0]
+            required_wp_keys = ['id', 'url', 'embedding', 'category', 'colors', 'brightness', 'contrast']
+            for key in required_wp_keys:
+                if key not in sample:
+                    errors.append(f"Wallpaper missing required key: {key}")
+            
+            # Validate embedding dimension
+            if 'embedding' in sample:
+                if not isinstance(sample['embedding'], list):
+                    errors.append("Embedding must be a list")
+                elif len(sample['embedding']) != 576:
+                    errors.append(f"Embedding has wrong dimension: {len(sample['embedding'])} (expected 576)")
+    
+    # Validate count matches
+    if 'total_wallpapers' in manifest and 'wallpapers' in manifest:
+        if manifest['total_wallpapers'] != len(manifest['wallpapers']):
+            errors.append(f"total_wallpapers ({manifest['total_wallpapers']}) doesn't match "
+                        f"actual count ({len(manifest['wallpapers'])})")
+    
+    return errors
+
+# ============================================================================
 # MOBILENET MODEL
 # ============================================================================
 
@@ -215,12 +363,13 @@ def extract_colors(image_path: Path, num_colors: int = 5) -> List[str]:
         List of hex color strings (e.g., ['#282828', '#cc241d', ...])
     """
     try:
-        # Load image and resize for faster processing
-        img = Image.open(image_path).convert('RGB')
-        img.thumbnail((200, 200))  # Reduce resolution for speed
-        
-        # Convert to numpy array
-        pixels = np.array(img).reshape(-1, 3)
+        # Load image and resize for faster processing with proper resource management
+        with Image.open(image_path) as img:
+            img = img.convert('RGB')
+            img.thumbnail((200, 200))  # Reduce resolution for speed
+            
+            # Convert to numpy array
+            pixels = np.array(img).reshape(-1, 3)
         
         # Use k-means to find dominant colors
         from sklearn.cluster import KMeans
@@ -250,9 +399,10 @@ def calculate_brightness(image_path: Path) -> int:
     Uses ITU-R BT.601 luma coefficients.
     """
     try:
-        img = Image.open(image_path).convert('RGB')
-        img.thumbnail((100, 100))  # Reduce for speed
-        pixels = np.array(img)
+        with Image.open(image_path) as img:
+            img = img.convert('RGB')
+            img.thumbnail((100, 100))  # Reduce for speed
+            pixels = np.array(img)
         
         # Calculate luma
         r, g, b = pixels[:,:,0], pixels[:,:,1], pixels[:,:,2]
@@ -272,9 +422,10 @@ def calculate_contrast(image_path: Path) -> int:
     Calculate contrast (0-100) using standard deviation.
     """
     try:
-        img = Image.open(image_path).convert('L')  # Grayscale
-        img.thumbnail((100, 100))
-        pixels = np.array(img)
+        with Image.open(image_path) as img:
+            img = img.convert('L')  # Grayscale
+            img.thumbnail((100, 100))
+            pixels = np.array(img)
         
         # Contrast = standard deviation
         contrast = int(np.std(pixels) / 127.5 * 100)
@@ -296,13 +447,128 @@ def get_image_resolution(image_path: Path) -> str:
 def compute_perceptual_hash(image_path: Path) -> str:
     """Compute perceptual hash for deduplication."""
     try:
-        return str(imagehash.phash(Image.open(image_path)))
+        with Image.open(image_path) as img:
+            return str(imagehash.phash(img))
     except Exception as e:
         logger.warning(f"Failed to compute phash for {image_path}: {e}")
         return ""
 
+def is_duplicate(phash: str, processed_hashes: Set[str], threshold: int = PHASH_THRESHOLD) -> bool:
+    """Check if image is duplicate with optimized comparison.
+    
+    Args:
+        phash: Perceptual hash to check
+        processed_hashes: Set of already processed hashes
+        threshold: Hamming distance threshold
+        
+    Returns:
+        True if duplicate found
+    """
+    if not phash:
+        return False
+    
+    try:
+        hash_obj = imagehash.hex_to_hash(phash)
+    except Exception as e:
+        logger.warning(f"Failed to parse phash {phash}: {e}")
+        return False
+    
+    # Use set lookup for exact matches (O(1))
+    if phash in processed_hashes:
+        return True
+    
+    # Only do expensive comparison for near-duplicates if threshold > 0
+    if threshold > 0:
+        for existing_hash_str in processed_hashes:
+            try:
+                existing_hash = imagehash.hex_to_hash(existing_hash_str)
+                if hash_obj - existing_hash <= threshold:
+                    return True
+            except Exception as e:
+                logger.debug(f"Failed to compare hashes: {e}")
+                continue
+    
+    return False
+
 # ============================================================================
-# CATEGORY DETECTION
+# PROGRESS TRACKING
+# ============================================================================
+
+class ProgressTracker:
+    """Track processing progress and statistics."""
+    
+    def __init__(self):
+        self.stats = {
+            'repos_processed': 0,
+            'repos_failed': 0,
+            'images_found': 0,
+            'images_processed': 0,
+            'images_failed': 0,
+            'duplicates_found': 0,
+            'total_size_bytes': 0,
+            'start_time': time.time(),
+            'repo_times': []
+        }
+        self.current_repo = None
+        self.current_repo_start = 0
+    
+    def record_repo_start(self, repo_name: str, image_count: int):
+        """Record start of repository processing."""
+        self.current_repo = repo_name
+        self.current_repo_start = time.time()
+        self.stats['images_found'] += image_count
+    
+    def record_repo_complete(self, images_processed: int, duplicates: int):
+        """Record completion of repository processing."""
+        elapsed = time.time() - self.current_repo_start
+        self.stats['repos_processed'] += 1
+        self.stats['images_processed'] += images_processed
+        self.stats['duplicates_found'] += duplicates
+        self.stats['repo_times'].append((self.current_repo, elapsed))
+        
+        rate = images_processed / elapsed if elapsed > 0 else 0
+        logger.info(f"Repo stats: {images_processed} processed, {duplicates} duplicates, "
+                   f"{elapsed:.1f}s elapsed, {rate:.1f} images/sec")
+    
+    def record_repo_failed(self, repo_name: str, error: str):
+        """Record failed repository."""
+        self.stats['repos_failed'] += 1
+        logger.error(f"Repository {repo_name} failed: {error}")
+    
+    def record_image_failed(self):
+        """Record failed image processing."""
+        self.stats['images_failed'] += 1
+    
+    def print_summary(self):
+        """Print final processing summary."""
+        elapsed_total = time.time() - self.stats['start_time']
+        
+        print("\n" + "="*60)
+        print("PROCESSING SUMMARY")
+        print("="*60)
+        print(f"Total time: {elapsed_total/60:.1f} minutes")
+        print(f"Repositories: {self.stats['repos_processed']} processed, "
+              f"{self.stats['repos_failed']} failed")
+        print(f"Images: {self.stats['images_found']} found, "
+              f"{self.stats['images_processed']} processed, "
+              f"{self.stats['images_failed']} failed, "
+              f"{self.stats['duplicates_found']} duplicates")
+        
+        if self.stats['images_processed'] > 0:
+            rate = self.stats['images_processed'] / elapsed_total
+            success_rate = (self.stats['images_processed'] / self.stats['images_found']) * 100
+            print(f"Processing rate: {rate:.1f} images/sec")
+            print(f"Success rate: {success_rate:.1f}%")
+        
+        if self.stats['repo_times']:
+            print(f"\nSlowest repositories:")
+            sorted_times = sorted(self.stats['repo_times'], key=lambda x: x[1], reverse=True)[:3]
+            for repo, elapsed in sorted_times:
+                print(f"  {repo}: {elapsed:.1f}s")
+        print("="*60 + "\n")
+
+# ============================================================================
+# REPOSITORY PROCESSING
 # ============================================================================
 
 CATEGORY_KEYWORDS = {
@@ -553,8 +819,9 @@ def process_repository(
     repo: Dict,
     extractor: EmbeddingExtractor,
     processed_hashes: Set[str],
-    test_mode: bool = False
-) -> List[Dict]:
+    test_mode: bool = False,
+    tracker: Optional[ProgressTracker] = None
+) -> Tuple[List[Dict], int]:
     """
     Process a single repository.
     
@@ -563,11 +830,13 @@ def process_repository(
         extractor: MobileNetV3 embedding extractor
         processed_hashes: Set of already processed perceptual hashes
         test_mode: If True, process only 10 images
+        tracker: Progress tracker for statistics
         
     Returns:
-        List of wallpaper metadata dictionaries
+        Tuple of (wallpaper metadata list, duplicate count)
     """
     wallpapers = []
+    duplicates_found = 0
     
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
@@ -575,7 +844,9 @@ def process_repository(
         # Clone repository (with sparse checkout in test mode)
         repo_path = clone_repository(repo, temp_path, test_mode=test_mode)
         if not repo_path:
-            return wallpapers
+            if tracker:
+                tracker.record_repo_failed(repo['name'], "Clone failed")
+            return wallpapers, duplicates_found
         
         # Find wallpapers
         image_paths = find_wallpapers(repo_path)
@@ -585,27 +856,30 @@ def process_repository(
             image_paths = image_paths[:10]
             logger.info(f"TEST MODE: Processing only {len(image_paths)} images")
         
+        # Record start with tracker
+        if tracker:
+            tracker.record_repo_start(repo['name'], len(image_paths))
+        
         # Process each image
         for img_path in tqdm(image_paths, desc=f"Processing {repo['name']}"):
             try:
                 # Compute perceptual hash for deduplication
                 phash = compute_perceptual_hash(img_path)
                 if not phash:
+                    if tracker:
+                        tracker.record_image_failed()
                     continue
                 
-                # Check for duplicates
-                is_duplicate = False
-                for existing_hash in processed_hashes:
-                    if imagehash.hex_to_hash(phash) - imagehash.hex_to_hash(existing_hash) <= PHASH_THRESHOLD:
-                        is_duplicate = True
-                        break
-                
-                if is_duplicate:
+                # Check for duplicates using optimized function
+                if is_duplicate(phash, processed_hashes):
+                    duplicates_found += 1
                     continue
                 
                 # Extract embedding
                 embedding = extractor.extract(img_path)
                 if embedding is None:
+                    if tracker:
+                        tracker.record_image_failed()
                     continue
                 
                 # Extract colors
@@ -637,7 +911,8 @@ def process_repository(
                     'contrast': contrast,
                     'embedding': embedding.tolist(),
                     'resolution': resolution,
-                    'attribution': repo['name']
+                    'attribution': repo['name'],
+                    'phash': phash  # Store for checkpoint recovery
                 }
                 
                 wallpapers.append(wallpaper_data)
@@ -645,28 +920,37 @@ def process_repository(
                 
             except Exception as e:
                 logger.warning(f"Failed to process {img_path}: {e}")
+                if tracker:
+                    tracker.record_image_failed()
                 continue
         
-        logger.info(f"✓ Processed {len(wallpapers)} wallpapers from {repo['name']}")
+        logger.info(f"✓ Processed {len(wallpapers)} wallpapers from {repo['name']} ({duplicates_found} duplicates)")
+        
+        # Record completion with tracker
+        if tracker:
+            tracker.record_repo_complete(len(wallpapers), duplicates_found)
     
-    return wallpapers
+    return wallpapers, duplicates_found
 
-def save_checkpoint(wallpapers: List[Dict], repo_index: int):
-    """Save intermediate results to checkpoint file."""
+def save_checkpoint(wallpapers: List[Dict], repo_index: int, processed_hashes: Set[str]):
+    """Save intermediate results to checkpoint file with hash tracking."""
     checkpoint_data = {
         'wallpapers': wallpapers,
         'last_repo_index': repo_index,
+        'processed_hashes': list(processed_hashes),  # Store hash set for resume
         'timestamp': datetime.utcnow().isoformat()
     }
     
-    with open(CHECKPOINT_PATH, 'w') as f:
-        json.dump(checkpoint_data, f)
-    
-    logger.info(f"✓ Saved checkpoint after repo {repo_index}")
+    try:
+        with open(CHECKPOINT_PATH, 'w') as f:
+            json.dump(checkpoint_data, f)
+        logger.info(f"✓ Saved checkpoint after repo {repo_index} ({len(processed_hashes)} hashes)")
+    except Exception as e:
+        logger.error(f"Failed to save checkpoint: {e}")
 
 def load_checkpoint() -> Tuple[List[Dict], int, Set[str]]:
     """
-    Load checkpoint from previous run.
+    Load checkpoint from previous run with validation.
     
     Returns:
         (wallpapers, last_repo_index, processed_hashes)
@@ -678,18 +962,41 @@ def load_checkpoint() -> Tuple[List[Dict], int, Set[str]]:
         with open(CHECKPOINT_PATH, 'r') as f:
             data = json.load(f)
         
+        # Validate checkpoint structure
+        required_keys = ['wallpapers', 'last_repo_index', 'timestamp']
+        if not all(key in data for key in required_keys):
+            logger.warning("Checkpoint file is missing required keys, starting fresh")
+            return [], 0, set()
+        
         wallpapers = data.get('wallpapers', [])
         last_repo_index = data.get('last_repo_index', 0)
         
-        # Rebuild hash set (approximate - using IDs as proxy)
-        processed_hashes = set()
+        # Validate wallpapers structure
+        if wallpapers and not isinstance(wallpapers, list):
+            logger.warning("Checkpoint wallpapers is not a list, starting fresh")
+            return [], 0, set()
         
-        logger.info(f"✓ Loaded checkpoint: {len(wallpapers)} wallpapers, resuming from repo {last_repo_index + 1}")
+        # Rebuild hash set from checkpoint (new: support both old and new format)
+        processed_hashes = set(data.get('processed_hashes', []))
+        
+        # Fallback: rebuild from wallpaper metadata if not in checkpoint
+        if not processed_hashes and wallpapers:
+            for wp in wallpapers:
+                if 'phash' in wp and wp['phash']:
+                    processed_hashes.add(wp['phash'])
+        
+        logger.info(f"✓ Loaded checkpoint: {len(wallpapers)} wallpapers, "
+                   f"{len(processed_hashes)} hashes, resuming from repo {last_repo_index + 1}")
         
         return wallpapers, last_repo_index + 1, processed_hashes
         
+    except json.JSONDecodeError as e:
+        logger.error(f"Checkpoint file is corrupted (JSON decode failed): {e}")
+        logger.info("Starting fresh (checkpoint ignored)")
+        return [], 0, set()
     except Exception as e:
         logger.error(f"Failed to load checkpoint: {e}")
+        logger.info("Starting fresh (checkpoint ignored)")
         return [], 0, set()
 
 def generate_manifest(wallpapers: List[Dict]) -> Dict:
@@ -706,7 +1013,15 @@ def generate_manifest(wallpapers: List[Dict]) -> Dict:
     return manifest
 
 def save_manifest(manifest: Dict):
-    """Save manifest.json and compressed version."""
+    """Save manifest.json and compressed version with validation."""
+    # Validate manifest before saving
+    validation_errors = validate_manifest(manifest)
+    if validation_errors:
+        logger.error("Manifest validation failed:")
+        for error in validation_errors:
+            logger.error(f"  - {error}")
+        raise ValueError(f"Manifest validation failed with {len(validation_errors)} errors")
+    
     # Save uncompressed JSON
     with open(MANIFEST_PATH, 'w') as f:
         json.dump(manifest, f, indent=2)
@@ -748,11 +1063,15 @@ def save_manifest(manifest: Dict):
 # ============================================================================
 
 def main():
-    """Main execution function."""
+    """Main execution function with comprehensive error handling."""
     parser = argparse.ArgumentParser(description='Curate wallpapers from GitHub repositories')
     parser.add_argument('--test', action='store_true', help='Test mode: process only 10 images per repo')
     parser.add_argument('--resume', action='store_true', help='Resume from last checkpoint')
+    parser.add_argument('--dry-run', action='store_true', help='Validate configuration without processing')
     args = parser.parse_args()
+    
+    # Register signal handlers for graceful shutdown
+    resource_manager.register_signal_handlers()
     
     # Create output directory
     OUTPUT_DIR.mkdir(exist_ok=True)
@@ -761,46 +1080,85 @@ def main():
     logger.info("VANDERWAALS WALLPAPER CURATION PIPELINE")
     logger.info("="*60)
     
+    # Validate configuration
+    logger.info("Validating configuration...")
+    validation_errors = validate_configuration()
+    if validation_errors:
+        logger.error("Configuration validation failed:")
+        for error in validation_errors:
+            logger.error(f"  - {error}")
+        return 1
+    logger.info("✓ Configuration valid")
+    
+    # Dry-run mode: validate and exit
+    if args.dry_run:
+        logger.info("DRY RUN MODE - Configuration validated successfully")
+        logger.info(f"Would process {len(REPOSITORIES)} repositories")
+        for repo in REPOSITORIES:
+            logger.info(f"  - {repo['name']}")
+        return 0
+    
     if args.test:
         logger.info("TEST MODE ENABLED: Processing 10 images per repo")
     
-    # Initialize embedding extractor
-    extractor = EmbeddingExtractor()
-    
-    # Load checkpoint if resuming
-    if args.resume:
-        all_wallpapers, start_index, processed_hashes = load_checkpoint()
-    else:
-        all_wallpapers = []
-        start_index = 0
-        processed_hashes = set()
-    
-    # Process repositories incrementally
-    for idx, repo in enumerate(REPOSITORIES[start_index:], start=start_index):
-        logger.info(f"\n[{idx + 1}/{len(REPOSITORIES)}] Processing {repo['name']}...")
+    try:
+        # Initialize embedding extractor
+        extractor = EmbeddingExtractor()
         
-        try:
-            # Process repository
-            wallpapers = process_repository(repo, extractor, processed_hashes, test_mode=args.test)
-            all_wallpapers.extend(wallpapers)
+        # Initialize progress tracker
+        tracker = ProgressTracker()
+        
+        # Load checkpoint if resuming
+        if args.resume:
+            all_wallpapers, start_index, processed_hashes = load_checkpoint()
+        else:
+            all_wallpapers = []
+            start_index = 0
+            processed_hashes = set()
+        
+        # Process repositories incrementally
+        for idx, repo in enumerate(REPOSITORIES[start_index:], start=start_index):
+            logger.info(f"\n[{idx + 1}/{len(REPOSITORIES)}] Processing {repo['name']}...")
             
-            # Save checkpoint after each repo
-            save_checkpoint(all_wallpapers, idx)
-            
-        except Exception as e:
-            logger.error(f"Failed to process {repo['name']}: {e}")
-            continue
-    
-    # Generate and save final manifest
-    logger.info("\nGenerating final manifest...")
-    manifest = generate_manifest(all_wallpapers)
-    save_manifest(manifest)
-    
-    # Cleanup checkpoint
-    if CHECKPOINT_PATH.exists():
-        CHECKPOINT_PATH.unlink()
-    
-    logger.info("✓ Curation pipeline complete!")
+            try:
+                # Process repository with progress tracking
+                wallpapers, duplicates = process_repository(
+                    repo, extractor, processed_hashes, 
+                    test_mode=args.test, tracker=tracker
+                )
+                all_wallpapers.extend(wallpapers)
+                
+                # Save checkpoint after each repo (now includes hashes)
+                save_checkpoint(all_wallpapers, idx, processed_hashes)
+                
+            except Exception as e:
+                logger.error(f"Failed to process {repo['name']}: {e}")
+                tracker.record_repo_failed(repo['name'], str(e))
+                continue
+        
+        # Print processing summary
+        tracker.print_summary()
+        
+        # Generate and save final manifest
+        logger.info("\nGenerating final manifest...")
+        manifest = generate_manifest(all_wallpapers)
+        save_manifest(manifest)
+        
+        # Cleanup checkpoint
+        if CHECKPOINT_PATH.exists():
+            CHECKPOINT_PATH.unlink()
+        
+        logger.info("✓ Curation pipeline complete!")
+        return 0
+        
+    except KeyboardInterrupt:
+        logger.warning("Received interrupt signal, cleaning up...")
+        resource_manager.cleanup()
+        return 130  # Standard exit code for Ctrl+C
+    except Exception as e:
+        logger.error(f"Fatal error in curation pipeline: {e}", exc_info=True)
+        resource_manager.cleanup()
+        return 1
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

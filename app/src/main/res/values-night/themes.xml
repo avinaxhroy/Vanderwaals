@@ -46,6 +46,8 @@
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <!-- Disable fitsSystemWindows to enable manual WindowInsets handling -->
         <item name="android:fitsSystemWindows">false</item>
+        <!-- Allow window to extend into display cutout area -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
         
         <!-- === DARK MODE ENFORCEMENT === -->
         <item name="android:forceDarkAllowed">false</item>

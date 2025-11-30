@@ -54,6 +54,7 @@ import me.avinas.vanderwaals.core.getDeviceScreenSize
 import java.io.File
 import me.avinas.vanderwaals.ui.theme.components.GlassSheet
 import androidx.compose.animation.core.animateDpAsState
+import me.avinas.vanderwaals.ui.theme.*
 
 /**
  * Compose screen for main wallpaper preview (primary user interface).
@@ -87,14 +88,7 @@ import androidx.compose.animation.core.animateDpAsState
  * @see me.avinas.vanderwaals.ui.history.HistoryScreen
  * @see me.avinas.vanderwaals.ui.settings.SettingsScreen
  */
-// Mockup Colors for Blobs (Copied from SettingsScreen)
-private val DarkIndigo400 = Color(0xFF818CF8)
-private val DarkRose400 = Color(0xFFFB7185)
-private val DarkSky400 = Color(0xFF38BDF8)
 
-private val LightPurple400 = Color(0xFFC084FC)
-private val LightOrange400 = Color(0xFFFB923C)
-private val LightTeal400 = Color(0xFF2DD4BF)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -393,44 +387,10 @@ fun MainScreen(
                     .fillMaxWidth()
             ) {
                 // Dynamic Background Blobs behind the GlassSheet
-                Canvas(modifier = Modifier.matchParentSize()) {
-                    val w = size.width
-                    val h = size.height
-
-                    if (isDark) {
-                        drawCircle(
-                            color = DarkIndigo400.copy(alpha = 0.2f),
-                            center = Offset(w * 0.2f, h * 0.5f),
-                            radius = 200.dp.toPx()
-                        )
-                        drawCircle(
-                            color = DarkRose400.copy(alpha = 0.15f),
-                            center = Offset(w * 0.8f, h * 0.2f),
-                            radius = 150.dp.toPx()
-                        )
-                        drawCircle(
-                            color = DarkSky400.copy(alpha = 0.15f),
-                            center = Offset(w * 0.5f, h * 0.8f),
-                            radius = 180.dp.toPx()
-                        )
-                    } else {
-                        drawCircle(
-                            color = LightPurple400.copy(alpha = 0.3f),
-                            center = Offset(w * 0.2f, h * 0.5f),
-                            radius = 250.dp.toPx()
-                        )
-                        drawCircle(
-                            color = LightOrange400.copy(alpha = 0.25f),
-                            center = Offset(w * 0.8f, h * 0.2f),
-                            radius = 200.dp.toPx()
-                        )
-                        drawCircle(
-                            color = LightTeal400.copy(alpha = 0.25f),
-                            center = Offset(w * 0.5f, h * 0.8f),
-                            radius = 220.dp.toPx()
-                        )
-                    }
-                }
+                me.avinas.vanderwaals.ui.theme.components.BackgroundBlobs(
+                    modifier = Modifier.matchParentSize(),
+                    isDark = isDark
+                )
 
                 // Glassmorphism Bottom Sheet
                 GlassSheet(

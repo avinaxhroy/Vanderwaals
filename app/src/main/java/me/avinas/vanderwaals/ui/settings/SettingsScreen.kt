@@ -8,6 +8,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,18 +37,10 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import me.avinas.vanderwaals.ui.theme.LocalThemeIsDark
 import me.avinas.vanderwaals.ui.theme.components.GlassCard
+import me.avinas.vanderwaals.ui.theme.*
 
 // Mockup Colors
-private val DarkIndigo400 = Color(0xFF818CF8)
-private val DarkRose400 = Color(0xFFFB7185)
-private val DarkSky400 = Color(0xFF38BDF8)
-private val DarkBackground = Color(0xFF111827)
 
-private val LightPurple400 = Color(0xFFC084FC)
-private val LightOrange400 = Color(0xFFFB923C)
-private val LightTeal400 = Color(0xFF2DD4BF)
-private val LightBackground = Color(0xFFF6F8F7)
-private val LightPrimary = Color(0xFF13EC6D)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,33 +79,6 @@ fun SettingsScreen(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = if (isDark) DarkBackground else LightBackground,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Settings",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDark) Color.White else Color(0xFF111827)
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = if (isDark) Color.Gray else Color.Gray
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                ),
-                modifier = Modifier
-                    .statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 16.dp)
-            )
-        },
         snackbarHost = { 
             SnackbarHost(
                 hostState = snackbarHostState,
@@ -122,46 +91,10 @@ fun SettingsScreen(
                 .fillMaxSize()
         ) {
             // Background Blobs
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val w = size.width
-                val h = size.height
-
-                if (isDark) {
-                    // Dark Mode Blobs
-                    drawCircle(
-                        color = DarkIndigo400.copy(alpha = 0.2f),
-                        center = Offset(0f, 0f),
-                        radius = 400.dp.toPx()
-                    )
-                    drawCircle(
-                        color = DarkRose400.copy(alpha = 0.1f),
-                        center = Offset(w, h * 0.8f),
-                        radius = 400.dp.toPx()
-                    )
-                    drawCircle(
-                        color = DarkSky400.copy(alpha = 0.1f),
-                        center = Offset(0f, h),
-                        radius = 320.dp.toPx()
-                    )
-                } else {
-                    // Light Mode Blobs
-                    drawCircle(
-                        color = LightPurple400.copy(alpha = 0.3f),
-                        center = Offset(0f, 0f),
-                        radius = 500.dp.toPx()
-                    )
-                    drawCircle(
-                        color = LightOrange400.copy(alpha = 0.2f),
-                        center = Offset(w, h * 0.8f),
-                        radius = 500.dp.toPx()
-                    )
-                    drawCircle(
-                        color = LightTeal400.copy(alpha = 0.2f),
-                        center = Offset(0f, h + 200f),
-                        radius = 400.dp.toPx()
-                    )
-                }
-            }
+            me.avinas.vanderwaals.ui.theme.components.BackgroundBlobs(
+                modifier = Modifier.fillMaxSize(),
+                isDark = isDark
+            )
             
             // Blur effect over blobs
             Box(
@@ -170,13 +103,25 @@ fun SettingsScreen(
                     .blur(60.dp)
             )
 
+            // Calculate top padding for content (StatusBar + TopAppBar height)
+            // Use safeDrawing to account for cutouts and status bars
+            val statusBarHeight = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
+            val topBarHeight = 64.dp // Standard M3 TopAppBar height
+            val contentTopPadding = statusBarHeight + topBarHeight + 16.dp
+
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(
+                    top = contentTopPadding,
+                    bottom = 16.dp,
+                    start = 16.dp,
+                    end = 16.dp
+                ),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
+
                 // MODE Section
                 item {
                     SettingsSectionHeader(title = "MODE")
@@ -925,6 +870,35 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
                 }
             }
+
+            // TopAppBar Overlay
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Settings",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDark) Color.White else Color(0xFF111827)
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = if (isDark) Color.Gray else Color.Gray
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
+                ),
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(horizontal = 8.dp, vertical = 16.dp)
+            )
         }
     }
 

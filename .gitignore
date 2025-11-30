@@ -74,8 +74,6 @@ scripts/.DS_Store
 
 # Lock files
 *.lock
-/.gradle
+
+# Release builds
 /app/release
-/.gradle
-app/src/main/assets/manifest.json
-app/src/main/assets/manifest.json.gz

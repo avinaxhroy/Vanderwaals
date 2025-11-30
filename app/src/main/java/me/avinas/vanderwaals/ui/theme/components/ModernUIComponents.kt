@@ -3,6 +3,7 @@ package me.avinas.vanderwaals.ui.theme.components
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -161,33 +162,7 @@ fun GlassCard(
                 shape = shape
             )
     ) {
-        // Top Gradient Border (simulated with Box)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(topGradient)
-                .align(Alignment.TopCenter)
-        )
 
-        // Left Gradient Border (simulated with Box)
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(1.dp)
-                .background(leftGradient)
-                .align(Alignment.CenterStart)
-        )
-        
-        // CSS: inset 0 1px 0 rgba(255, 255, 255, 0.5) -> Top Inner Highlight
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .align(Alignment.TopCenter)
-                .offset(y = 1.dp) // Inset by 1px
-                .background(if (isDark) GlassInsetTop else Color.White.copy(alpha = 0.5f))
-        )
 
         // CSS: inset 0 -1px 0 rgba(255, 255, 255, 0.1) -> Bottom Inner Highlight
         Box(
@@ -535,5 +510,57 @@ fun ModernDivider(
             thickness = thickness,
             color = color
         )
+    }
+}
+
+// ===== BACKGROUND BLOBS =====
+
+/**
+ * Animated background blobs for visual interest
+ */
+@Composable
+fun BackgroundBlobs(
+    modifier: Modifier = Modifier,
+    isDark: Boolean = LocalThemeIsDark.current
+) {
+    Canvas(modifier = modifier.fillMaxSize()) {
+        val w = size.width
+        val h = size.height
+
+        if (isDark) {
+            // Dark Mode Blobs
+            drawCircle(
+                color = DarkIndigo400.copy(alpha = 0.2f),
+                center = Offset(w * 0.2f, h * 0.5f),
+                radius = 400.dp.toPx()
+            )
+            drawCircle(
+                color = DarkRose400.copy(alpha = 0.15f),
+                center = Offset(w * 0.8f, h * 0.2f),
+                radius = 400.dp.toPx()
+            )
+            drawCircle(
+                color = DarkSky400.copy(alpha = 0.15f),
+                center = Offset(w * 0.5f, h * 0.8f),
+                radius = 320.dp.toPx()
+            )
+        } else {
+            // Light Mode Blobs
+            drawCircle(
+                color = LightPurple400.copy(alpha = 0.3f),
+                center = Offset(w * 0.2f, h * 0.5f),
+                radius = 500.dp.toPx()
+            )
+            drawCircle(
+                color = LightOrange400.copy(alpha = 0.25f),
+                center = Offset(w * 0.8f, h * 0.2f),
+                radius = 500.dp.toPx()
+            )
+            drawCircle(
+                color = LightTeal400.copy(alpha = 0.25f),
+                center = Offset(w * 0.5f, h * 0.8f),
+                radius = 400.dp.toPx()
+            )
+        }
     }
 }
