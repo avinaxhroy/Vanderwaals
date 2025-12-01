@@ -3,6 +3,7 @@ package me.avinas.vanderwaals.domain.usecase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import me.avinas.vanderwaals.algorithm.SimilarityCalculator
+import me.avinas.vanderwaals.data.dao.WallpaperHistoryDao
 import me.avinas.vanderwaals.data.entity.UserPreferences
 import me.avinas.vanderwaals.data.entity.WallpaperMetadata
 import me.avinas.vanderwaals.data.repository.CategoryPreferenceRepository
@@ -69,11 +70,16 @@ class SelectNextWallpaperUseCase @Inject constructor(
     private val similarityCalculator: SimilarityCalculator,
     private val settingsDataStore: me.avinas.vanderwaals.data.datastore.SettingsDataStore,
     private val dailyPlaylistManager: me.avinas.vanderwaals.data.repository.DailyPlaylistManager,
+    private val wallpaperHistoryDao: WallpaperHistoryDao,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) {
     private val colorAnalyzer = me.avinas.vanderwaals.algorithm.ColorAnalyzer
     private val compositionAnalyzer = me.avinas.vanderwaals.algorithm.CompositionAnalyzer
     private val explorationStrategy = me.avinas.vanderwaals.algorithm.ExplorationStrategy()
+    
+    // YouTube-like recommender for more engaging, diverse recommendations
+    private val youtubeLikeRecommender = me.avinas.vanderwaals.algorithm.YouTubeLikeRecommender()
+    
     /**
      * Seeded random instance for true randomness.
      * CRITICAL FIX (Nov 2025): Creates new seed on each invocation combining multiple entropy sources.
@@ -142,6 +148,17 @@ class SelectNextWallpaperUseCase @Inject constructor(
      */
     suspend operator fun invoke(excludeWallpaperId: String? = null): Result<WallpaperMetadata> {
         return try {
+            // CRITICAL FIX (Dec 2025): Always get the currently active wallpaper and exclude it
+            // This prevents the algorithm from selecting the same wallpaper that's currently displayed.
+            // Previously, history was only recorded AFTER applying the wallpaper, causing a race condition
+            // where the same wallpaper could be selected again immediately.
+            val currentActiveWallpaper = wallpaperHistoryDao.getActiveWallpaper()
+            val effectiveExcludeId = excludeWallpaperId ?: currentActiveWallpaper?.wallpaperId
+            
+            if (effectiveExcludeId != null) {
+                android.util.Log.d("SelectNextWallpaper", "Excluding currently active wallpaper: $effectiveExcludeId")
+            }
+            
             // Step 1: Get user preferences, or create defaults if not initialized
             // Use direct database read (not Flow) to avoid cached values
             // CRITICAL FIX: Retry multiple times to handle multi-instance sync delay
@@ -191,7 +208,7 @@ class SelectNextWallpaperUseCase @Inject constructor(
                 var nextId = dailyPlaylistManager.getNextWallpaperId()
                 
                 // If the selected ID matches the excluded one, try getting the next one
-                if (nextId != null && nextId == excludeWallpaperId) {
+                if (nextId != null && nextId == effectiveExcludeId) {
                     android.util.Log.d("SelectNextWallpaper", "Selected ID $nextId matches excluded ID, skipping to next...")
                     nextId = dailyPlaylistManager.getNextWallpaperId()
                 }
@@ -237,7 +254,7 @@ class SelectNextWallpaperUseCase @Inject constructor(
             }
             
             val downloadedWallpapers = allDownloadedWallpapers.filter { wallpaper ->
-                wallpaper.source in enabledSources && wallpaper.id != excludeWallpaperId
+                wallpaper.source in enabledSources && wallpaper.id != effectiveExcludeId
             }
             
             if (downloadedWallpapers.isEmpty()) {
@@ -247,9 +264,14 @@ class SelectNextWallpaperUseCase @Inject constructor(
             }
             
             // Step 3: Get recent wallpaper history to avoid repeats
+            // CRITICAL FIX (Dec 2025): Use dynamic history size based on change frequency
+            // For 15-minute changes, we need a much larger window to prevent repeats
+            val dynamicHistorySize = getHistorySizeForInterval(settings.changeInterval)
+            android.util.Log.d("SelectNextWallpaper", "Using dynamic history size: $dynamicHistorySize for interval: ${settings.changeInterval}")
+            
             val recentHistoryList = wallpaperRepository.getHistory().first()
             val recentHistory = recentHistoryList
-                .take(RECENT_HISTORY_SIZE)
+                .take(dynamicHistorySize)
                 .map { it.wallpaperId }
                 .toSet()
             
@@ -419,16 +441,60 @@ class SelectNextWallpaperUseCase @Inject constructor(
             // CRITICAL FIX: Create seeded random for true randomness on each invocation
             val seededRandom = createSeededRandom()
             
-            // Step 8: Apply epsilon-greedy selection with diversity awareness
-            // Add exploration boost to base epsilon
-            val effectiveEpsilon = (preferences.epsilon + explorationBoost).coerceAtMost(1.0f)
+            // Step 8: Use YouTube-like selection algorithm for more engaging recommendations
+            // IMPROVED (Dec 2025): Replaced epsilon-greedy with YouTube-like algorithm that provides:
+            // - Serendipity (5% chance of surprise picks)
+            // - Adaptive exploration (more when user is unhappy)
+            // - Diminishing returns for overexposed categories
+            // - Diversity in final selection
+            // - Engagement prediction based on category history
             
-            val selectedWallpaper = selectWithEpsilonGreedy(
-                rankedWallpapers = rankedWallpapers,
-                epsilon = effectiveEpsilon,
-                recentCategories = recentCategories,
-                random = seededRandom
+            // Build session context for YouTube-like recommender
+            val likedCategories = mutableMapOf<String, Int>()
+            val dislikedCategories = mutableMapOf<String, Int>()
+            
+            // Build category preference maps from history
+            recentHistoryList.forEach { historyItem ->
+                val wallpaper = downloadedWallpapers.find { it.id == historyItem.wallpaperId }
+                if (wallpaper != null && wallpaper.category.isNotBlank()) {
+                    when (historyItem.userFeedback) {
+                        "like" -> likedCategories[wallpaper.category] = 
+                            likedCategories.getOrDefault(wallpaper.category, 0) + 1
+                        "dislike" -> dislikedCategories[wallpaper.category] = 
+                            dislikedCategories.getOrDefault(wallpaper.category, 0) + 1
+                    }
+                }
+            }
+            
+            val sessionContext = me.avinas.vanderwaals.algorithm.YouTubeLikeRecommender.SessionContext(
+                recentlyViewedIds = recentHistory,
+                recentCategories = recentCategories.toList(),
+                sessionLikes = recentHistoryList.take(10).count { it.userFeedback == "like" },
+                sessionDislikes = recentHistoryList.take(10).count { it.userFeedback == "dislike" },
+                totalHistoryLikes = preferences.likedWallpaperIds.size,
+                totalHistoryDislikes = preferences.dislikedWallpaperIds.size,
+                likedCategories = likedCategories,
+                dislikedCategories = dislikedCategories
             )
+            
+            // Convert ranked wallpapers to format expected by YouTube-like recommender
+            val candidatesWithScores = rankedWallpapers.map { 
+                Pair(it.wallpaper, it.similarity) 
+            }
+            
+            val selectedWallpaper = try {
+                youtubeLikeRecommender.selectWallpaper(
+                    candidates = candidatesWithScores,
+                    context = sessionContext,
+                    random = seededRandom
+                )
+            } catch (e: Exception) {
+                android.util.Log.w("SelectNextWallpaper", "YouTube-like selection failed, falling back to top match", e)
+                // Fallback to top ranked wallpaper
+                rankedWallpapers.first().wallpaper
+            }
+            
+            android.util.Log.d("SelectNextWallpaper", "Selected via YouTube-like algorithm: ${selectedWallpaper.id} (category=${selectedWallpaper.category})")
             
             // Step 9: Record category/color views
             if (selectedWallpaper.category.isNotBlank()) {
@@ -1127,14 +1193,39 @@ class SelectNextWallpaperUseCase @Inject constructor(
     
     companion object {
         /**
-         * Number of recent wallpapers to remember (to avoid repeats).
+         * Base number of recent wallpapers to remember (to avoid repeats).
+         * This is dynamically adjusted based on change frequency.
          */
-        private const val RECENT_HISTORY_SIZE = 10
+        private const val BASE_RECENT_HISTORY_SIZE = 10
         
         /**
          * Maximum candidates to consider for epsilon-greedy selection.
          */
         private const val MAX_EXPLORATION_POOL = 100
+        
+        /**
+         * Calculates dynamic history size based on change interval.
+         * 
+         * For high-frequency changes (15 min, unlock), we need a larger history window
+         * to prevent repeats over a reasonable time period (at least 12-24 hours).
+         * 
+         * - 15 minutes: 48 changes/day → need at least 48 history entries for 12hr protection
+         * - Unlock: ~20-50 unlocks/day → need at least 30 history entries
+         * - Hourly: 24 changes/day → need at least 24 history entries for 12hr protection
+         * - Daily: 1 change/day → need at least 7 history entries for a week's protection
+         * 
+         * @param changeInterval The current change interval setting
+         * @return Dynamic history size
+         */
+        fun getHistorySizeForInterval(changeInterval: String): Int {
+            return when (changeInterval) {
+                "15min" -> 48    // 12 hours of protection at 15-min intervals
+                "unlock" -> 40   // Full day protection for typical usage
+                "hourly" -> 24   // 24 hours of protection
+                "daily" -> 14    // 2 weeks of protection
+                else -> BASE_RECENT_HISTORY_SIZE
+            }
+        }
     }
     
     /**

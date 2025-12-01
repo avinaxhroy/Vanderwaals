@@ -160,9 +160,10 @@ class HistoryViewModel @Inject constructor(
                 result.fold(
                     onSuccess = {
                         // Update history with feedback
+                        // DOWNLOAD is treated as LIKE in history (super-like)
                         val updatedHistory = history.copy(
                             userFeedback = when (feedback) {
-                                FeedbackType.LIKE -> WallpaperHistory.FEEDBACK_LIKE
+                                FeedbackType.LIKE, FeedbackType.DOWNLOAD -> WallpaperHistory.FEEDBACK_LIKE
                                 FeedbackType.DISLIKE -> WallpaperHistory.FEEDBACK_DISLIKE
                             }
                         )
@@ -189,14 +190,14 @@ class HistoryViewModel @Inject constructor(
     fun downloadWallpaper(wallpaperId: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
-                // PERFORMANCE: Use summaries for download, no embedding needed
-                // Note: getAllWallpaperSummaries() returns WallpaperMetadata with empty embeddings
-                val wallpaper = wallpaperRepository.getAllWallpaperSummaries().first()
+                // CRITICAL: Load full wallpaper with embedding for preference learning
+                // Download action is the STRONGEST positive signal (1.5x learning rate)
+                val fullWallpaper = wallpaperRepository.getAllWallpapers().first()
                     .find { it.id == wallpaperId }
                     ?: return@launch
                 
                 // Download/Get from cache
-                val downloadResult = wallpaperRepository.downloadWallpaper(wallpaper)
+                val downloadResult = wallpaperRepository.downloadWallpaper(fullWallpaper)
                 
                 downloadResult.onSuccess { file ->
                     // Validate file before saving
@@ -206,8 +207,21 @@ class HistoryViewModel @Inject constructor(
                     }
 
                     // Save to gallery
-                    val saveResult = mediaSaver.saveImageToGallery(file, wallpaper.id)
+                    val saveResult = mediaSaver.saveImageToGallery(file, fullWallpaper.id)
                     if (saveResult.isSuccess) {
+                        // IMPORTANT: Update preferences with DOWNLOAD feedback (highest weight)
+                        // This has 1.5x learning rate compared to regular LIKE
+                        if (fullWallpaper.embedding.isNotEmpty()) {
+                            val preferenceResult = updatePreferencesUseCase(fullWallpaper, FeedbackType.DOWNLOAD)
+                            preferenceResult.fold(
+                                onSuccess = {
+                                    android.util.Log.d("HistoryViewModel", "Download preference updated for: ${fullWallpaper.id}")
+                                },
+                                onFailure = { error ->
+                                    android.util.Log.e("HistoryViewModel", "Failed to update preferences for download", error)
+                                }
+                            )
+                        }
                         onSuccess()
                     } else {
                         onError("Failed to save to gallery")

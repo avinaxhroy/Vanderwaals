@@ -349,12 +349,24 @@ class ApplicationSettingsViewModel @Inject constructor(
         _needsAlarmPermission.value = false
     }
     
+    // Flag to track if user went to permission settings
+    private var _waitingForAlarmPermission = false
+    
+    // Warning message for the user (observed by UI to show toast/snackbar)
+    private val _warningMessage = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val warningMessage: kotlinx.coroutines.flow.StateFlow<String?> = _warningMessage.asStateFlow()
+    
+    fun clearWarningMessage() {
+        _warningMessage.value = null
+    }
+    
     /**
      * Opens alarm permission settings.
      */
     fun openAlarmPermissionSettings() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             try {
+                _waitingForAlarmPermission = true
                 val intent = android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
                     data = android.net.Uri.parse("package:${context.packageName}")
                     addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -362,16 +374,125 @@ class ApplicationSettingsViewModel @Inject constructor(
                 context.startActivity(intent)
             } catch (e: Exception) {
                 android.util.Log.e("ApplicationSettingsVM", "Failed to open alarm permission settings", e)
+                _waitingForAlarmPermission = false
             }
         }
         _needsAlarmPermission.value = false
     }
     
     /**
+     * Called when the app resumes (user returns from permission settings).
+     * Re-checks permission and continues the start flow if granted.
+     */
+    fun onResume() {
+        if (_waitingForAlarmPermission && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            _waitingForAlarmPermission = false
+            val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as? android.app.AlarmManager
+            if (alarmManager != null && alarmManager.canScheduleExactAlarms()) {
+                android.util.Log.d("ApplicationSettingsVM", "Alarm permission granted, continuing start flow")
+                _warningMessage.value = "Permission granted! Setting up auto-change..."
+                // Continue the start flow - user just granted permission
+                startUsing()
+            } else {
+                android.util.Log.w("ApplicationSettingsVM", "Alarm permission still not granted")
+                // Show the dialog again or let user decide
+                _needsAlarmPermission.value = true
+            }
+        }
+    }
+    
+    /**
      * Dismisses the alarm permission dialog.
+     * WARNING: Proceeds with inexact scheduling (WorkManager fallback).
      */
     fun dismissAlarmPermissionDialog() {
         _needsAlarmPermission.value = false
+        _warningMessage.value = "Wallpaper timing may be inexact without alarm permission"
+        // Proceed with the start flow anyway - will use WorkManager fallback
+        android.util.Log.w("ApplicationSettingsVM", "User dismissed alarm permission, proceeding with inexact scheduling")
+        startAppWithInexactScheduling()
+    }
+    
+    /**
+     * Start app flow that bypasses the alarm permission check.
+     * Used when user dismisses permission dialog and wants to proceed anyway.
+     */
+    private fun startAppWithInexactScheduling() {
+        viewModelScope.launch {
+            try {
+                _startState.value = StartState.Starting("Saving settings...", 0.5f)
+                
+                // Get current values
+                val applyToValue = when (_applyTo.value) {
+                    ApplyTo.LOCK_SCREEN -> "lock_screen"
+                    ApplyTo.HOME_SCREEN -> "home_screen"
+                    ApplyTo.BOTH -> "both"
+                    ApplyTo.BOTH_DIFFERENT -> "both_different"
+                }
+                
+                val intervalValue = when (_changeInterval.value) {
+                    ChangeInterval.EVERY_UNLOCK -> "unlock"
+                    ChangeInterval.FIFTEEN_MINUTES -> "15min"
+                    ChangeInterval.HOURLY -> "hourly"
+                    ChangeInterval.DAILY -> "daily"
+                    ChangeInterval.NEVER -> "never"
+                }
+                
+                // Save settings
+                settingsDataStore.updateApplyTo(applyToValue)
+                settingsDataStore.updateInterval(
+                    intervalValue,
+                    if (_changeInterval.value == ChangeInterval.DAILY) {
+                        java.time.LocalTime.of(_dailyTime.value.hour, _dailyTime.value.minute)
+                    } else null
+                )
+                settingsDataStore.updateDailyPlaylistSize(_dailyPlaylistSize.value)
+                settingsDataStore.markOnboardingComplete()
+                
+                delay(500L)
+                
+                _startState.value = StartState.Starting("Setting up auto-change (inexact)...", 0.7f)
+                
+                // Schedule with WorkManager fallback (inexact)
+                val targetScreen = when (_applyTo.value) {
+                    ApplyTo.LOCK_SCREEN -> "lock"
+                    ApplyTo.HOME_SCREEN -> "home"
+                    ApplyTo.BOTH -> "both"
+                    ApplyTo.BOTH_DIFFERENT -> "both_different"
+                }
+                
+                if (_changeInterval.value == ChangeInterval.EVERY_UNLOCK) {
+                    _startState.value = StartState.Starting("Downloading daily playlist...", 0.75f)
+                    val playlistRequest = androidx.work.OneTimeWorkRequestBuilder<me.avinas.vanderwaals.worker.DailyPlaylistWorker>()
+                        .setConstraints(
+                            androidx.work.Constraints.Builder()
+                                .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                                .build()
+                        )
+                        .addTag("initial_playlist_download")
+                        .build()
+                    workManager.enqueueUniqueWork(
+                        "initial_playlist_download",
+                        androidx.work.ExistingWorkPolicy.REPLACE,
+                        playlistRequest
+                    )
+                }
+                
+                workScheduler.scheduleWallpaperChange(
+                    interval = _changeInterval.value,
+                    time = java.time.LocalTime.of(_dailyTime.value.hour, _dailyTime.value.minute),
+                    targetScreen = targetScreen
+                )
+                
+                _startState.value = StartState.Starting("Finalizing...", 0.95f)
+                delay(300L)
+                _startState.value = StartState.Success
+                
+            } catch (e: Exception) {
+                android.util.Log.e("ApplicationSettingsVM", "Error in inexact scheduling flow", e)
+                _startState.value = StartState.Error(e.message ?: "Unknown error")
+            }
+        }
     }
 }
 

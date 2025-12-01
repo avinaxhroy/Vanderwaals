@@ -182,8 +182,9 @@ class WallpaperRepositoryImpl @Inject constructor(
     
     override suspend fun updateHistory(historyId: Long, feedback: FeedbackType) {
         withContext(Dispatchers.IO) {
+            // DOWNLOAD is treated as LIKE in history (super-like with higher learning weight)
             val feedbackString = when (feedback) {
-                FeedbackType.LIKE -> WallpaperHistory.FEEDBACK_LIKE
+                FeedbackType.LIKE, FeedbackType.DOWNLOAD -> WallpaperHistory.FEEDBACK_LIKE
                 FeedbackType.DISLIKE -> WallpaperHistory.FEEDBACK_DISLIKE
             }
             
@@ -199,8 +200,9 @@ class WallpaperRepositoryImpl @Inject constructor(
         withContext(Dispatchers.IO) {
             // Use transaction to ensure feedback and context are updated atomically
             me.avinas.vanderwaals.data.TransactionHelper.withTransaction(database) {
+                // DOWNLOAD is treated as LIKE in history (super-like with higher learning weight)
                 val feedbackString = when (feedback) {
-                    FeedbackType.LIKE -> WallpaperHistory.FEEDBACK_LIKE
+                    FeedbackType.LIKE, FeedbackType.DOWNLOAD -> WallpaperHistory.FEEDBACK_LIKE
                     FeedbackType.DISLIKE -> WallpaperHistory.FEEDBACK_DISLIKE
                 }
                 

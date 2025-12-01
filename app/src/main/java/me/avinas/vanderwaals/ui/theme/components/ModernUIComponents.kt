@@ -27,7 +27,22 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.dp
 import me.avinas.vanderwaals.ui.theme.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.ui.draw.scale
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 
 /**
  * Modern UI Components for Vanderwaals
@@ -63,11 +78,23 @@ fun GradientButton(
     icon: (@Composable () -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    
+    // Scale animation on press
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "button_scale"
+    )
     
     Box(
         modifier = modifier
+            .scale(scale)
             .shadow(
-                elevation = if (enabled) 8.dp else 0.dp,
+                elevation = if (enabled) if (isPressed) 4.dp else 8.dp else 0.dp,
                 shape = shape,
                 ambientColor = VanderwaalsTan.copy(alpha = 0.3f),
                 spotColor = VanderwaalsTan.copy(alpha = 0.3f)
@@ -135,7 +162,7 @@ fun GradientButton(
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(20.dp),
+    shape: Shape = RoundedCornerShape(24.dp),
     elevation: Dp = 0.dp, // Unused, kept for API compatibility
     contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable ColumnScope.() -> Unit
@@ -143,26 +170,107 @@ fun GlassCard(
     val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
     val containerColor = if (isDark) GlassBackground else GlassBackgroundLight
     val borderColor = if (isDark) GlassBorder else GlassBorderLight
-    val topGradient = if (isDark) GlassGradientTop else GlassGradientTopLight
-    val leftGradient = if (isDark) GlassGradientLeft else GlassGradientLeftLight
     
     Box(
         modifier = modifier
             .shadow(
-                elevation = 32.dp, // 0 8px 32px
+                elevation = 16.dp,
                 shape = shape,
-                ambientColor = if (isDark) Color.Black.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f),
-                spotColor = if (isDark) Color.Black.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f)
+                ambientColor = if (isDark) Color.Black.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.05f),
+                spotColor = if (isDark) Color.Black.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.05f)
             )
             .clip(shape)
             .background(containerColor)
             .border(
                 width = 1.dp,
-                color = borderColor,
+                brush = if (isDark) GlassGradientTop else GlassGradientTopLight,
                 shape = shape
             )
     ) {
+        // CSS: inset 0 -1px 0 rgba(255, 255, 255, 0.1) -> Bottom Inner Highlight
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .align(Alignment.BottomCenter)
+                .offset(y = (-1).dp) // Inset by 1px
+                .background(if (isDark) GlassInsetBottom else Color.White.copy(alpha = 0.2f))
+        )
+        
+        // CSS: inset 0 0 34px 17px rgba(255, 255, 255, 1.7) -> Strong Inner Glow
+        // Simulated with a radial gradient
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            if (isDark) GlassInnerGlow else Color.White.copy(alpha = 0.4f),
+                            Color.Transparent
+                        ),
+                        center = Offset.Zero,
+                        radius = 1000f // Large radius for soft glow
+                    )
+                )
+        )
+        
+        Column(
+            modifier = Modifier.padding(contentPadding),
+            content = content
+        )
+    }
+}
 
+/**
+ * Glassmorphism card with a subtle color tint
+ */
+@Composable
+fun TintedGlassCard(
+    modifier: Modifier = Modifier,
+    tintColor: Color,
+    shape: Shape = RoundedCornerShape(24.dp),
+    contentPadding: PaddingValues = PaddingValues(16.dp),
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
+    val containerColor = if (isDark) GlassBackground else GlassBackgroundLight
+    
+    Box(
+        modifier = modifier
+            .shadow(
+                elevation = 16.dp,
+                shape = shape,
+                ambientColor = tintColor.copy(alpha = if (isDark) 0.1f else 0.05f),
+                spotColor = tintColor.copy(alpha = if (isDark) 0.2f else 0.1f)
+            )
+            .clip(shape)
+            .background(containerColor)
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        tintColor.copy(alpha = 0.3f),
+                        tintColor.copy(alpha = 0.05f)
+                    )
+                ),
+                shape = shape
+            )
+    ) {
+        // Tint Overlay
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            tintColor.copy(alpha = 0.15f),
+                            tintColor.copy(alpha = 0.05f)
+                        ),
+                        start = Offset.Zero,
+                        end = Offset.Infinite
+                    )
+                )
+        )
 
         // CSS: inset 0 -1px 0 rgba(255, 255, 255, 0.1) -> Bottom Inner Highlight
         Box(
@@ -186,7 +294,7 @@ fun GlassCard(
                             Color.Transparent
                         ),
                         center = Offset.Zero,
-                        radius = 800f // Large radius for soft glow
+                        radius = 1000f // Large radius for soft glow
                     )
                 )
         )
@@ -220,14 +328,14 @@ fun GlassSheet(
             .shadow(
                 elevation = 32.dp,
                 shape = shape,
-                ambientColor = Color.Black.copy(alpha = 0.1f),
-                spotColor = Color.Black.copy(alpha = 0.1f)
+                ambientColor = Color.Black.copy(alpha = 0.15f),
+                spotColor = Color.Black.copy(alpha = 0.15f)
             )
             .clip(shape)
             .background(containerColor)
             .border(
                 width = 1.dp,
-                color = borderColor,
+                brush = topGradient,
                 shape = shape
             )
     ) {
@@ -260,7 +368,7 @@ fun GlassSheet(
                             if (isDark) GlassInnerGlow else Color.White.copy(alpha = 0.4f),
                             Color.Transparent
                         ),
-                        endY = 400f
+                        endY = 500f
                     )
                 )
         )
@@ -513,10 +621,99 @@ fun ModernDivider(
     }
 }
 
+// ===== PREMIUM BACKGROUND =====
+
+/**
+ * Premium animated background for secondary screens
+ */
+@Composable
+fun PremiumBackground(
+    modifier: Modifier = Modifier,
+    isDark: Boolean = LocalThemeIsDark.current
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "blobs")
+
+    // Animate positions
+    val offset1 by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(12000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ), label = "offset1"
+    )
+    val offset2 by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(18000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ), label = "offset2"
+    )
+    
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(if (isDark) DarkBackground else LightBackground)
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize().blur(100.dp)) {
+            val w = size.width
+            val h = size.height
+
+            if (isDark) {
+                // Dark Mode Blobs - Deep Ocean Theme
+                drawCircle(
+                    color = Color(0xFF1E3A8A).copy(alpha = 0.2f), // Deep Royal Blue
+                    center = Offset(w * 0.2f + (offset1 * 100f), h * 0.3f),
+                    radius = 500.dp.toPx()
+                )
+                drawCircle(
+                    color = Color(0xFF0F766E).copy(alpha = 0.15f), // Deep Teal
+                    center = Offset(w * 0.8f - (offset2 * 100f), h * 0.6f),
+                    radius = 450.dp.toPx()
+                )
+                drawCircle(
+                    color = Color(0xFF0E7490).copy(alpha = 0.15f), // Cyan/Slate
+                    center = Offset(w * 0.5f, h * 0.9f - (offset1 * 50f)),
+                    radius = 500.dp.toPx()
+                )
+            } else {
+                // Light Mode Blobs - Softer, pastel but vibrant
+                drawCircle(
+                    color = Color(0xFFE9D5FF).copy(alpha = 0.8f), // Purple 200
+                    center = Offset(w * 0.2f + (offset1 * 100f), h * 0.3f),
+                    radius = 600.dp.toPx()
+                )
+                drawCircle(
+                    color = Color(0xFFFECDD3).copy(alpha = 0.7f), // Rose 200
+                    center = Offset(w * 0.8f - (offset2 * 100f), h * 0.6f),
+                    radius = 500.dp.toPx()
+                )
+                drawCircle(
+                    color = Color(0xFF99F6E4).copy(alpha = 0.6f), // Teal 200
+                    center = Offset(w * 0.5f, h * 0.9f - (offset1 * 50f)),
+                    radius = 550.dp.toPx()
+                )
+            }
+        }
+        
+        // Noise overlay for texture (optional, can simulate with a very subtle gradient)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            if (isDark) Color.Black.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.2f)
+                        )
+                    )
+                )
+        )
+    }
+}
 // ===== BACKGROUND BLOBS =====
 
 /**
- * Animated background blobs for visual interest
+ * Animated background blobs for visual interest (Used in MainScreen)
  */
 @Composable
 fun BackgroundBlobs(
@@ -563,4 +760,87 @@ fun BackgroundBlobs(
             )
         }
     }
+}
+
+// ===== GLASS TOP APP BAR BACKGROUND =====
+
+/**
+ * Glassmorphic background for TopAppBar
+ * 
+ * Features:
+ * - Translucent background with blur effect
+ * - Subtle bottom border
+ * - Inner glow and highlights
+ * - Matches GlassCard aesthetic
+ */
+@Composable
+fun GlassTopAppBarBackground(
+    modifier: Modifier = Modifier
+) {
+    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
+    val containerColor = if (isDark) GlassBackground else GlassBackgroundLight
+    val borderColor = if (isDark) GlassBorder else GlassBorderLight
+    
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 16.dp,
+                spotColor = if (isDark) Color.Black.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f),
+                ambientColor = if (isDark) Color.Black.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f)
+            )
+            .background(containerColor)
+    ) {
+        // Bottom Border
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .align(Alignment.BottomCenter)
+                .background(borderColor)
+        )
+
+        // CSS: inset 0 -1px 0 rgba(255, 255, 255, 0.1) -> Bottom Inner Highlight
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .align(Alignment.BottomCenter)
+                .offset(y = (-1).dp) // Inset by 1px
+                .background(if (isDark) GlassInsetBottom else Color.White.copy(alpha = 0.2f))
+        )
+        
+        // Inner Glow Simulation
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            if (isDark) GlassInnerGlow else Color.White.copy(alpha = 0.4f),
+                            Color.Transparent
+                        ),
+                        endY = 200f
+                    )
+                )
+        )
+    }
+}
+
+/**
+ * Helper to observe pressed state from InteractionSource
+ */
+@Composable
+fun InteractionSource.collectIsPressedAsState(): State<Boolean> {
+    val isPressed = remember { mutableStateOf(false) }
+    LaunchedEffect(this) {
+        interactions.collect { interaction ->
+            when (interaction) {
+                is PressInteraction.Press -> isPressed.value = true
+                is PressInteraction.Release -> isPressed.value = false
+                is PressInteraction.Cancel -> isPressed.value = false
+            }
+        }
+    }
+    return isPressed
 }

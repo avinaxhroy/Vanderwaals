@@ -134,9 +134,10 @@ object AppModule {
     @Singleton
     fun provideWorkScheduler(
         @ApplicationContext context: Context,
-        engagementTracker: me.avinas.vanderwaals.domain.usecase.UserEngagementTracker
+        engagementTracker: me.avinas.vanderwaals.domain.usecase.UserEngagementTracker,
+        networkStateTracker: me.avinas.vanderwaals.network.NetworkStateTracker
     ): me.avinas.vanderwaals.worker.WorkScheduler {
-        return me.avinas.vanderwaals.worker.WorkScheduler(context, engagementTracker)
+        return me.avinas.vanderwaals.worker.WorkScheduler(context, engagementTracker, networkStateTracker)
     }
     
     @Provides

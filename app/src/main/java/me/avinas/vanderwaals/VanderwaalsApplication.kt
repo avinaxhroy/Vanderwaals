@@ -254,16 +254,19 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
                     return@launch
                 }
                 
-                // Check if alarm permission is granted (Android 12+)
-                // Check if alarm permission is granted (Android 12+) ONLY for alarm-based intervals
+                // Check if alarm permission is granted (Android 12+) for ALL alarm-based intervals
+                // CRITICAL FIX: Must include FIFTEEN_MINUTES - it also uses exact alarms!
                 if (interval == me.avinas.vanderwaals.worker.ChangeInterval.DAILY || 
-                    interval == me.avinas.vanderwaals.worker.ChangeInterval.HOURLY) {
+                    interval == me.avinas.vanderwaals.worker.ChangeInterval.HOURLY ||
+                    interval == me.avinas.vanderwaals.worker.ChangeInterval.FIFTEEN_MINUTES) {
                     
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                         val alarmManager = getSystemService(android.content.Context.ALARM_SERVICE) as? android.app.AlarmManager
                         if (alarmManager != null && !alarmManager.canScheduleExactAlarms()) {
-                            Log.d(TAG, "Skipping wallpaper scheduling - alarm permission not granted yet")
-                            return@launch
+                            Log.w(TAG, "⚠️ Exact alarm permission not granted - wallpaper timing may be inaccurate")
+                            Log.w(TAG, "   User should grant SCHEDULE_EXACT_ALARM permission in Settings")
+                            // Don't return - still try to schedule, but it may use inexact alarms
+                            // The scheduling code will handle this and potentially fall back
                         }
                     }
                 }

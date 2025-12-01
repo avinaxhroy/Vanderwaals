@@ -3,6 +3,8 @@ package me.avinas.vanderwaals.ui.settings
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -30,11 +33,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import me.avinas.vanderwaals.ui.theme.LocalThemeIsDark
 import me.avinas.vanderwaals.ui.theme.components.GlassCard
 import me.avinas.vanderwaals.ui.theme.*
@@ -58,6 +64,20 @@ fun SettingsScreen(
     var showTimePickerDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
+    
+    // Lifecycle observer to detect when user returns from permission settings
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.onResume()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     // Handle system back button
     androidx.activity.compose.BackHandler {
@@ -90,17 +110,10 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
         ) {
-            // Background Blobs
-            me.avinas.vanderwaals.ui.theme.components.BackgroundBlobs(
+            // Premium Background
+            me.avinas.vanderwaals.ui.theme.components.PremiumBackground(
                 modifier = Modifier.fillMaxSize(),
                 isDark = isDark
-            )
-            
-            // Blur effect over blobs
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .blur(60.dp)
             )
 
             // Calculate top padding for content (StatusBar + TopAppBar height)
@@ -109,7 +122,14 @@ fun SettingsScreen(
             val topBarHeight = 64.dp // Standard M3 TopAppBar height
             val contentTopPadding = statusBarHeight + topBarHeight + 16.dp
 
+            // Track scroll state for dynamic TopAppBar background
+            val listState = rememberLazyListState()
+            val isScrolled by remember {
+                derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 }
+            }
+
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
@@ -872,33 +892,47 @@ fun SettingsScreen(
             }
 
             // TopAppBar Overlay
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Settings",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDark) Color.White else Color(0xFF111827)
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = if (isDark) Color.Gray else Color.Gray
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                ),
-                windowInsets = WindowInsets(0, 0, 0, 0),
+            Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 16.dp)
-            )
+            ) {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = isScrolled,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    me.avinas.vanderwaals.ui.theme.components.GlassTopAppBarBackground(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp + WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding())
+                    )
+                }
+
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "Settings",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back"
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent
+                    ),
+                    windowInsets = WindowInsets(0, 0, 0, 0),
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(vertical = 16.dp)
+                )
+            }
         }
     }
 

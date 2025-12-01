@@ -46,26 +46,94 @@ class WallpaperAlarmReceiver : BroadcastReceiver() {
             WallpaperChangeWorker.KEY_MODE to mode
         )
         
-        // Enqueue wallpaper change work
+        // Enqueue wallpaper change work as UNIQUE work to prevent duplicates
+        // Using REPLACE ensures only one change runs even if multiple alarms fire
         val changeWork = OneTimeWorkRequestBuilder<WallpaperChangeWorker>()
             .setInputData(inputData)
             .build()
         
-        workManager.enqueue(changeWork)
-        android.util.Log.d(TAG, "WallpaperChangeWorker enqueued from alarm")
+        workManager.enqueueUniqueWork(
+            ALARM_TRIGGERED_WORK_NAME,
+            androidx.work.ExistingWorkPolicy.REPLACE, // Replace any pending work
+            changeWork
+        )
+        android.util.Log.d(TAG, "WallpaperChangeWorker enqueued from alarm (unique, REPLACE policy)")
         
         // Check if this is a repeating alarm (15-min or hourly) or daily alarm
         val intervalMillis = intent.getLongExtra("intervalMillis", 0L)
         if (intervalMillis > 0) {
-            // This is a repeating alarm (15-min or hourly), it will auto-repeat
-            android.util.Log.d(TAG, "Repeating alarm - will auto-trigger in ${intervalMillis / 60000} minutes")
+            // CRITICAL FIX: setRepeating() is inexact on Android 5.1+
+            // Must manually reschedule using setExactAndAllowWhileIdle() for precise timing
+            android.util.Log.d(TAG, "Interval-based alarm - rescheduling for ${intervalMillis / 60000} minutes from now")
+            rescheduleRepeatingAlarm(context, targetScreen, mode, intervalMillis)
         } else {
             // This is a daily alarm, reschedule for next day
-            rescheduleAlarm(context, targetScreen, mode, intent)
+            rescheduleDailyAlarm(context, targetScreen, mode, intent)
         }
     }
     
-    private fun rescheduleAlarm(context: Context, targetScreen: String, mode: String, originalIntent: Intent) {
+    /**
+     * Reschedules a repeating alarm (15-min or hourly) using exact timing.
+     * 
+     * CRITICAL FIX: On Android 5.1+ (API 22+), setRepeating() became inexact and 
+     * subject to batching, causing irregular intervals like 3min, 11min, 16min, etc.
+     * 
+     * Solution: Use setExactAndAllowWhileIdle() with manual rescheduling after each
+     * alarm fires, just like we do for daily alarms. This guarantees exact intervals.
+     */
+    private fun rescheduleRepeatingAlarm(
+        context: Context, 
+        targetScreen: String, 
+        mode: String, 
+        intervalMillis: Long
+    ) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+        if (alarmManager == null) {
+            android.util.Log.e(TAG, "AlarmManager not available for rescheduling repeating alarm!")
+            return
+        }
+        
+        // Calculate next alarm time - exactly intervalMillis from now
+        val nextTriggerTime = System.currentTimeMillis() + intervalMillis
+        val intervalMinutes = intervalMillis / 60000
+        
+        android.util.Log.d(TAG, "Scheduling next alarm in exactly $intervalMinutes minutes")
+        android.util.Log.d(TAG, "  Current time: ${System.currentTimeMillis()}")
+        android.util.Log.d(TAG, "  Next trigger: $nextTriggerTime")
+        
+        // Create intent with same parameters for next alarm
+        val alarmIntent = Intent(context, WallpaperAlarmReceiver::class.java).apply {
+            putExtra("targetScreen", targetScreen)
+            putExtra("mode", mode)
+            putExtra("intervalMillis", intervalMillis)
+        }
+        
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            ALARM_REQUEST_CODE_REPEATING,
+            alarmIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        
+        try {
+            // Use setExactAndAllowWhileIdle for precise timing even during Doze
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                nextTriggerTime,
+                pendingIntent
+            )
+            
+            android.util.Log.d(TAG, "✅ Repeating alarm rescheduled successfully")
+            android.util.Log.d(TAG, "  Next alarm in: $intervalMinutes minutes")
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "❌ Failed to reschedule repeating alarm: ${e.message}", e)
+        }
+    }
+    
+    /**
+     * Reschedules a daily alarm for the same time tomorrow.
+     */
+    private fun rescheduleDailyAlarm(context: Context, targetScreen: String, mode: String, originalIntent: Intent) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
         if (alarmManager == null) {
             android.util.Log.e(TAG, "AlarmManager not available for rescheduling!")
@@ -112,5 +180,13 @@ class WallpaperAlarmReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "WallpaperAlarmReceiver"
         private const val ALARM_REQUEST_CODE_DAILY = 1001
+        private const val ALARM_REQUEST_CODE_REPEATING = 1002
+        
+        /**
+         * Unique work name for alarm-triggered wallpaper changes.
+         * Using unique work with REPLACE policy prevents duplicate changes
+         * if multiple alarms fire in quick succession.
+         */
+        const val ALARM_TRIGGERED_WORK_NAME = "alarm_triggered_wallpaper_change"
     }
 }

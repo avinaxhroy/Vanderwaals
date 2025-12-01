@@ -27,8 +27,9 @@ data class AnalyticsState(
     // === Recommendation Impact ===
     val averageSimilarityScore: Float = 0f, // 0-100 scale
     val similarityTrend: SimilarityTrend = SimilarityTrend.STABLE,
-    val originalAnchorInfluence: Float = 40f, // Always 40%
-    val learnedAnchorInfluence: Float = 60f, // Always 60%
+    val hasOriginalEmbedding: Boolean = false, // True when user uploaded an image or selected categories during onboarding
+    val originalAnchorInfluence: Float = 40f, // Only relevant when hasOriginalEmbedding is true
+    val learnedAnchorInfluence: Float = 60f, // Only relevant when hasOriginalEmbedding is true
     
     // === History Stats ===
     val totalWallpapersViewed: Int = 0,

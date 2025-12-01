@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -125,68 +126,20 @@ fun HistoryScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surface)
         ) {
-            // Dynamic Background Blobs
+            // Premium Background
             val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-            val infiniteTransition = rememberInfiniteTransition(label = "blobs")
-
-            // Animate positions
-            val offset1 by infiniteTransition.animateFloat(
-                initialValue = 0f, targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(10000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ), label = "offset1"
+            me.avinas.vanderwaals.ui.theme.components.PremiumBackground(
+                modifier = Modifier.fillMaxSize(),
+                isDark = isDark
             )
-            val offset2 by infiniteTransition.animateFloat(
-                initialValue = 0f, targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(15000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ), label = "offset2"
-            )
-
-            Canvas(modifier = Modifier.fillMaxSize().blur(80.dp)) {
-                val w = size.width
-                val h = size.height
-
-                if (isDark) {
-                    // Dark Mode Blobs (Indigo/Rose/Sky)
-                    drawCircle(
-                        color = Color(0xFF5C6BC0).copy(alpha = 0.2f), // Indigo 400
-                        center = Offset(w * 0.2f + (offset1 * 100f), h * 0.2f),
-                        radius = 400.dp.toPx()
-                    )
-                    drawCircle(
-                        color = Color(0xFFEC407A).copy(alpha = 0.15f), // Rose 400
-                        center = Offset(w * 0.8f - (offset2 * 100f), h * 0.5f),
-                        radius = 350.dp.toPx()
-                    )
-                    drawCircle(
-                        color = Color(0xFF29B6F6).copy(alpha = 0.15f), // Sky 400
-                        center = Offset(w * 0.4f, h * 0.8f + (offset1 * 50f)),
-                        radius = 450.dp.toPx()
-                    )
-                } else {
-                    // Light Mode Blobs (Purple/Orange/Teal)
-                    drawCircle(
-                        color = Color(0xFFAB47BC).copy(alpha = 0.3f), // Purple 400
-                        center = Offset(w * 0.8f - (offset1 * 100f), h * 0.1f),
-                        radius = 500.dp.toPx()
-                    )
-                    drawCircle(
-                        color = Color(0xFFFFA726).copy(alpha = 0.25f), // Orange 400
-                        center = Offset(w * 0.1f + (offset2 * 100f), h * 0.6f),
-                        radius = 400.dp.toPx()
-                    )
-                    drawCircle(
-                        color = Color(0xFF26A69A).copy(alpha = 0.25f), // Teal 400
-                        center = Offset(w * 0.6f, h * 0.9f - (offset1 * 50f)),
-                        radius = 450.dp.toPx()
-                    )
-                }
-            }
 
             val uiState by viewModel.historyGroups.collectAsState()
+            
+            // Track scroll state for dynamic TopAppBar background
+            val listState = rememberLazyListState()
+            val isScrolled by remember {
+                derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 }
+            }
             
             // Calculate top padding for content (StatusBar + TopAppBar height)
             // Use safeDrawing to account for cutouts and status bars
@@ -234,6 +187,7 @@ fun HistoryScreen(
                         }
                     } else {
                         LazyColumn(
+                            state = listState,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(paddingValues),
@@ -302,31 +256,47 @@ fun HistoryScreen(
             }
 
             // TopAppBar Overlay
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "History",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                windowInsets = WindowInsets(0, 0, 0, 0),
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                ),
+            Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(vertical = 16.dp)
-            )
+            ) {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = isScrolled,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    me.avinas.vanderwaals.ui.theme.components.GlassTopAppBarBackground(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp + WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding())
+                    )
+                }
+
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "History",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back"
+                            )
+                        }
+                    },
+                    windowInsets = WindowInsets(0, 0, 0, 0),
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent
+                    ),
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(vertical = 16.dp)
+                )
+            }
         }
 
         // Full-screen preview dialog

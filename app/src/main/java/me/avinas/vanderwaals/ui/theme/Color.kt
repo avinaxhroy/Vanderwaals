@@ -174,9 +174,9 @@ val GradientVerticalLight = Brush.verticalGradient(
 val GlassBackground = Color(0x8C1F2937) // rgba(31, 41, 55, 0.55)
 val GlassBorder = Color(0x1AFFFFFF) // rgba(255, 255, 255, 0.1)
 val GlassShadow = Color(0x1A000000) // rgba(0, 0, 0, 0.1)
-val GlassHighlight = Color(0xCCFFFFFF) // rgba(255, 255, 255, 0.8)
+val GlassHighlight = Color(0x50FFFFFF) // rgba(255, 255, 255, 0.3) - Dimmed from 0.8
 val GlassHighlightSubtle = Color(0x4DFFFFFF) // rgba(255, 255, 255, 0.3)
-val GlassInsetTop = Color(0x80FFFFFF) // rgba(255, 255, 255, 0.5)
+val GlassInsetTop = Color(0x20FFFFFF) // rgba(255, 255, 255, 0.12) - Dimmed from 0.5
 val GlassInsetBottom = Color(0x1AFFFFFF) // rgba(255, 255, 255, 0.1)
 val GlassInnerGlow = Color(0x26FFFFFF) // Approximating the strong inner glow safely
 

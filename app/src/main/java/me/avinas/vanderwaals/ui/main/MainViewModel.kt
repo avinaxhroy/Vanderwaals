@@ -7,6 +7,7 @@ import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import me.avinas.vanderwaals.core.MediaSaver
 import me.avinas.vanderwaals.data.dao.WallpaperHistoryDao
 import me.avinas.vanderwaals.data.entity.WallpaperHistory
 import me.avinas.vanderwaals.data.entity.WallpaperMetadata
@@ -52,6 +53,7 @@ class MainViewModel @Inject constructor(
     private val historyDao: WallpaperHistoryDao,
     private val updatePreferencesUseCase: UpdatePreferencesUseCase,
     private val workManager: WorkManager,
+    private val mediaSaver: MediaSaver,
     private val application: android.app.Application
 ) : ViewModel() {
 
@@ -399,6 +401,87 @@ class MainViewModel @Inject constructor(
             } catch (e: Exception) {
                 android.util.Log.e("MainViewModel", "Exception in dislikeCurrentWallpaper", e)
                 onError(e.message ?: "Error recording dislike")
+            }
+        }
+    }
+
+    /**
+     * Downloads the current wallpaper to the gallery.
+     * 
+     * This action has the HIGHEST learning weight because:
+     * - User values the wallpaper enough to save it for future use
+     * - It's a stronger signal than a simple "like"
+     * - Learning rate is 1.5x compared to regular like
+     * 
+     * Updates the preference vector and saves the image to device gallery.
+     */
+    fun downloadCurrentWallpaper(onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val state = currentWallpaper.value
+                val wallpaper = (state as? MainUiState.Success)?.wallpaper
+                if (wallpaper == null) {
+                    onError("No wallpaper to download")
+                    return@launch
+                }
+
+                // CRITICAL: Load full wallpaper with embedding for preference learning
+                val fullWallpaper = wallpaperRepository.getAllWallpapers().first()
+                    .find { it.id == wallpaper.id }
+                
+                if (fullWallpaper == null) {
+                    onError("Wallpaper not found in catalog")
+                    return@launch
+                }
+
+                // Download/Get from cache
+                val downloadResult = wallpaperRepository.downloadWallpaper(fullWallpaper)
+                
+                downloadResult.onSuccess { file ->
+                    // Validate file before saving
+                    if (!file.exists() || file.length() <= 0) {
+                        onError("Download failed: Empty file")
+                        return@onSuccess
+                    }
+
+                    // Save to gallery
+                    val saveResult = mediaSaver.saveImageToGallery(file, fullWallpaper.id)
+                    if (saveResult.isSuccess) {
+                        // IMPORTANT: Update preferences with DOWNLOAD feedback (highest weight)
+                        if (fullWallpaper.embedding.isNotEmpty()) {
+                            val preferenceResult = updatePreferencesUseCase(fullWallpaper, FeedbackType.DOWNLOAD)
+                            preferenceResult.fold(
+                                onSuccess = {
+                                    // Also update history context
+                                    val activeHistory = historyDao.getActiveWallpaper()
+                                    if (activeHistory != null) {
+                                        val context = me.avinas.vanderwaals.data.entity.FeedbackContext.fromCurrentState(
+                                            application
+                                        )
+                                        wallpaperRepository.updateHistoryWithContext(
+                                            activeHistory.id,
+                                            FeedbackType.DOWNLOAD,
+                                            context
+                                        )
+                                    }
+                                    android.util.Log.d("MainViewModel", "Downloaded wallpaper: ${fullWallpaper.id} - strongest learning signal applied")
+                                },
+                                onFailure = { error ->
+                                    android.util.Log.e("MainViewModel", "Failed to update preferences for download", error)
+                                }
+                            )
+                        }
+                        onSuccess()
+                    } else {
+                        onError("Failed to save to gallery")
+                    }
+                }
+                downloadResult.onFailure {
+                    onError("Download failed: ${it.message}")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MainViewModel", "Exception in downloadCurrentWallpaper", e)
+                onError(e.message ?: "Error downloading wallpaper")
             }
         }
     }

@@ -49,11 +49,14 @@ class AnalyticsViewModel @Inject constructor(
                 _state.update { it.copy(isLoading = true, error = null) }
 
                 // Combine all data sources
+                // CRITICAL FIX (Dec 2025): Use getAllWallpapers() for similarity calculation
+                // getAllWallpaperSummaries() returns empty embeddings for performance,
+                // but we NEED embeddings to calculate cosine similarity for "Match Quality"
                 combine(
                     preferenceRepository.getUserPreferences(),
                     wallpaperRepository.getHistory(),
-                    // Load wallpapers (summaries only for performance)
-                    wallpaperRepository.getAllWallpaperSummaries().distinctUntilChanged()
+                    // Use full wallpapers with embeddings for similarity calculation
+                    wallpaperRepository.getAllWallpapers().distinctUntilChanged()
                 ) { preferences: UserPreferences?, history: List<WallpaperHistory>, allWallpapers: List<me.avinas.vanderwaals.data.entity.WallpaperMetadata> ->
                     Triple(preferences, history, allWallpapers)
                 }.collectLatest { (preferences, history, allWallpapers) ->
@@ -139,6 +142,11 @@ class AnalyticsViewModel @Inject constructor(
                         categoryInsights,
                         avgDuration
                     )
+                    
+                    // CRITICAL FIX (Dec 2025): Check if original embedding exists
+                    // Original embedding only exists when user uploaded an image or selected categories during onboarding
+                    // In Auto Mode (mode = "auto"), user doesn't have an original embedding
+                    val hasOriginalEmbedding = preferences.originalEmbedding.isNotEmpty()
 
                     _state.update {
                         it.copy(
@@ -153,6 +161,7 @@ class AnalyticsViewModel @Inject constructor(
                             feedbackRatio = feedbackRatio,
                             averageSimilarityScore = avgSimilarity,
                             similarityTrend = trend,
+                            hasOriginalEmbedding = hasOriginalEmbedding,
                             totalWallpapersViewed = history.size,
                             averageWallpaperDuration = avgDuration,
                             mostLikedCategory = mostLiked?.category,
@@ -295,12 +304,26 @@ class AnalyticsViewModel @Inject constructor(
 
         val similarities = recent.mapNotNull { h ->
             wallpaperMap[h.wallpaperId]?.let { wallpaper ->
-                cosineSimilarity(preferences.preferenceVector, wallpaper.embedding)
+                // CRITICAL FIX (Dec 2025): Check if embedding is not empty before calculating
+                // getAllWallpaperSummaries returns empty embeddings, causing 0 similarity
+                if (wallpaper.embedding.isNotEmpty() && wallpaper.embedding.size == preferences.preferenceVector.size) {
+                    cosineSimilarity(preferences.preferenceVector, wallpaper.embedding)
+                } else {
+                    null // Skip wallpapers without embeddings
+                }
             }
         }
+        
+        // Log for debugging
+        android.util.Log.d("AnalyticsViewModel", "Similarity calculation: ${similarities.size} valid scores from ${recent.size} history items")
 
         return if (similarities.isNotEmpty()) {
-            (similarities.average().toFloat() * 100f).coerceIn(0f, 100f)
+            val avg = similarities.average().toFloat()
+            // Cosine similarity ranges from -1 to 1, normalize to 0-100
+            // Map: -1 -> 0%, 0 -> 50%, 1 -> 100%
+            val normalized = ((avg + 1f) / 2f * 100f).coerceIn(0f, 100f)
+            android.util.Log.d("AnalyticsViewModel", "Average similarity: $avg, normalized: $normalized%")
+            normalized
         } else 50f // Return neutral if no similarities could be calculated
     }
 

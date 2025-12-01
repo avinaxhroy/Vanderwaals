@@ -132,18 +132,19 @@ class UpdatePreferencesUseCase @Inject constructor(
                 )
             }
             
-            // CRITICAL FIX FOR AUTO MODE: Initialize preference vector from first liked wallpaper
+            // CRITICAL FIX FOR AUTO MODE: Initialize preference vector from first positive feedback
             // When Auto Mode starts, preference vector is EMPTY (size = 0)
-            // First LIKE should create the vector from that wallpaper's embedding
-            // First DISLIKE should be ignored (can't learn what to avoid without knowing what they like)
+            // First LIKE or DOWNLOAD should create the vector from that wallpaper's embedding
+            // First DISLIKE initializes with zero vector to enable negative learning
             val isVectorEmpty = currentPreferences.preferenceVector.isEmpty()
+            val isPositive = feedback == FeedbackType.LIKE || feedback == FeedbackType.DOWNLOAD
             
             // Step 3: Initialize or get current vector
             val currentVector = if (isVectorEmpty) {
-                if (feedback == FeedbackType.LIKE) {
-                    // First like in Auto Mode: Initialize preference vector from this wallpaper
+                if (isPositive) {
+                    // First positive feedback in Auto Mode: Initialize preference vector from this wallpaper
                     android.util.Log.d("UpdatePreferences", 
-                        "Auto Mode FIRST LIKE - initializing preference vector from wallpaper ${wallpaper.id}"
+                        "Auto Mode FIRST ${feedback.name} - initializing preference vector from wallpaper ${wallpaper.id}"
                     )
                     wallpaper.embedding.clone()
                 } else {
@@ -169,15 +170,17 @@ class UpdatePreferencesUseCase @Inject constructor(
             val learningRate = baseLearningRate * learningRateMultiplier
             
             // Step 5: Update preference vector using EMA with momentum
-            // Skip EMA update on first like (already initialized above), otherwise update normally
-            val (updatedVector, newMomentum) = if (isVectorEmpty && feedback == FeedbackType.LIKE) {
-                // First like: Use initialized vector as-is, no momentum yet
-                android.util.Log.d("UpdatePreferences", "First like - using wallpaper embedding directly (no EMA update)")
+            // Skip EMA update on first positive feedback (already initialized above), otherwise update normally
+            val (updatedVector, newMomentum) = if (isVectorEmpty && isPositive) {
+                // First positive feedback: Use initialized vector as-is, no momentum yet
+                android.util.Log.d("UpdatePreferences", "First positive feedback (${feedback.name}) - using wallpaper embedding directly (no EMA update)")
                 Pair(currentVector, FloatArray(EXPECTED_EMBEDDING_SIZE))
             } else {
                 // Subsequent feedback: Update using EMA
                 when (feedback) {
-                    FeedbackType.LIKE -> {
+                    FeedbackType.LIKE, FeedbackType.DOWNLOAD -> {
+                        // Both like and download use positive feedback update
+                        // Download just has higher learning rate (calculated above)
                         preferenceUpdater.updateWithPositiveFeedback(
                             currentVector = currentVector,
                             targetEmbedding = wallpaper.embedding,
@@ -196,8 +199,9 @@ class UpdatePreferencesUseCase @Inject constructor(
                 }
             }
             
-            // Step 5: Update liked/disliked wallpaper lists
-            val updatedLikedIds = if (feedback == FeedbackType.LIKE) {
+            // Step 6: Update liked/disliked wallpaper lists
+            // DOWNLOAD counts as a "super like" - add to liked list
+            val updatedLikedIds = if (isPositive) {
                 currentPreferences.likedWallpaperIds + wallpaper.id
             } else {
                 currentPreferences.likedWallpaperIds
@@ -226,7 +230,7 @@ class UpdatePreferencesUseCase @Inject constructor(
             if (wallpaper.category.isNotBlank()) {
                 // Update category preferences for categorized wallpapers
                 when (feedback) {
-                    FeedbackType.LIKE -> categoryPreferenceRepository.recordLike(wallpaper.category)
+                    FeedbackType.LIKE, FeedbackType.DOWNLOAD -> categoryPreferenceRepository.recordLike(wallpaper.category)
                     FeedbackType.DISLIKE -> categoryPreferenceRepository.recordDislike(wallpaper.category)
                 }
             } else {
@@ -234,25 +238,27 @@ class UpdatePreferencesUseCase @Inject constructor(
                 // Extract top 3 colors from palette
                 val topColors = wallpaper.colors.take(3)
                 when (feedback) {
-                    FeedbackType.LIKE -> colorPreferenceRepository.recordLikes(topColors)
+                    FeedbackType.LIKE, FeedbackType.DOWNLOAD -> colorPreferenceRepository.recordLikes(topColors)
                     FeedbackType.DISLIKE -> colorPreferenceRepository.recordDislikes(topColors)
                 }
             }
             
-            // Step 9: Update composition preferences for LIKE feedback
-            // Only update on likes to learn preferred visual styles
-            if (feedback == FeedbackType.LIKE) {
+            // Step 9: Update composition preferences for positive feedback
+            // Learn preferred visual styles from both LIKE and DOWNLOAD (with higher weight for download)
+            if (isPositive) {
                 try {
                     val wallpaperFile = java.io.File(context.filesDir, "wallpapers/${wallpaper.id}.jpg")
                     if (wallpaperFile.exists()) {
                         val composition = compositionAnalyzer.analyzeComposition(wallpaperFile)
                         if (!composition.isEmpty()) {
-                            // Update composition preferences with reduced learning rate for implicit style learning
+                            // DOWNLOAD has higher learning rate (1.5x) for composition too
+                            val compositionLearningRate = if (feedback == FeedbackType.DOWNLOAD) 0.225f else 0.15f
+                            // Update composition preferences
                             compositionPreferenceRepository.updatePreferences(
                                 newComposition = composition,
-                                learningRate = 0.15f * learningRateMultiplier
+                                learningRate = compositionLearningRate * learningRateMultiplier
                             )
-                            android.util.Log.d("UpdatePreferences", 
+                            android.util.Log.d("UpdatePreferences",
                                 "Updated composition preferences: symmetry=${String.format("%.2f", composition.symmetryScore)}, " +
                                 "centerWeight=${String.format("%.2f", composition.centerWeight)}, " +
                                 "complexity=${String.format("%.2f", composition.complexity)}"
@@ -293,20 +299,43 @@ class UpdatePreferencesUseCase @Inject constructor(
         feedbackCount: Int,
         feedbackType: FeedbackType
     ): Float {
-        return when {
+        // Base rates by feedback type:
+        // - DOWNLOAD: Highest weight (1.5x) - user wants to keep it for future
+        // - DISLIKE: High weight - strong signal to avoid similar content
+        // - LIKE: Standard weight - positive but not as strong as download
+        val baseMultiplier = when (feedbackType) {
+            FeedbackType.DOWNLOAD -> 1.5f  // 50% stronger than like
+            FeedbackType.DISLIKE -> 1.0f   // Standard negative
+            FeedbackType.LIKE -> 1.0f      // Standard positive
+        }
+        
+        val baseRate = when {
             feedbackCount < 10 -> {
                 // Fast initial learning
-                if (feedbackType == FeedbackType.LIKE) 0.15f else 0.20f
+                when (feedbackType) {
+                    FeedbackType.DOWNLOAD -> 0.225f  // 0.15 * 1.5
+                    FeedbackType.DISLIKE -> 0.20f
+                    FeedbackType.LIKE -> 0.15f
+                }
             }
             feedbackCount < 50 -> {
                 // Moderate learning
-                if (feedbackType == FeedbackType.LIKE) 0.10f else 0.15f
+                when (feedbackType) {
+                    FeedbackType.DOWNLOAD -> 0.15f   // 0.10 * 1.5
+                    FeedbackType.DISLIKE -> 0.15f
+                    FeedbackType.LIKE -> 0.10f
+                }
             }
             else -> {
                 // Stable maintenance
-                if (feedbackType == FeedbackType.LIKE) 0.05f else 0.10f
+                when (feedbackType) {
+                    FeedbackType.DOWNLOAD -> 0.075f  // 0.05 * 1.5
+                    FeedbackType.DISLIKE -> 0.10f
+                    FeedbackType.LIKE -> 0.05f
+                }
             }
         }
+        return baseRate
     }
     
     companion object {
@@ -320,8 +349,14 @@ class UpdatePreferencesUseCase @Inject constructor(
 /**
  * Enum representing types of user feedback on wallpapers.
  * 
+ * Learning rate weights (from highest to lowest):
+ * - DOWNLOAD: 1.5x base rate - Strongest positive signal (user wants to keep it)
+ * - DISLIKE: 1.0x base rate - Strong negative signal (user definitely doesn't want it)
+ * - LIKE: 1.0x base rate - Standard positive signal
+ * 
  * @property LIKE User explicitly liked the wallpaper (positive feedback)
  * @property DISLIKE User explicitly disliked the wallpaper (negative feedback)
+ * @property DOWNLOAD User downloaded the wallpaper to gallery (strongest positive feedback)
  */
 enum class FeedbackType {
     /**
@@ -334,5 +369,12 @@ enum class FeedbackType {
      * Negative feedback: User dislikes the wallpaper.
      * Pushes preference vector away from the wallpaper's embedding.
      */
-    DISLIKE
+    DISLIKE,
+    
+    /**
+     * Strongest positive feedback: User downloaded the wallpaper to gallery.
+     * This indicates the user values the wallpaper enough to save it for future use.
+     * Has the highest learning rate to strongly pull preference vector toward it.
+     */
+    DOWNLOAD
 }

@@ -77,3 +77,4 @@ scripts/.DS_Store
 
 # Release builds
 /app/release
+app/release/output-metadata.json

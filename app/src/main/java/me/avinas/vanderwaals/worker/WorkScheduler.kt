@@ -18,6 +18,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import me.avinas.vanderwaals.domain.usecase.UserEngagementTracker
 import java.time.Duration
@@ -77,11 +78,13 @@ sealed class SchedulingResult {
  * 
  * @property context Application context
  * @property workManager WorkManager instance
+ * @property networkStateTracker Tracks network connectivity and triggers fresh downloads
  */
 @Singleton
 class WorkScheduler @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val engagementTracker: UserEngagementTracker
+    private val engagementTracker: UserEngagementTracker,
+    private val networkStateTracker: me.avinas.vanderwaals.network.NetworkStateTracker
 ) {
     private val workManager = WorkManager.getInstance(context)
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -90,6 +93,56 @@ class WorkScheduler @Inject constructor(
         private const val TAG = "WorkScheduler"
         private const val ALARM_REQUEST_CODE_DAILY = 1001
         private const val ALARM_REQUEST_CODE_REPEATING = 1002
+    }
+    
+    init {
+        // Set up network restoration callback
+        setupNetworkRestorationCallback()
+    }
+    
+    /**
+     * Sets up callback to handle network restoration.
+     * 
+     * When network connectivity is restored after being offline, this callback:
+     * 1. Cancels any pending retry work (will be handled immediately)
+     * 2. Triggers an immediate wallpaper change to download fresh wallpapers
+     * 
+     * This fixes the issue where wallpaper rotation continues using cached/old
+     * wallpapers even after internet connectivity is restored.
+     */
+    private fun setupNetworkRestorationCallback() {
+        networkStateTracker.onNetworkRestored = {
+            android.util.Log.d(TAG, "🌐 Network restored - triggering fresh wallpaper download")
+            
+            // Cancel any pending retry work
+            workManager.cancelUniqueWork(WallpaperChangeWorker.RETRY_WORK_NAME)
+            
+            // Trigger immediate wallpaper change to download fresh wallpaper
+            // This runs with network constraint already satisfied
+            coroutineScope.launch {
+                // Small delay to ensure network is stable
+                kotlinx.coroutines.delay(2000L)
+                
+                // Get current target screen from settings
+                val settingsDataStore = me.avinas.vanderwaals.data.datastore.SettingsDataStore(context)
+                val settings = settingsDataStore.settings.first()
+                
+                val targetScreen = when (settings.applyTo) {
+                    "lock_screen" -> WallpaperChangeWorker.TARGET_LOCK
+                    "home_screen" -> WallpaperChangeWorker.TARGET_HOME
+                    "both_different" -> WallpaperChangeWorker.TARGET_BOTH_DIFFERENT
+                    else -> WallpaperChangeWorker.TARGET_BOTH
+                }
+                
+                // Only trigger if auto-change is enabled
+                if (settings.changeInterval != "never") {
+                    android.util.Log.d(TAG, "Triggering fresh wallpaper download for target: $targetScreen")
+                    triggerImmediateWallpaperChange(targetScreen)
+                } else {
+                    android.util.Log.d(TAG, "Auto-change is disabled, skipping fresh download trigger")
+                }
+            }
+        }
     }
     
     /**
@@ -375,17 +428,30 @@ class WorkScheduler @Inject constructor(
         }
         
         // Check if we have permission to schedule exact alarms (Android 12+)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            if (!alarmManager.canScheduleExactAlarms()) {
-                android.util.Log.e(TAG, "❌ SCHEDULE_EXACT_ALARM permission not granted! Alarms will not fire at exact time.")
-                android.util.Log.e(TAG, "   User needs to grant this permission in Settings > Apps > Vanderwaals > Alarms & reminders")
-                return SchedulingResult.PermissionDenied(
-                    "For daily changes at exact time, please grant alarm permission in Settings"
-                )
-            } else {
-                android.util.Log.d(TAG, "✅ SCHEDULE_EXACT_ALARM permission granted")
-            }
+        val hasExactAlarmPermission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            alarmManager.canScheduleExactAlarms()
+        } else {
+            true // Pre-Android 12 doesn't need this permission
         }
+        
+        if (!hasExactAlarmPermission) {
+            android.util.Log.w(TAG, "⚠️ SCHEDULE_EXACT_ALARM permission not granted!")
+            android.util.Log.w(TAG, "   Falling back to WorkManager PeriodicWork for daily changes")
+            
+            // FALLBACK: Use WorkManager PeriodicWork instead of AlarmManager
+            // This won't be at the exact time specified, but will still change daily
+            schedulePeriodicWallpaperChange(
+                interval = 1,
+                timeUnit = TimeUnit.DAYS,
+                targetScreen = targetScreen
+            )
+            
+            return SchedulingResult.BatteryOptimizationWarning(
+                "Daily wallpaper changes scheduled, but won't be at exactly ${time.hour}:${String.format("%02d", time.minute)}. Grant exact alarm permission in Settings for precise timing."
+            )
+        }
+        
+        android.util.Log.d(TAG, "✅ SCHEDULE_EXACT_ALARM permission granted")
         
         // Check battery optimization status - warn but don't fail
         val batteryOptimizationExempt = me.avinas.vanderwaals.core.BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
@@ -470,8 +536,25 @@ class WorkScheduler @Inject constructor(
     /**
      * Schedules repeating alarm for 15-minute or hourly wallpaper changes.
      * 
-     * Uses setRepeating with AlarmManager for precise interval-based execution.
-     * This ensures wallpaper changes happen at exact intervals (15 min or 1 hour).
+     * CRITICAL IMPLEMENTATION DETAIL:
+     * Uses setExactAndAllowWhileIdle + self-rescheduling instead of setRepeating.
+     * 
+     * WHY NOT setRepeating?
+     * On Android 5.1+ (API 22+), setRepeating() became inexact and subject to
+     * system batching. This causes irregular intervals like 3min, 11min, 16min, 22min
+     * instead of exact 15 minute intervals.
+     * 
+     * HOW THIS WORKS:
+     * 1. This method sets the first exact alarm for 5 seconds from now
+     * 2. When alarm fires, WallpaperAlarmReceiver handles the wallpaper change
+     * 3. WallpaperAlarmReceiver then reschedules the next exact alarm
+     * 4. This creates a chain of exact alarms at precise intervals
+     * 
+     * GUARANTEED BEHAVIOR:
+     * ✅ First run: ~5 seconds from now
+     * ✅ Subsequent runs: Exactly at configured interval (15min or 1hr)
+     * ✅ Works during Doze mode (setExactAndAllowWhileIdle)
+     * ✅ Survives app restart and device reboot (via BootCompletedReceiver)
      * 
      * @param intervalMillis Interval in milliseconds (900000 for 15min, 3600000 for 1hr)
      * @param targetScreen Target screen (home, lock, both)
@@ -485,17 +568,31 @@ class WorkScheduler @Inject constructor(
         }
         
         // Check if we have permission to schedule exact alarms (Android 12+)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            if (!alarmManager.canScheduleExactAlarms()) {
-                android.util.Log.e(TAG, "❌ SCHEDULE_EXACT_ALARM permission not granted!")
-                android.util.Log.e(TAG, "   User needs to grant this permission in Settings")
-                return SchedulingResult.PermissionDenied(
-                    "For reliable ${intervalMillis / 60000}-minute changes, please grant exact alarm permission in Settings"
-                )
-            } else {
-                android.util.Log.d(TAG, "✅ SCHEDULE_EXACT_ALARM permission granted")
-            }
+        val hasExactAlarmPermission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            alarmManager.canScheduleExactAlarms()
+        } else {
+            true // Pre-Android 12 doesn't need this permission
         }
+        
+        if (!hasExactAlarmPermission) {
+            android.util.Log.w(TAG, "⚠️ SCHEDULE_EXACT_ALARM permission not granted!")
+            android.util.Log.w(TAG, "   Falling back to WorkManager PeriodicWork (less precise timing)")
+            
+            // FALLBACK: Use WorkManager PeriodicWork instead of AlarmManager
+            // This will be less precise but will still work
+            val intervalMinutes = intervalMillis / 60000
+            schedulePeriodicWallpaperChange(
+                interval = intervalMinutes,
+                timeUnit = TimeUnit.MINUTES,
+                targetScreen = targetScreen
+            )
+            
+            return SchedulingResult.BatteryOptimizationWarning(
+                "Wallpaper changes scheduled, but timing may vary. Grant exact alarm permission in Settings for precise ${intervalMinutes}-minute intervals."
+            )
+        }
+        
+        android.util.Log.d(TAG, "✅ SCHEDULE_EXACT_ALARM permission granted")
         
         // Check battery optimization status - warn but don't fail
         val batteryOptimizationExempt = me.avinas.vanderwaals.core.BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
@@ -527,20 +624,22 @@ class WorkScheduler @Inject constructor(
         val triggerTime = System.currentTimeMillis() + 5000 // 5 seconds from now
         
         try {
-            // Use setRepeating for regular interval-based alarms
-            alarmManager.setRepeating(
+            // CRITICAL FIX: Use setExactAndAllowWhileIdle instead of setRepeating
+            // On Android 5.1+ (API 22+), setRepeating() became inexact and subject to batching,
+            // causing irregular intervals like 3min, 11min, 16min instead of exact 15min.
+            // WallpaperAlarmReceiver will reschedule the next exact alarm after each trigger.
+            alarmManager.setExactAndAllowWhileIdle(
                 AlarmManager.RTC_WAKEUP,
                 triggerTime,
-                intervalMillis,
                 pendingIntent
             )
             
             val intervalMinutes = intervalMillis / 60000
-            android.util.Log.d(TAG, "✅ Repeating alarm scheduled successfully")
+            android.util.Log.d(TAG, "✅ Exact repeating alarm scheduled successfully")
             android.util.Log.d(TAG, "  Interval: $intervalMinutes minutes")
             android.util.Log.d(TAG, "  Target screen: $targetScreen")
             android.util.Log.d(TAG, "  First run: ~5 seconds from now")
-            android.util.Log.d(TAG, "  Subsequent runs: Every $intervalMinutes minutes")
+            android.util.Log.d(TAG, "  Subsequent runs: Every $intervalMinutes minutes (exact, via self-rescheduling)")
             
             return if (hasBatteryWarning) {
                 SchedulingResult.BatteryOptimizationWarning(
@@ -550,7 +649,7 @@ class WorkScheduler @Inject constructor(
                 SchedulingResult.Success
             }
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "❌ Failed to set repeating alarm: ${e.message}", e)
+            android.util.Log.e(TAG, "❌ Failed to set exact repeating alarm: ${e.message}", e)
             return SchedulingResult.Error("Failed to schedule alarm: ${e.message}")
         }
     }
@@ -593,11 +692,68 @@ class WorkScheduler @Inject constructor(
     }
     
     /**
-     * Cancels all scheduled wallpaper change work.
+     * Cancels all scheduled wallpaper change work AND alarms.
+     * 
+     * CRITICAL FIX: Must cancel BOTH WorkManager work AND AlarmManager alarms.
+     * Previously only WorkManager work was cancelled, leaving AlarmManager alarms
+     * active which caused multiple triggers and irregular timing.
      */
     fun cancelWallpaperChange() {
+        // Cancel all WorkManager work related to wallpaper changes
         workManager.cancelUniqueWork(WallpaperChangeWorker.WORK_NAME)
+        workManager.cancelUniqueWork(WallpaperAlarmReceiver.ALARM_TRIGGERED_WORK_NAME)
+        workManager.cancelUniqueWork(WallpaperChangeWorker.RETRY_WORK_NAME)
+        
+        // Cancel AlarmManager alarms (daily and repeating)
+        cancelAllAlarms()
+        
+        // Stop foreground service
         stopWallpaperMonitorService()
+        
+        android.util.Log.d(TAG, "✅ Cancelled all wallpaper change mechanisms (WorkManager + AlarmManager + Service)")
+    }
+    
+    /**
+     * Cancels all AlarmManager alarms for wallpaper changes.
+     * 
+     * This cancels both:
+     * - Daily alarms (ALARM_REQUEST_CODE_DAILY)
+     * - Repeating alarms (ALARM_REQUEST_CODE_REPEATING) for 15-min and hourly
+     */
+    private fun cancelAllAlarms() {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+        if (alarmManager == null) {
+            android.util.Log.w(TAG, "AlarmManager not available - cannot cancel alarms")
+            return
+        }
+        
+        // Cancel daily alarm
+        val dailyIntent = Intent(context, WallpaperAlarmReceiver::class.java)
+        val dailyPendingIntent = PendingIntent.getBroadcast(
+            context,
+            ALARM_REQUEST_CODE_DAILY,
+            dailyIntent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        )
+        if (dailyPendingIntent != null) {
+            alarmManager.cancel(dailyPendingIntent)
+            dailyPendingIntent.cancel()
+            android.util.Log.d(TAG, "Cancelled daily alarm")
+        }
+        
+        // Cancel repeating alarm (15-min or hourly)
+        val repeatingIntent = Intent(context, WallpaperAlarmReceiver::class.java)
+        val repeatingPendingIntent = PendingIntent.getBroadcast(
+            context,
+            ALARM_REQUEST_CODE_REPEATING,
+            repeatingIntent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        )
+        if (repeatingPendingIntent != null) {
+            alarmManager.cancel(repeatingPendingIntent)
+            repeatingPendingIntent.cancel()
+            android.util.Log.d(TAG, "Cancelled repeating alarm")
+        }
     }
     
     /**

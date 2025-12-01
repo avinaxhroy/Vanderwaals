@@ -12,6 +12,8 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -47,6 +49,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.skydoves.landscapist.glide.GlideImage
 import com.skydoves.landscapist.ImageOptions
 import androidx.compose.ui.layout.ContentScale
+import me.avinas.vanderwaals.ui.theme.components.TintedGlassCard
 
 /**
  * Analytics Screen - Beautiful conversational dashboard
@@ -62,6 +65,11 @@ fun AnalyticsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
+    
+    // Track scroll state for dynamic TopAppBar background
+    val isScrolled by remember {
+        derivedStateOf { scrollState.value > 0 }
+    }
 
     // Handle system back button
     androidx.activity.compose.BackHandler {
@@ -73,32 +81,46 @@ fun AnalyticsScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color.Transparent, // Transparent to show blobs
         topBar = {
-            TopAppBar(
-                title = { 
-                    Text(
-                        "Personalization Insights",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isSystemInDarkTheme()) Color.White else Color(0xFF111827)
+            Box {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = isScrolled,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    me.avinas.vanderwaals.ui.theme.components.GlassTopAppBarBackground(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(96.dp + WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding())
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = if (isSystemInDarkTheme()) Color.Gray else Color.Gray
+                }
+
+                TopAppBar(
+                    title = { 
+                        Text(
+                            "Personalization Insights",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSystemInDarkTheme()) Color.White else Color(0xFF111827)
                         )
-                    }
-                },
-                windowInsets = WindowInsets(0, 0, 0, 0),
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                ),
-                modifier = Modifier
-                    .statusBarsPadding()
-                    .padding(vertical = 16.dp)
-            )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = if (isSystemInDarkTheme()) Color.Gray else Color.Gray
+                            )
+                        }
+                    },
+                    windowInsets = WindowInsets(0, 0, 0, 0),
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent
+                    ),
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(vertical = 16.dp)
+                )
+            }
         }
     ) { paddingValues ->
         Box(
@@ -240,7 +262,11 @@ private fun AnalyticsContent(
 
         // History Stats
         if (state.totalWallpapersViewed > 0) {
-            HistoryStatsCard(state)
+            HistoryStatsCard(
+                totalViewed = state.totalWallpapersViewed,
+                avgDuration = state.averageWallpaperDuration,
+                favoriteCategory = state.mostLikedCategory
+            )
         }
 
         // Advanced Metrics (for power users)
@@ -281,12 +307,13 @@ private fun PersonalizationStatusCard(state: AnalyticsState) {
         }
     }
 
-    VibrantCard(
-        colors = listOf(Color(0xFF2196F3), Color(0xFF9C27B0)) // Blue to Purple
+    TintedGlassCard(
+        tintColor = Color(0xFF2196F3), // Blue tint
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
-                .padding(20.dp)
+                .padding(8.dp)
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -297,28 +324,66 @@ private fun PersonalizationStatusCard(state: AnalyticsState) {
                     style = MaterialTheme.typography.labelMedium,
                     color = Color.White.copy(alpha = 0.7f)
                 )
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = statusTitle,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                // Level pill
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.White.copy(alpha = 0.2f))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "Level $qualityLevel",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
             }
             
-            // Visual Level Indicator
+            // Visual Level Indicator with Koala
             Box(contentAlignment = Alignment.Center) {
+                // Outer glow
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(Color(0xFF2196F3).copy(alpha = 0.4f), Color.Transparent)
+                            )
+                        )
+                )
+                
                 CircularScoreIndicator(
                     score = qualityLevel / 5f,
-                    size = 64.dp,
+                    size = 90.dp,
                     strokeWidth = 6.dp,
                     color = Color.White,
-                    showPercentage = false  // Don't show percentage here, we'll show level instead
+                    showPercentage = false
                 )
-                Text(
-                    text = "Lvl $qualityLevel",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
+                
+                // Dynamic Koala Icon
+                val koalaIcon = when {
+                    !state.isPersonalizationWorking -> "Koala_Confused.png"
+                    qualityLevel <= 2 -> "Koala_Smile.png"
+                    qualityLevel <= 4 -> "Koala_Cool.png"
+                    else -> "Koala_Excited.png"
+                }
+                
+                KoalaIcon(
+                    name = koalaIcon,
+                    modifier = Modifier
+                        .size(64.dp) // Slightly larger to fill better
+                        .clip(CircleShape) // Clip to circle to hide straight bottom
+                        .offset(y = 2.dp),
+                    contentScale = ContentScale.Crop // Crop to fill the circle
                 )
             }
         }
@@ -418,25 +483,27 @@ private fun InsightCard(insight: SmartInsight) {
         InsightType.WARNING -> Icons.Default.Warning
     }
 
-    VibrantCard(
-        colors = listOf(Color(0xFF8E24AA), Color(0xFFD81B60)) // Violet to Pink
+    TintedGlassCard(
+        tintColor = backgroundColor.copy(alpha = 0.5f), // Use insight color as tint
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .background(Color.White.copy(alpha = 0.2f), CircleShape),
+                    .size(48.dp)
+                    .background(iconColor.copy(alpha = 0.2f), CircleShape)
+                    .border(1.dp, iconColor.copy(alpha = 0.3f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = iconColor,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -455,7 +522,7 @@ private fun InsightCard(insight: SmartInsight) {
                 Text(
                     text = insight.description,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.9f),
+                    color = Color.White.copy(alpha = 0.8f),
                     lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.3f
                 )
             }
@@ -465,56 +532,80 @@ private fun InsightCard(insight: SmartInsight) {
 
 @Composable
 private fun LearningProgressCard(state: AnalyticsState) {
-    VibrantCard(
-        colors = listOf(Color(0xFF009688), Color(0xFF4CAF50)) // Teal to Green
+    TintedGlassCard(
+        tintColor = Color(0xFF009688), // Teal tint
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                text = "Preference Mix",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-
-            // Visual Split Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(24.dp)
-                    .clip(RoundedCornerShape(12.dp))
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(0.4f)
-                        .fillMaxHeight()
-                        .background(Color.White.copy(alpha = 0.3f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("40%", style = MaterialTheme.typography.labelSmall, color = Color.White)
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(0.6f)
-                        .fillMaxHeight()
-                        .background(Color.White.copy(alpha = 0.8f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("60%", style = MaterialTheme.typography.labelSmall, color = Color(0xFF009688))
-                }
-            }
-            
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Original Style", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
-                Text("Learned Style", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
+                Text(
+                    text = if (state.hasOriginalEmbedding) "Preference Mix" else "Learning Progress",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                KoalaIcon(name = "Koala_Note.png", modifier = Modifier.size(40.dp))
             }
 
-            HorizontalDivider(color = Color.White.copy(alpha = 0.2f))
+            // Only show the "Original Style vs Learned Style" split bar when user has an original embedding
+            // This is only true in Personalize Mode (user uploaded an image or selected categories)
+            // In Auto Mode, there's no "original style" - only learned preferences from feedback
+            if (state.hasOriginalEmbedding) {
+                // Visual Split Bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(24.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(0.4f)
+                            .fillMaxHeight()
+                            .background(Color.White.copy(alpha = 0.3f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("40%", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(0.6f)
+                            .fillMaxHeight()
+                            .background(Color.White.copy(alpha = 0.8f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("60%", style = MaterialTheme.typography.labelSmall, color = Color(0xFF009688))
+                    }
+                }
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Original Style", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
+                    Text("Learned Style", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
+                }
+                
+                HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+            } else {
+                // Auto Mode - show a different message explaining learning
+                Text(
+                    text = "Learning from your feedback to understand your taste. " +
+                           "The more you like/dislike, the better recommendations become!",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.8f),
+                    lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.3f
+                )
+                
+                HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+            }
 
             // Exploration Icon Row
             Row(
@@ -523,7 +614,14 @@ private fun LearningProgressCard(state: AnalyticsState) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Default.Explore, null, tint = Color.White)
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(Color.White.copy(alpha = 0.1f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Explore, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    }
                     Text("Exploration Rate", style = MaterialTheme.typography.bodyMedium, color = Color.White)
                 }
                 Text(
@@ -586,8 +684,9 @@ private fun AnchorExplanation(
 
 @Composable
 private fun FeedbackStatsCard(state: AnalyticsState) {
-    VibrantCard(
-        colors = listOf(Color(0xFFFF9800), Color(0xFFFF5722)) // Orange to Deep Orange
+    TintedGlassCard(
+        tintColor = Color(0xFFFF9800), // Orange tint
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -735,8 +834,9 @@ private fun FeedbackStatsCard(state: AnalyticsState) {
 
 @Composable
 private fun RecommendationImpactCard(state: AnalyticsState) {
-    VibrantCard(
-        colors = listOf(Color(0xFF673AB7), Color(0xFF3F51B5)) // Deep Purple to Indigo
+    TintedGlassCard(
+        tintColor = Color(0xFF673AB7), // Deep Purple tint
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -826,8 +926,9 @@ private fun RecommendationImpactCard(state: AnalyticsState) {
 
 @Composable
 private fun CategoryBreakdownCard(state: AnalyticsState) {
-    VibrantCard(
-        colors = listOf(Color(0xFF3F51B5), Color(0xFF2196F3)) // Indigo to Blue
+    TintedGlassCard(
+        tintColor = Color(0xFF3F51B5), // Indigo tint
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -954,9 +1055,14 @@ private fun CategoryPreferenceRow(category: CategoryInsight) {
 }
 
 @Composable
-private fun HistoryStatsCard(state: AnalyticsState) {
-    VibrantCard(
-        colors = listOf(Color(0xFF607D8B), Color(0xFF455A64)) // Blue Grey
+private fun HistoryStatsCard(
+    totalViewed: Int,
+    avgDuration: Long,
+    favoriteCategory: String?
+) {
+    TintedGlassCard(
+        tintColor = Color(0xFF607D8B), // Blue Grey tint
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -966,7 +1072,7 @@ private fun HistoryStatsCard(state: AnalyticsState) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("🕰️", style = MaterialTheme.typography.titleLarge)
+                KoalaIcon(name = "Koala_Read.png", modifier = Modifier.size(32.dp))
                 Text(
                     text = "Viewing History",
                     style = MaterialTheme.typography.titleMedium,
@@ -980,31 +1086,25 @@ private fun HistoryStatsCard(state: AnalyticsState) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 StatColumn(
-                    value = state.totalWallpapersViewed.toString(),
-                    label = "Wallpapers\nViewed"
+                    label = "Total Viewed",
+                    value = totalViewed.toString()
                 )
                 
                 // Format duration nicely
-                val durationText = if (state.averageWallpaperDuration < 60) {
-                    "${state.averageWallpaperDuration}s"
+                val durationText = if (avgDuration < 60) {
+                    "${avgDuration}s"
                 } else {
-                    "${state.averageWallpaperDuration / 60}m"
+                    "${avgDuration / 60}m"
                 }
                 
                 StatColumn(
-                    value = durationText,
-                    label = "Avg. View\nTime"
+                    label = "Avg. Time",
+                    value = durationText
                 )
                 
-                val activityIcon = when (state.activityTrend) {
-                    ActivityTrend.INCREASING -> "📈"
-                    ActivityTrend.STABLE -> "➡️"
-                    ActivityTrend.DECREASING -> "📉"
-                }
-                
                 StatColumn(
-                    value = activityIcon,
-                    label = "Activity\nTrend"
+                    label = "Favorite",
+                    value = favoriteCategory?.replaceFirstChar { it.uppercase() } ?: "None yet"
                 )
             }
         }
@@ -1013,8 +1113,9 @@ private fun HistoryStatsCard(state: AnalyticsState) {
 
 @Composable
 private fun AdvancedMetricsCard(state: AnalyticsState) {
-    VibrantCard(
-        colors = listOf(Color(0xFF795548), Color(0xFF5D4037)) // Brown
+    TintedGlassCard(
+        tintColor = Color(0xFF795548), // Brown tint
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -1105,33 +1206,7 @@ private fun AdvancedMetricRow(
 
 // ========== Helper Composables ==========
 
-@Composable
-private fun VibrantCard(
-    modifier: Modifier = Modifier,
-    colors: List<Color>,
-    content: @Composable () -> Unit
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = colors,
-                        start = androidx.compose.ui.geometry.Offset.Zero,
-                        end = androidx.compose.ui.geometry.Offset.Infinite
-                    )
-                )
-        ) {
-            content()
-        }
-    }
-}
+
 
 @Composable
 private fun StatBox(
@@ -1210,11 +1285,22 @@ private fun CircularScoreIndicator(
     isPercentage: Boolean = false
 ) {
     Box(contentAlignment = Alignment.Center) {
+        // Glow effect
+        Box(
+            modifier = Modifier
+                .size(size)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(color.copy(alpha = 0.3f), Color.Transparent)
+                    )
+                )
+        )
+
         // Background circle to ensure visibility
         Box(
             modifier = Modifier
                 .size(size)
-                .border(strokeWidth, color.copy(alpha = 0.2f), CircleShape)
+                .border(strokeWidth, color.copy(alpha = 0.1f), CircleShape)
         )
         
         // Normalize score to 0-1 range
@@ -1313,3 +1399,16 @@ private fun formatDuration(seconds: Long): String {
 
 // Helper data class for tuple
 private data class Tuple4<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+
+@Composable
+private fun KoalaIcon(
+    name: String,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Fit
+) {
+    GlideImage(
+        imageModel = { "file:///android_asset/koala/$name" },
+        modifier = modifier,
+        imageOptions = ImageOptions(contentScale = contentScale)
+    )
+}

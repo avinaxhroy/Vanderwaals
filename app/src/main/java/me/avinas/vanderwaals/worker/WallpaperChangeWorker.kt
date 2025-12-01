@@ -23,6 +23,7 @@ import me.avinas.vanderwaals.data.entity.UserPreferences
 import me.avinas.vanderwaals.data.repository.PreferenceRepository
 import me.avinas.vanderwaals.data.repository.WallpaperRepository
 import me.avinas.vanderwaals.domain.usecase.SelectNextWallpaperUseCase
+import me.avinas.vanderwaals.network.NetworkStateTracker
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -65,7 +66,8 @@ class WallpaperChangeWorker @AssistedInject constructor(
     private val preferenceRepository: PreferenceRepository,
     private val engagementTracker: me.avinas.vanderwaals.domain.usecase.UserEngagementTracker,
     private val processImplicitFeedbackUseCase: me.avinas.vanderwaals.domain.usecase.ProcessImplicitFeedbackUseCase,
-    private val findCachedWallpaperUseCase: me.avinas.vanderwaals.domain.usecase.FindCachedWallpaperUseCase
+    private val findCachedWallpaperUseCase: me.avinas.vanderwaals.domain.usecase.FindCachedWallpaperUseCase,
+    private val networkStateTracker: NetworkStateTracker
 ) : CoroutineWorker(appContext, workerParams) {
     
     companion object {
@@ -110,6 +112,12 @@ class WallpaperChangeWorker @AssistedInject constructor(
          * Used to determine if implicit feedback should be processed.
          */
         const val KEY_IS_MANUAL_CHANGE = "is_manual_change"
+        
+        /**
+         * Key for indicating if this is a network retry after connectivity was restored.
+         * When true, the worker should prioritize downloading fresh wallpapers over using cache.
+         */
+        const val KEY_IS_NETWORK_RETRY = "is_network_retry"
         
         /**
          * Unique work name for retry when network becomes available.
@@ -265,10 +273,15 @@ class WallpaperChangeWorker @AssistedInject constructor(
         var downloadResult = wallpaperRepository.downloadWallpaper(wallpaper)
         var wallpaperFile: File? = null
         var selectedWallpaper = wallpaper
+        var usedCachedFallback = false
         
         if (downloadResult.isFailure) {
             val downloadError = downloadResult.exceptionOrNull()
             Log.w(TAG, "Failed to download wallpaper ${wallpaper.id}: ${downloadError?.message}")
+            
+            // CRITICAL: Mark that we're in offline mode so NetworkStateTracker knows
+            // to trigger fresh downloads when connectivity is restored
+            networkStateTracker.markAsOfflineMode()
             
             // OFFLINE FALLBACK: Try to find a different wallpaper that's already cached on disk
             Log.d(TAG, "Attempting offline fallback - searching for cached wallpapers...")
@@ -280,6 +293,7 @@ class WallpaperChangeWorker @AssistedInject constructor(
                 Log.d(TAG, "Offline fallback successful - using cached wallpaper: ${cachedWallpaper.id}")
                 selectedWallpaper = cachedWallpaper
                 wallpaperFile = cachedFile
+                usedCachedFallback = true
                 
                 // Schedule a retry when internet becomes available to download new wallpapers
                 // This ensures we refresh the cache when connectivity is restored
@@ -294,6 +308,11 @@ class WallpaperChangeWorker @AssistedInject constructor(
             }
         } else {
             wallpaperFile = downloadResult.getOrNull()!!
+            // CRITICAL: Mark successful download so we know cache is fresh
+            networkStateTracker.markSuccessfulDownload()
+            
+            // Cancel any pending retry work since we successfully downloaded
+            cancelPendingRetryWork()
         }
         
         // Step 3.5: Process implicit feedback for previous wallpaper (ONLY if manual change)
@@ -423,7 +442,6 @@ class WallpaperChangeWorker @AssistedInject constructor(
         val homeWallpaper = homeWallpaperResult.getOrNull()!!
         
         // Step 2: Select second (different) wallpaper for lock screen
-        // Step 2: Select second (different) wallpaper for lock screen
         val lockWallpaperResult = selectNextWallpaperUseCase(excludeWallpaperId = homeWallpaper.id)
         if (lockWallpaperResult.isFailure) {
             val error = lockWallpaperResult.exceptionOrNull()
@@ -438,10 +456,15 @@ class WallpaperChangeWorker @AssistedInject constructor(
         // Step 3: Download home wallpaper (with offline fallback)
         var actualHomeWallpaper = homeWallpaper
         var homeWallpaperFile: File
+        var usedCachedFallback = false
         
         val homeDownloadResult = wallpaperRepository.downloadWallpaper(homeWallpaper)
         if (homeDownloadResult.isFailure) {
             Log.w(TAG, "Failed to download home wallpaper: ${homeDownloadResult.exceptionOrNull()?.message}")
+            
+            // CRITICAL: Mark offline mode for network state tracking
+            networkStateTracker.markAsOfflineMode()
+            usedCachedFallback = true
             
             // OFFLINE FALLBACK for home wallpaper
             val cachedHomeResult = findCachedWallpaperUseCase(excludeWallpaperId = homeWallpaper.id)
@@ -473,6 +496,12 @@ class WallpaperChangeWorker @AssistedInject constructor(
             if (lockDownloadResult.isFailure) {
                 Log.w(TAG, "Failed to download lock wallpaper: ${lockDownloadResult.exceptionOrNull()?.message}")
                 
+                // Mark offline mode if not already
+                if (!usedCachedFallback) {
+                    networkStateTracker.markAsOfflineMode()
+                    usedCachedFallback = true
+                }
+                
                 // OFFLINE FALLBACK for lock wallpaper
                 val cachedLockResult = findCachedWallpaperUseCase(excludeWallpaperId = actualHomeWallpaper.id)
                 if (cachedLockResult != null) {
@@ -491,6 +520,12 @@ class WallpaperChangeWorker @AssistedInject constructor(
             }
         } else {
             lockWallpaperFile = homeWallpaperFile
+        }
+        
+        // Mark successful download if no cache fallback was used
+        if (!usedCachedFallback) {
+            networkStateTracker.markSuccessfulDownload()
+            cancelPendingRetryWork()
         }
         
         // Step 5: Apply wallpaper to home screen
@@ -753,13 +788,14 @@ class WallpaperChangeWorker @AssistedInject constructor(
             val inputData = workDataOf(
                 KEY_TARGET_SCREEN to targetScreen,
                 KEY_MODE to MODE_VANDERWAALS,
-                KEY_IS_MANUAL_CHANGE to false
+                KEY_IS_MANUAL_CHANGE to false,
+                KEY_IS_NETWORK_RETRY to true // Mark this as a network retry
             )
             
             val retryWork = OneTimeWorkRequestBuilder<WallpaperChangeWorker>()
                 .setConstraints(constraints)
                 .setInputData(inputData)
-                .setInitialDelay(5, TimeUnit.MINUTES) // Delay to avoid rapid retries
+                .setInitialDelay(1, TimeUnit.MINUTES) // Reduced delay - network is already available
                 .build()
             
             WorkManager.getInstance(applicationContext).enqueueUniqueWork(
@@ -768,10 +804,25 @@ class WallpaperChangeWorker @AssistedInject constructor(
                 retryWork
             )
             
-            Log.d(TAG, "Scheduled retry work for when network becomes available (with 5 min delay)")
+            Log.d(TAG, "Scheduled retry work for when network becomes available (with 1 min delay)")
             
         } catch (e: Exception) {
             Log.e(TAG, "Failed to schedule retry work", e)
+        }
+    }
+    
+    /**
+     * Cancels any pending retry work when a fresh download succeeds.
+     * 
+     * This prevents the retry work from running unnecessarily after
+     * we've already downloaded fresh wallpapers successfully.
+     */
+    private fun cancelPendingRetryWork() {
+        try {
+            WorkManager.getInstance(applicationContext).cancelUniqueWork(RETRY_WORK_NAME)
+            Log.d(TAG, "Cancelled pending retry work - fresh download succeeded")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to cancel retry work", e)
         }
     }
 }

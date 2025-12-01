@@ -108,12 +108,16 @@ class SettingsViewModel @Inject constructor(
         _toastMessage.value = null
     }
     
+    // Flag to track if user went to permission settings
+    private var _waitingForAlarmPermission = false
+    
     /**
      * Opens alarm permission settings.
      */
     fun openAlarmPermissionSettings() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             try {
+                _waitingForAlarmPermission = true
                 val intent = android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
                     data = android.net.Uri.parse("package:${context.packageName}")
                     addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -121,16 +125,46 @@ class SettingsViewModel @Inject constructor(
                 context.startActivity(intent)
             } catch (e: Exception) {
                 android.util.Log.e("SettingsViewModel", "Failed to open alarm permission settings", e)
+                _waitingForAlarmPermission = false
             }
         }
         _needsAlarmPermission.value = false
     }
     
     /**
+     * Called when the app resumes (user returns from permission settings).
+     * Re-checks permission and schedules appropriately.
+     */
+    fun onResume() {
+        if (_waitingForAlarmPermission && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            _waitingForAlarmPermission = false
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? android.app.AlarmManager
+            if (alarmManager != null && alarmManager.canScheduleExactAlarms()) {
+                _toastMessage.value = "Alarm permission granted! Wallpapers will change on time."
+                viewModelScope.launch {
+                    updateWorkSchedule()
+                }
+            } else {
+                _toastMessage.value = "Permission not granted. Wallpaper timing may be inexact."
+                viewModelScope.launch {
+                    updateWorkSchedule()
+                }
+            }
+        }
+    }
+    
+    /**
      * Dismisses the alarm permission dialog.
+     * WARNING: This will proceed with inexact scheduling!
      */
     fun dismissAlarmPermissionDialog() {
         _needsAlarmPermission.value = false
+        // Warn the user that timing will be inexact
+        _toastMessage.value = "Wallpaper timing may be inexact without alarm permission"
+        // Still schedule, but with inexact timing (WorkManager fallback)
+        viewModelScope.launch {
+            updateWorkSchedule()
+        }
     }
 
     /**

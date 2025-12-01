@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
@@ -272,97 +273,29 @@ fun MainScreen(
         ) {
             Box(
                 modifier = Modifier
-                    .width(240.dp)
-                    .height(70.dp)
+                    .width(260.dp)
+                    .height(80.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .offset(y = 8.dp)
-                        .background(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    Color(0xFF9333EA).copy(alpha = 0.35f),
-                                    Color.Transparent
-                                ),
-                                radius = 300f
-                            ),
-                            shape = RoundedCornerShape(44.dp)
-                        )
-                        .blur(16.dp)
-                )
+                // Outer Glow removed as per UI polish request
                 
-                Card(
+                // Glass Logo Container
+                me.avinas.vanderwaals.ui.theme.components.GlassCard(
                     modifier = Modifier.matchParentSize(),
                     shape = RoundedCornerShape(44.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color.Transparent
-                    ),
-                    border = BorderStroke(
-                        width = 2.5.dp,
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                Color(0xFFFBBF24).copy(alpha = 0.7f),
-                                Color(0xFFE879F9).copy(alpha = 0.8f),
-                                Color.White.copy(alpha = 0.6f),
-                                Color(0xFFA78BFA).copy(alpha = 0.8f),
-                                Color(0xFF60A5FA).copy(alpha = 0.7f)
-                            )
-                        )
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    contentPadding = PaddingValues(0.dp)
                 ) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                brush = Brush.horizontalGradient(
-                                    colors = listOf(
-                                        Color(0xFF8B5CF6),
-                                        Color(0xFFD946EF),
-                                        Color(0xFFEC4899),
-                                        Color(0xFFF43F5E)
-                                    )
-                                )
-                            ),
+                        modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    brush = Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.White.copy(alpha = 0.25f),
-                                            Color.Transparent,
-                                            Color.Black.copy(alpha = 0.08f)
-                                        )
-                                    )
-                                )
-                        )
-                        
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    brush = Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color.Transparent,
-                                            Color.White.copy(alpha = 0.15f),
-                                            Color.Transparent
-                                        )
-                                    )
-                                )
-                        )
-                        
                         Image(
                             painter = painterResource(id = R.drawable.vanderwaals_logo),
                             contentDescription = "Vanderwaals",
                             modifier = Modifier
-                                .fillMaxWidth(0.88f)
-                                .padding(horizontal = 20.dp, vertical = 14.dp),
+                                .fillMaxWidth(0.85f)
+                                .padding(horizontal = 24.dp, vertical = 16.dp),
                             contentScale = ContentScale.Fit,
-                            alpha = 1.0f
+                            alpha = 0.95f
                         )
                     }
                 }
@@ -386,11 +319,7 @@ fun MainScreen(
                 modifier = Modifier
                     .fillMaxWidth()
             ) {
-                // Dynamic Background Blobs behind the GlassSheet
-                me.avinas.vanderwaals.ui.theme.components.BackgroundBlobs(
-                    modifier = Modifier.matchParentSize(),
-                    isDark = isDark
-                )
+                // Dynamic Background Blobs removed as per UI polish request
 
                 // Glassmorphism Bottom Sheet
                 GlassSheet(
@@ -403,69 +332,45 @@ fun MainScreen(
                         verticalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
                         // Primary Action: Change Now (Premium Gradient)
-                        Button(
-                            onClick = { 
+                        // Primary Action: Change Now (Premium Gradient)
+                        me.avinas.vanderwaals.ui.theme.components.GradientButton(
+                            text = "Change Wallpaper",
+                            onClick = {
                                 haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                viewModel.changeNow() 
+                                viewModel.changeNow()
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(68.dp)
-                                .shadow(
-                                    elevation = 16.dp,
-                                    shape = RoundedCornerShape(24.dp),
-                                    ambientColor = Color(0xFF7C3AED).copy(alpha = 0.5f),
-                                    spotColor = Color(0xFF7C3AED).copy(alpha = 0.5f)
-                                ),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.Transparent,
-                                disabledContainerColor = Color.Gray.copy(alpha = 0.3f)
+                                .height(64.dp),
+                            enabled = !isLoading,
+                            gradient = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFF8B5CF6), // Violet
+                                    Color(0xFFD946EF)  // Fuchsia
+                                )
                             ),
-                            contentPadding = PaddingValues(0.dp),
                             shape = RoundedCornerShape(24.dp),
-                            enabled = !isLoading
-                        ) {
-                            // Gradient Container
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        brush = Brush.horizontalGradient(
-                                            colors = listOf(
-                                                Color(0xFF8B5CF6), // Violet
-                                                Color(0xFFD946EF)  // Fuchsia
-                                            )
-                                        )
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
+                            textStyle = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
+                            ),
+                            icon = {
                                 if (isLoading) {
                                     CircularProgressIndicator(
-                                        modifier = Modifier.size(28.dp),
+                                        modifier = Modifier.size(24.dp),
                                         color = Color.White,
                                         strokeWidth = 3.dp
                                     )
                                 } else {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.AutoAwesome,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(26.dp),
-                                            tint = Color.White
-                                        )
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Text(
-                                            text = "Change Wallpaper",
-                                            style = MaterialTheme.typography.titleLarge.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                letterSpacing = 0.5.sp
-                                            ),
-                                            color = Color.White
-                                        )
-                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.AutoAwesome,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp),
+                                        tint = Color.White
+                                    )
                                 }
                             }
-                        }
+                        )
 
                         // Secondary Actions: History & Settings
                         Row(
@@ -591,6 +496,27 @@ fun MainScreen(
                                         imageVector = Icons.Default.ThumbDown,
                                         contentDescription = "Dislike",
                                         tint = Color(0xFF60A5FA),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                
+                                Spacer(modifier = Modifier.width(8.dp))
+                                
+                                // Download button - Strongest learning signal
+                                IconButton(
+                                    onClick = { 
+                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                        viewModel.downloadCurrentWallpaper(
+                                            onSuccess = { scope.launch { snackbarHostState.showSnackbar("Saved to gallery") } },
+                                            onError = { error -> scope.launch { snackbarHostState.showSnackbar(error) } }
+                                        )
+                                    },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = "Download to gallery",
+                                        tint = Color(0xFF22C55E), // Green for save/download
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }

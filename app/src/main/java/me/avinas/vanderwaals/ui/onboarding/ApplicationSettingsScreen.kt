@@ -36,11 +36,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.avinas.vanderwaals.ui.theme.animations.bounceOnAppear
 import me.avinas.vanderwaals.ui.theme.animations.pressAnimation
@@ -88,8 +91,35 @@ fun ApplicationSettingsScreen(
     val dailyTime by viewModel.dailyTime.collectAsStateWithLifecycle()
     val startState by viewModel.startState.collectAsStateWithLifecycle()
     val needsAlarmPermission by viewModel.needsAlarmPermission.collectAsStateWithLifecycle()
+    val warningMessage by viewModel.warningMessage.collectAsStateWithLifecycle()
     
     var showTimePicker by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    // Lifecycle observer to detect when user returns from permission settings
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.onResume()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+    
+    // Show warning messages as Snackbar
+    LaunchedEffect(warningMessage) {
+        warningMessage?.let {
+            snackbarHostState.showSnackbar(
+                message = it,
+                duration = SnackbarDuration.Short
+            )
+            viewModel.clearWarningMessage()
+        }
+    }
     
     // Navigate when start succeeds
     LaunchedEffect(startState) {
@@ -100,6 +130,12 @@ fun ApplicationSettingsScreen(
     
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { 
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 100.dp)
+            ) 
+        },
 
         bottomBar = {
             GlassSheet(
