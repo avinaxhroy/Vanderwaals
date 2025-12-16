@@ -385,7 +385,7 @@ class WallpaperRepositoryImpl @Inject constructor(
     }
 
     override fun getCroppedWallpaperFile(wallpaper: WallpaperMetadata): File {
-        return File(wallpaperCacheDir, "${wallpaper.id}_cropped.jpg")
+        return File(wallpaperCacheDir, "${wallpaper.id}_cropped.png")
     }
     
     companion object {

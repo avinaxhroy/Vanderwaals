@@ -615,10 +615,11 @@ class WallpaperChangeWorker @AssistedInject constructor(
             
             // CRITICAL FIX: Save the cropped bitmap to a file so preview can load the EXACT same image
             // This guarantees preview and applied wallpaper are pixel-perfect identical
-            val croppedFile = File(wallpaperFile.parentFile, "${wallpaperFile.nameWithoutExtension}_cropped.jpg")
+            // Using PNG format for lossless quality preservation (no JPEG compression artifacts)
+            val croppedFile = File(wallpaperFile.parentFile, "${wallpaperFile.nameWithoutExtension}_cropped.png")
             try {
                 croppedFile.outputStream().use { out ->
-                    processedBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, out)
+                    processedBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
                 }
                 Log.d(TAG, "Saved cropped wallpaper to: ${croppedFile.absolutePath}")
             } catch (e: Exception) {

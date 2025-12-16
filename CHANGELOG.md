@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.8.5] - 2025-12-16
+
+### Smart Crop Quality Preservation
+- **Lossless Cropped Cache**: Cropped wallpapers are now saved as PNG instead of JPEG, eliminating compression artifacts that degraded quality.
+- **Resolution Preservation**: When source images are significantly larger than the screen (1.5x+), SmartCrop now preserves 25% more resolution for better visual quality.
+- **No More Aggressive Downscaling**: High-resolution wallpapers (2+ MB) maintain their quality instead of being aggressively compressed.
+
 ## [3.8.0] - 2025-12-16
 
 ### Samsung Optimizations

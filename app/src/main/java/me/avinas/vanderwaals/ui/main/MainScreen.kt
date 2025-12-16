@@ -166,7 +166,7 @@ fun MainScreen(
                     label = "wallpaper_transition"
                 ) { wallpaper ->
                     if (wallpaper != null) {
-                        val croppedFile = java.io.File(context.cacheDir, "wallpapers/${wallpaper.id}_cropped.jpg")
+                        val croppedFile = java.io.File(context.cacheDir, "wallpapers/${wallpaper.id}_cropped.png")
                         val imageSource = if (croppedFile.exists()) {
                             croppedFile.absolutePath
                         } else {

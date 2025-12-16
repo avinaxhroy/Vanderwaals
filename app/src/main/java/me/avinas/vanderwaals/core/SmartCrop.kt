@@ -279,7 +279,8 @@ object SmartCrop {
         source: Bitmap,
         targetWidth: Int,
         targetHeight: Int,
-        mode: CropMode = CropMode.AUTO
+        mode: CropMode = CropMode.AUTO,
+        preserveQuality: Boolean = true
     ): Bitmap {
         if (source.width == targetWidth && source.height == targetHeight) {
             return source
@@ -295,15 +296,30 @@ object SmartCrop {
             val targetAspect = targetWidth.toFloat() / targetHeight.toFloat()
             val aspectDifference = abs(sourceAspect - targetAspect)
 
+            // Quality Preservation: Calculate optimal output dimensions
+            // If source is significantly larger than target, preserve extra resolution
+            val qualityScaleFactor = when {
+                preserveQuality && 
+                source.width >= targetWidth * 1.5f && 
+                source.height >= targetHeight * 1.5f -> 1.25f
+                else -> 1.0f
+            }
+            val outputWidth = (targetWidth * qualityScaleFactor).toInt()
+            val outputHeight = (targetHeight * qualityScaleFactor).toInt()
+            
+            if (qualityScaleFactor > 1.0f) {
+                Log.d(TAG, "Quality preservation: scaling output to ${outputWidth}x${outputHeight} (${qualityScaleFactor}x)")
+            }
+
             // If aspects are very similar (< 1% difference), just scale
             if (aspectDifference < 0.01f) {
                 Log.d(TAG, "Aspect ratios are very similar, using simple scaling")
-                return scaleBitmap(source, targetWidth, targetHeight)
+                return scaleBitmap(source, outputWidth, outputHeight)
             }
 
             // Check if user explicitly requested FILL
             if (mode == CropMode.FILL) {
-                return fillBitmap(source, targetWidth, targetHeight)
+                return fillBitmap(source, outputWidth, outputHeight)
             }
 
             val sourceIsLandscape = source.width > source.height
@@ -340,7 +356,7 @@ object SmartCrop {
             // If both are similar orientation and aspect difference is small (< 15%), prefer scaling
             if (aspectDifference < 0.15f && (sourceIsLandscape == !targetIsPortrait)) {
                 Log.d(TAG, "Similar orientations with minor aspect difference, using gentle scaling")
-                return scaleBitmap(source, targetWidth, targetHeight)
+                return scaleBitmap(source, outputWidth, outputHeight)
             }
 
             // For desktop wallpapers (typically 16:9 or wider) going to phone screens (9:16),
@@ -349,10 +365,10 @@ object SmartCrop {
             
             if (!needsSmartCrop && mode == CropMode.AUTO) {
                 Log.d(TAG, "Image doesn't need smart crop, using content-preserving scale")
-                return scaleBitmap(source, targetWidth, targetHeight)
+                return scaleBitmap(source, outputWidth, outputHeight)
             }
 
-            Log.d(TAG, "Applying smart crop: source ${source.width}x${source.height} (%.2f vs %.2f)".format(sourceAspect, targetAspect) + " -> target ${targetWidth}x${targetHeight}")
+            Log.d(TAG, "Applying smart crop: source ${source.width}x${source.height} (%.2f vs %.2f)".format(sourceAspect, targetAspect) + " -> target ${outputWidth}x${outputHeight}")
 
             // Determine crop mode
             val actualMode = when (mode) {
@@ -367,14 +383,14 @@ object SmartCrop {
             val cropRegion = calculateOptimalCrop(
                 sourceWidth = source.width,
                 sourceHeight = source.height,
-                targetWidth = targetWidth,
-                targetHeight = targetHeight,
+                targetWidth = outputWidth,
+                targetHeight = outputHeight,
                 focalPoints = focalPoints,
                 horizonY = detectHorizon(source)
             )
 
             // Apply the crop
-            applyCrop(source, cropRegion, targetWidth, targetHeight)
+            applyCrop(source, cropRegion, outputWidth, outputHeight)
         } catch (e: Exception) {
             Log.e(TAG, "Error in smartCropBitmap", e)
             // Fallback to center crop
