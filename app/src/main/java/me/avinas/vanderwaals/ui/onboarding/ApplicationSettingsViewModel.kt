@@ -138,12 +138,27 @@ class ApplicationSettingsViewModel @Inject constructor(
                 Log.d("ApplicationSettings", "Catalog ready with $wallpaperCount wallpapers")
                 
                 // Download first wallpaper for immediate display (10% -> 40%)
-                Log.d("ApplicationSettings", "Downloading first wallpaper for immediate display...")
+                // PRIORITY: Use first liked wallpaper from confirmation gallery if available
+                Log.d("ApplicationSettings", "Preparing first wallpaper for immediate display...")
                 _startState.value = StartState.Starting("Preparing your first wallpaper...", 0.2f)
+                
+                val existingPrefs = preferenceRepository.getUserPreferences().first()
+                val likedIds = existingPrefs?.likedWallpaperIds ?: emptySet()
                 
                 val allWallpapers = wallpaperRepository.getAllWallpapers().first()
                 if (allWallpapers.isNotEmpty()) {
-                    val firstWallpaper = allWallpapers.random()
+                    // Try to use first liked wallpaper, fallback to random
+                    val firstWallpaper = if (likedIds.isNotEmpty()) {
+                        val firstLikedId = likedIds.first()
+                        allWallpapers.find { it.id == firstLikedId }
+                            ?: allWallpapers.random()
+                            .also { Log.w("ApplicationSettings", "Liked wallpaper $firstLikedId not found, using random") }
+                    } else {
+                        allWallpapers.random()
+                    }
+                    
+                    Log.d("ApplicationSettings", "Selected wallpaper: ${firstWallpaper.id} (liked: ${likedIds.contains(firstWallpaper.id)})")
+                    
                     val downloadResult = wallpaperRepository.downloadWallpaper(firstWallpaper)
                     if (downloadResult.isSuccess) {
                         wallpaperRepository.markAsDownloaded(firstWallpaper.id)

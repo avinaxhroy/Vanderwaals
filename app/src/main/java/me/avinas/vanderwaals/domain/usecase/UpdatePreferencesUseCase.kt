@@ -271,6 +271,19 @@ class UpdatePreferencesUseCase @Inject constructor(
                 }
             }
             
+            // SUCCESS LOG: Explicit confirmation for debugging
+            android.util.Log.i("UpdatePreferences", """
+                ✅ PREFERENCE UPDATED SUCCESSFULLY
+                ├── Wallpaper: ${wallpaper.id}
+                ├── Category: ${wallpaper.category.ifBlank { "uncategorized" }}
+                ├── Feedback: ${feedback.name}
+                ├── Learning Rate: ${String.format("%.4f", learningRate)} (base) × ${String.format("%.2f", learningRateMultiplier)} (multiplier)
+                ├── Old Feedback Count: ${currentPreferences.feedbackCount}
+                ├── New Feedback Count: ${updatedPreferences.feedbackCount}
+                ├── Vector Changed: ${!currentVector.contentEquals(updatedVector)}
+                └── Liked/Disliked Counts: ${updatedLikedIds.size}/${updatedDislikedIds.size}
+            """.trimIndent())
+            
             Result.success(Unit)
             
         } catch (e: Exception) {

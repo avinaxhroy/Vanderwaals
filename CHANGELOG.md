@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.8.0] - 2025-12-16
+
+### Samsung Optimizations
+- **Direct WakeLock Integration**: Implemented `SamsungPowerHelper` and Service-level WakeLocks to prevent `WallpaperMonitorService` from being killed by aggressive One UI power management.
+- **Enhanced Reliability**: Added specific handling for Samsung's "Sleeping Apps" and battery usage limits to ensure consistent wallpaper changes on S23+ devices.
+
+### Algorithm Improvements
+- **Fast Auto-Mode Initialization**: Auto Mode now initializes preference vectors immediately upon the *first* like or download, dramatically speeding up the "learning" phase for new users.
+- **Enhanced Composition Learning**: "Download" actions now carry 1.5x weight for learning specific composition preferences (symmetry, complexity, balance).
+
+### Onboarding & UX
+- **Instant Gratification**: The first wallpaper liked during onboarding is now immediately applied when clicking "Start Using Vanderwaals".
+- **Improved Alarm Permissions**: Added a graceful fallback to "inexact scheduling" if the user denies exact alarm permissions, ensuring the app still functions (albeit with less precision).
+- **Daily Playlist Pre-fetching**: Added logic to immediately download the initial daily playlist during onboarding for smoother first-run experience.
+
 ## [3.6.0] - 2025-12-01
 
 ### New Features

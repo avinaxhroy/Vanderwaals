@@ -105,6 +105,7 @@ Upload one favorite wallpaper and instantly get 100+ similar matches. The algori
   - Both screens simultaneously
 
 - **Smart Crop**: Intelligent image cropping using saliency detection to focus on interesting regions
+- **Samsung Optimized**: Dedicated "Keep-Alive" service with `SamsungPowerHelper` to bypass aggressive One UI battery restrictions on S23+ devices.
 
 ### 📊 History & Analytics
 
@@ -284,7 +285,11 @@ newPreference = α × newFeedback + (1 - α) × oldPreference
 
 **Learning rate** adapts based on feedback count:
 - New users: α = 0.30 (learn faster)
+
 - Experienced users: α = 0.15 (stable preferences)
+
+**Fast Initialization (Auto Mode)**:
+- **First Reaction Matters**: Unlike standard EMA which starts from zero, the *very first* like or download immediately sets the baseline preference vector, jump-starting the personalization process.
 
 **Implicit feedback** from duration:
 - < 5 minutes = Dislike (30% strength)

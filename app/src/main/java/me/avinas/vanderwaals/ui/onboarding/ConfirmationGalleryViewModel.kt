@@ -26,6 +26,10 @@ import javax.inject.Inject
  * 2. Initialize preference vector
  * 3. Store initial feedback in database
  * 
+ * **First Wallpaper Application:**
+ * First liked wallpaper is applied later in ApplicationSettingsViewModel
+ * when user clicks "Start Using Vanderwaals"
+ * 
  * **State:**
  * - displayedWallpapers: 8 diverse samples
  * - likedWallpapers: User's likes
@@ -216,6 +220,9 @@ class ConfirmationGalleryViewModel @Inject constructor(
      * 2. Calculate average embedding of likes (preferenceVector)
      * 3. Store BOTH originalEmbedding (prime reference) and preferenceVector
      * 4. Store feedback in database
+     * 
+     * NOTE: First liked wallpaper is applied later in ApplicationSettingsViewModel
+     * when user clicks "Start Using Vanderwaals"
      * 
      * @param allWallpapers All 50 similar wallpapers (for lookup)
      */

@@ -13,6 +13,7 @@ import android.content.IntentFilter
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import dagger.hilt.android.AndroidEntryPoint
@@ -23,6 +24,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import me.avinas.vanderwaals.R
+import me.avinas.vanderwaals.core.SamsungPowerHelper
 import me.avinas.vanderwaals.data.datastore.SettingsDataStore
 import me.avinas.vanderwaals.data.repository.WallpaperRepository
 import me.avinas.vanderwaals.domain.usecase.SelectNextWallpaperUseCase
@@ -41,6 +43,9 @@ import javax.inject.Inject
  * The "15min" interval uses AlarmManager (not this service).
  * 
  * OPTIMIZED: Executes wallpaper change logic directly to avoid WorkManager latency.
+ * 
+ * SAMSUNG FIX (Dec 2025): Added wakelock and Samsung-specific receiver registration
+ * to handle aggressive One UI power management on S23 and newer devices.
  * 
  * @see me.avinas.vanderwaals.worker.WorkScheduler
  */
@@ -63,6 +68,12 @@ class WallpaperMonitorService : Service() {
     lateinit var findCachedWallpaperUseCase: me.avinas.vanderwaals.domain.usecase.FindCachedWallpaperUseCase
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    
+    /**
+     * Wakelock to prevent CPU from sleeping during unlock detection.
+     * SAMSUNG FIX: Helps keep the service alive on aggressive One UI power management.
+     */
+    private var wakeLock: PowerManager.WakeLock? = null
     
     // Internal receiver for unlock events
     private val unlockReceiver = object : BroadcastReceiver() {
@@ -89,6 +100,9 @@ class WallpaperMonitorService : Service() {
         // Health check interval
         private const val HEALTH_CHECK_INTERVAL_MS = 300_000L // 5 minutes
         private const val MAX_CONSECUTIVE_FAILURES = 5
+        
+        // Wakelock timeout (10 minutes - refreshed periodically)
+        private const val WAKELOCK_TIMEOUT_MS = 10 * 60 * 1000L
     }
     
     // Service state
@@ -105,18 +119,40 @@ class WallpaperMonitorService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Service created - Lifecycle: onCreate()")
+        
+        // Log Samsung device info for debugging
+        SamsungPowerHelper.logDeviceInfo()
+        
+        // Warn if battery restricted on Samsung
+        if (SamsungPowerHelper.isBatteryRestricted(this)) {
+            Log.w(TAG, "⚠️ SAMSUNG BATTERY RESTRICTION DETECTED - unlock events may be delayed or missed!")
+            Log.w(TAG, SamsungPowerHelper.getSamsungPowerInstructions())
+        }
+        
         createNotificationChannel()
         currentState = ServiceState.IDLE
         startForeground(NOTIFICATION_ID, createNotification("Monitoring device unlock"))
         
-        // Register receiver for USER_PRESENT
-        val filter = IntentFilter(Intent.ACTION_USER_PRESENT)
-        registerReceiver(unlockReceiver, filter)
-        Log.d(TAG, "Unlock receiver registered successfully")
+        // SAMSUNG FIX: Acquire wakelock to prevent CPU sleep
+        acquireWakeLock()
+        
+        // Register receiver for USER_PRESENT with high priority for Samsung
+        val filter = IntentFilter(Intent.ACTION_USER_PRESENT).apply {
+            priority = IntentFilter.SYSTEM_HIGH_PRIORITY
+        }
+        
+        // Use appropriate registration method based on API level
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(unlockReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(unlockReceiver, filter)
+        }
+        Log.d(TAG, "Unlock receiver registered successfully (priority=${filter.priority})")
         
         // Perform initial health check
         performHealthCheck()
     }
+
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "Service started - Lifecycle: onStartCommand()")
@@ -161,8 +197,11 @@ class WallpaperMonitorService : Service() {
             serviceScope.cancel("Service destroyed")
             Log.d(TAG, "Service scope cancelled")
         } catch (e: Exception) {
-            Log.e(TAG, "Error cancelling service scope", e)
+        Log.e(TAG, "Error cancelling service scope", e)
         }
+        
+        // SAMSUNG FIX: Release wakelock
+        releaseWakeLock()
         
         // Update state
         currentState = ServiceState.IDLE
@@ -520,5 +559,43 @@ class WallpaperMonitorService : Service() {
         val notification = createNotification(status)
         val notificationManager = getSystemService(NotificationManager::class.java)
         notificationManager.notify(NOTIFICATION_ID, notification)
+    }
+    
+    /**
+     * Acquires a partial wakelock to prevent CPU from sleeping.
+     * SAMSUNG FIX: Helps keep the service alive on aggressive One UI power management.
+     * 
+     * Uses PARTIAL_WAKE_LOCK with timeout to prevent battery drain.
+     * The wakelock is refreshed on each unlock event.
+     */
+    private fun acquireWakeLock() {
+        if (wakeLock == null) {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "Vanderwaals:WallpaperMonitor"
+            )
+        }
+        
+        wakeLock?.let { wl ->
+            if (!wl.isHeld) {
+                wl.acquire(WAKELOCK_TIMEOUT_MS)
+                Log.d(TAG, "Wakelock acquired (timeout=${WAKELOCK_TIMEOUT_MS}ms)")
+            }
+        }
+    }
+    
+    /**
+     * Releases the wakelock to allow CPU to sleep.
+     * Called in onDestroy and when service is no longer needed.
+     */
+    private fun releaseWakeLock() {
+        wakeLock?.let { wl ->
+            if (wl.isHeld) {
+                wl.release()
+                Log.d(TAG, "Wakelock released")
+            }
+        }
+        wakeLock = null
     }
 }
