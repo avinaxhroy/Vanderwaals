@@ -1143,7 +1143,7 @@ def generate_manifest(wallpapers: List[Dict], use_quantization: bool = True) -> 
                 
                 # Keep original embedding for now (can be removed later for full optimization)
                 # Uncomment next line to fully remove original embedding:
-                # wp_copy.pop('embedding', None)
+                wp_copy.pop('embedding', None)
                 
                 processed_wallpapers.append(wp_copy)
             
