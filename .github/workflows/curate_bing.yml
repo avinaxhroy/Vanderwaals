@@ -1,0 +1,287 @@
+name: Curate Bing Wallpapers
+
+on:
+  # Run quarterly on Jan 1, Apr 1, Jul 1, Oct 1 at 3 AM UTC
+  schedule:
+    - cron: '0 3 1 1,4,7,10 *'
+  
+  # Allow manual trigger with options
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Test mode (process only 30 images)'
+        required: false
+        type: boolean
+        default: false
+      lite_only:
+        description: 'Generate only lite manifest (last 2 years)'
+        required: false
+        type: boolean
+        default: false
+      skip_release:
+        description: 'Skip creating GitHub release'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  curate:
+    name: Curate Bing Wallpapers
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 hour timeout for full archive
+    
+    permissions:
+      contents: write  # Required for committing and creating releases
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+      
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: 'scripts/requirements.txt'
+      
+      - name: Check disk space (before)
+        run: |
+          echo "=== Disk Space Before ==="
+          df -h
+          echo "=========================="
+      
+      - name: Install Python dependencies
+        run: |
+          cd scripts
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run Bing curation script
+        id: curate
+        run: |
+          cd scripts
+          
+          # Determine arguments
+          ARGS=""
+          if [[ "${{ github.event.inputs.test_mode }}" == "true" ]]; then
+            ARGS="$ARGS --test"
+            echo "TEST_MODE=true" >> $GITHUB_ENV
+          fi
+          
+          if [[ "${{ github.event.inputs.lite_only }}" == "true" ]]; then
+            ARGS="$ARGS --lite-only"
+          fi
+          
+          # Run curation
+          python curate_bing_wallpapers.py $ARGS
+          
+          # Set output variables for lite manifest
+          if [[ -f "curation_output/bing_manifest_lite.json" ]]; then
+            LITE_COUNT=$(jq '.total_wallpapers' curation_output/bing_manifest_lite.json)
+            echo "lite_count=$LITE_COUNT" >> $GITHUB_OUTPUT
+            
+            LITE_SIZE=$(du -h curation_output/bing_manifest_lite.json | cut -f1)
+            echo "lite_size=$LITE_SIZE" >> $GITHUB_OUTPUT
+            
+            LITE_COMPRESSED=$(du -h curation_output/bing_manifest_lite.json.gz | cut -f1)
+            echo "lite_compressed=$LITE_COMPRESSED" >> $GITHUB_OUTPUT
+          fi
+          
+          # Set output variables for full manifest
+          if [[ -f "curation_output/bing_manifest_full.json" ]]; then
+            FULL_COUNT=$(jq '.total_wallpapers' curation_output/bing_manifest_full.json)
+            echo "full_count=$FULL_COUNT" >> $GITHUB_OUTPUT
+            
+            FULL_SIZE=$(du -h curation_output/bing_manifest_full.json | cut -f1)
+            echo "full_size=$FULL_SIZE" >> $GITHUB_OUTPUT
+            
+            FULL_COMPRESSED=$(du -h curation_output/bing_manifest_full.json.gz | cut -f1)
+            echo "full_compressed=$FULL_COMPRESSED" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Check disk space (after)
+        run: |
+          echo "=== Disk Space After ==="
+          df -h
+          echo "========================"
+      
+      - name: Validate manifest structure
+        run: |
+          cd scripts/curation_output
+          
+          for manifest in bing_manifest_lite.json bing_manifest_full.json; do
+            if [[ -f "$manifest" ]]; then
+              echo "Validating $manifest..."
+              
+              # Check JSON is valid
+              jq empty "$manifest" || exit 1
+              
+              # Check required fields
+              jq -e '.version' "$manifest" > /dev/null || { echo "Missing version"; exit 1; }
+              jq -e '.last_updated' "$manifest" > /dev/null || { echo "Missing last_updated"; exit 1; }
+              jq -e '.model_version' "$manifest" > /dev/null || { echo "Missing model_version"; exit 1; }
+              jq -e '.embedding_dim' "$manifest" > /dev/null || { echo "Missing embedding_dim"; exit 1; }
+              jq -e '.wallpapers' "$manifest" > /dev/null || { echo "Missing wallpapers array"; exit 1; }
+              
+              # Validate embedding dimensions
+              EMBEDDING_DIM=$(jq '.embedding_dim' "$manifest")
+              if [[ "$EMBEDDING_DIM" != "576" ]]; then
+                echo "Invalid embedding dimension: $EMBEDDING_DIM (expected 576)"
+                exit 1
+              fi
+              
+              # Check first wallpaper has correct structure
+              FIRST_EMBEDDING_LEN=$(jq '.wallpapers[0].embedding | length' "$manifest")
+              if [[ "$FIRST_EMBEDDING_LEN" != "576" ]]; then
+                echo "First wallpaper has invalid embedding length: $FIRST_EMBEDDING_LEN"
+                exit 1
+              fi
+              
+              echo "✓ $manifest validation passed"
+            fi
+          done
+      
+      - name: Copy manifests to app assets
+        run: |
+          # Create assets directory if it doesn't exist
+          mkdir -p app/src/main/assets
+          
+          # Copy lite manifest
+          if [[ -f "scripts/curation_output/bing_manifest_lite.json" ]]; then
+            cp scripts/curation_output/bing_manifest_lite.json app/src/main/assets/
+            cp scripts/curation_output/bing_manifest_lite.json.gz app/src/main/assets/
+            echo "✓ Copied lite manifest"
+          fi
+          
+          # Copy full manifest
+          if [[ -f "scripts/curation_output/bing_manifest_full.json" ]]; then
+            cp scripts/curation_output/bing_manifest_full.json app/src/main/assets/
+            cp scripts/curation_output/bing_manifest_full.json.gz app/src/main/assets/
+            echo "✓ Copied full manifest"
+          fi
+      
+      - name: Commit updated manifests
+        id: commit
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          git add app/src/main/assets/bing_manifest*.json*
+          
+          # Check if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            # Create commit message
+            LITE_COUNT="${{ steps.curate.outputs.lite_count }}"
+            FULL_COUNT="${{ steps.curate.outputs.full_count }}"
+            
+            if [[ "${{ github.event.inputs.test_mode }}" == "true" ]]; then
+              COMMIT_MSG="chore: update Bing manifests (TEST RUN) [skip ci]"
+            else
+              COMMIT_MSG="chore: update Bing manifests (lite: ${LITE_COUNT}, full: ${FULL_COUNT}) [skip ci]"
+            fi
+            
+            git commit -m "$COMMIT_MSG"
+            git push
+            
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "✓ Committed and pushed changes"
+          fi
+      
+      - name: Upload manifest artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bing-manifest-artifacts
+          path: |
+            scripts/curation_output/bing_manifest_lite.json
+            scripts/curation_output/bing_manifest_lite.json.gz
+            scripts/curation_output/bing_manifest_full.json
+            scripts/curation_output/bing_manifest_full.json.gz
+            scripts/curation_output/bing_curation.log
+          retention-days: 30
+      
+      - name: Create GitHub Release
+        if: |
+          github.event_name == 'schedule' && 
+          steps.commit.outputs.has_changes == 'true' &&
+          github.event.inputs.skip_release != 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: bing-manifest-${{ github.run_number }}
+          name: Bing Wallpaper Manifest - ${{ github.run_number }}
+          body: |
+            ## Bing Wallpaper Curation
+            
+            **Lite Manifest (Last 2 Years):**
+            - Wallpapers: ${{ steps.curate.outputs.lite_count }}
+            - Size: ${{ steps.curate.outputs.lite_size }}
+            - Compressed: ${{ steps.curate.outputs.lite_compressed }}
+            
+            **Full Manifest (2009-Present):**
+            - Wallpapers: ${{ steps.curate.outputs.full_count }}
+            - Size: ${{ steps.curate.outputs.full_size }}
+            - Compressed: ${{ steps.curate.outputs.full_compressed }}
+            
+            ### CDN Access
+            Lite manifest (recommended):
+            ```
+            https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/app/src/main/assets/bing_manifest_lite.json.gz
+            ```
+            
+            Full manifest:
+            ```
+            https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/app/src/main/assets/bing_manifest_full.json.gz
+            ```
+            
+            ---
+            *Generated by GitHub Actions*
+          draft: false
+          prerelease: false
+
+      - name: Post summary
+        if: always()
+        run: |
+          echo "## Bing Curation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ steps.curate.outcome }}" == "success" ]]; then
+            echo "✅ **Status:** Success" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            if [[ -n "${{ steps.curate.outputs.lite_count }}" ]]; then
+              echo "### Lite Manifest (Last 2 Years)" >> $GITHUB_STEP_SUMMARY
+              echo "- 📊 **Wallpapers:** ${{ steps.curate.outputs.lite_count }}" >> $GITHUB_STEP_SUMMARY
+              echo "- 📦 **Size:** ${{ steps.curate.outputs.lite_size }}" >> $GITHUB_STEP_SUMMARY
+              echo "- 🗜️ **Compressed:** ${{ steps.curate.outputs.lite_compressed }}" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+            
+            if [[ -n "${{ steps.curate.outputs.full_count }}" ]]; then
+              echo "### Full Manifest (2009-Present)" >> $GITHUB_STEP_SUMMARY
+              echo "- 📊 **Wallpapers:** ${{ steps.curate.outputs.full_count }}" >> $GITHUB_STEP_SUMMARY
+              echo "- 📦 **Size:** ${{ steps.curate.outputs.full_size }}" >> $GITHUB_STEP_SUMMARY
+              echo "- 🗜️ **Compressed:** ${{ steps.curate.outputs.full_compressed }}" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "❌ **Status:** Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Mode" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ github.event.inputs.test_mode }}" == "true" ]]; then
+            echo "⚠️ This was a test run (30 images)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Full production run" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Bing curation pipeline failed!"
+          echo "Check the logs for details."
+          exit 1

@@ -75,10 +75,12 @@ class SyncWallpaperCatalogUseCase @Inject constructor(
                 Log.d(TAG, "Syncing GitHub manifest...")
                 onProgress?.invoke("Connecting to server...", 0.1f, 0)
                 
-                manifestRepository.syncManifest { message, progress, count ->
-                    // Pass through progress from repository
-                    onProgress?.invoke(message, progress, count)
-                }.fold(
+                manifestRepository.syncManifest(
+                    onProgress = { message, progress, count ->
+                        // Pass through progress from repository
+                        onProgress?.invoke(message, progress, count)
+                    }
+                ).fold(
                     onSuccess = { count ->
                         totalCount += count
                         Log.d(TAG, "GitHub sync successful: $count wallpapers")

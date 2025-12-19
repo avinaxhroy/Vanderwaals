@@ -67,6 +67,7 @@ class SettingsViewModel @Inject constructor(
     private val settingsDataStore: me.avinas.vanderwaals.data.datastore.SettingsDataStore,
     private val syncWallpaperCatalogUseCase: me.avinas.vanderwaals.domain.usecase.SyncWallpaperCatalogUseCase,
     private val userPreferenceDao: me.avinas.vanderwaals.data.dao.UserPreferenceDao,
+    private val bingManifestRepository: me.avinas.vanderwaals.data.repository.BingManifestRepository,
     @param:ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -92,6 +93,13 @@ class SettingsViewModel @Inject constructor(
     private val _isPlaylistDownloading = MutableStateFlow(false)
     private val _playlistDownloadProgress = MutableStateFlow(PlaylistDownloadProgress())
     
+    // Bing sync state
+    private val _isBingSyncing = MutableStateFlow(false)
+    private val _bingSyncProgress = MutableStateFlow(0f)
+    private val _bingSyncMessage = MutableStateFlow("")
+    private val _bingWallpaperCount = MutableStateFlow(0)
+    private val _bingManifestType = MutableStateFlow("lite")  // "lite" or "full"
+    
     // Public toast message flow
     val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
     
@@ -100,6 +108,13 @@ class SettingsViewModel @Inject constructor(
     
     // Public alarm permission needed flow
     val needsAlarmPermission: StateFlow<Boolean> = _needsAlarmPermission.asStateFlow()
+    
+    // Public Bing sync state flows
+    val isBingSyncing: StateFlow<Boolean> = _isBingSyncing.asStateFlow()
+    val bingSyncProgress: StateFlow<Float> = _bingSyncProgress.asStateFlow()
+    val bingSyncMessage: StateFlow<String> = _bingSyncMessage.asStateFlow()
+    val bingWallpaperCount: StateFlow<Int> = _bingWallpaperCount.asStateFlow()
+    val bingManifestType: StateFlow<String> = _bingManifestType.asStateFlow()
     
     /**
      * Clears the toast message after it's been shown.
@@ -241,8 +256,14 @@ class SettingsViewModel @Inject constructor(
                 }
                 
                 _dailyPlaylistSize.value = settings.dailyPlaylistSize
+                
+                // Load Bing manifest type
+                _bingManifestType.value = settings.bingManifestType
             }
         }
+        
+        // Load Bing wallpaper count
+        loadBingWallpaperCount()
         
         // Observe Daily Playlist Worker status (both scheduled and manual)
         viewModelScope.launch {
@@ -460,6 +481,74 @@ class SettingsViewModel @Inject constructor(
             _sourcesEnabled.value = updated
             val sourceKey = if (source.contains("GitHub")) "github" else "bing"
             settingsDataStore.toggleSource(sourceKey, enabled)
+        }
+    }
+    
+    /**
+     * Syncs Bing wallpapers with progress tracking.
+     * @param forceUpdate If true, downloads fresh manifest ignoring If-Modified-Since
+     */
+    fun syncBingWallpapers(forceUpdate: Boolean = false) {
+        viewModelScope.launch {
+            _isBingSyncing.value = true
+            _bingSyncProgress.value = 0f
+            _bingSyncMessage.value = "Starting sync..."
+            
+            bingManifestRepository.syncBingManifest(
+                manifestType = _bingManifestType.value,
+                onProgress = { message, progress, count ->
+                    _bingSyncMessage.value = message
+                    _bingSyncProgress.value = progress
+                    _bingWallpaperCount.value = count
+                },
+                forceUpdate = forceUpdate
+            ).fold(
+                onSuccess = { count ->
+                    _bingWallpaperCount.value = count
+                    _isBingSyncing.value = false
+                    _bingSyncProgress.value = 1f
+                    _bingSyncMessage.value = "Sync complete!"
+                    _toastMessage.value = "Synced $count Bing wallpapers"
+                    
+                    // Update last sync timestamp
+                    settingsDataStore.updateBingLastSyncTimestamp(System.currentTimeMillis())
+                },
+                onFailure = { error ->
+                    _isBingSyncing.value = false
+                    _bingSyncProgress.value = 0f
+                    _bingSyncMessage.value = "Sync failed"
+                    _toastMessage.value = "Bing sync failed: ${error.message}"
+                }
+            )
+        }
+    }
+    
+    /**
+     * Updates the Bing manifest type (lite vs full).
+     * If Bing is enabled and type changes, will trigger a resync.
+     */
+    fun updateBingManifestType(type: String) {
+        viewModelScope.launch {
+            val oldType = _bingManifestType.value
+            _bingManifestType.value = type
+            settingsDataStore.updateBingManifestType(type)
+            
+            // If Bing is enabled and type changed, resync
+            val bingEnabled = _sourcesEnabled.value["Bing Wallpapers"] == true
+            if (bingEnabled && oldType != type) {
+                // Clear existing Bing wallpapers before syncing new type
+                bingManifestRepository.clearBingWallpapers()
+                syncBingWallpapers(forceUpdate = true)
+            }
+        }
+    }
+    
+    /**
+     * Loads Bing wallpaper count on init.
+     */
+    private fun loadBingWallpaperCount() {
+        viewModelScope.launch {
+            _bingWallpaperCount.value = bingManifestRepository.getBingWallpaperCount()
         }
     }
     

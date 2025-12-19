@@ -131,7 +131,23 @@ class QueueNextWallpapersUseCase @Inject constructor(
                 return Result.success(0)
             }
             
-            Log.d(TAG, "Catalog has ${allWallpapers.size} total wallpapers")
+            // Step 3b: Filter by enabled sources (github/bing user settings)
+            val enabledSources = mutableListOf<String>()
+            if (settings.githubEnabled) enabledSources.add("github")
+            if (settings.bingEnabled) enabledSources.add("bing")
+            
+            val sourceFilteredWallpapers = if (enabledSources.isEmpty()) {
+                allWallpapers
+            } else {
+                allWallpapers.filter { it.source.lowercase() in enabledSources }
+            }
+            
+            if (sourceFilteredWallpapers.isEmpty()) {
+                Log.w(TAG, "No wallpapers in catalog for enabled sources: $enabledSources")
+                return Result.success(0)
+            }
+            
+            Log.d(TAG, "Catalog has ${allWallpapers.size} total, ${sourceFilteredWallpapers.size} from enabled sources: $enabledSources")
             
             // Step 4: Get already downloaded wallpapers
             val downloadedIds = wallpaperRepository.getDownloadedWallpapers()
@@ -151,7 +167,7 @@ class QueueNextWallpapersUseCase @Inject constructor(
             Log.d(TAG, "${recentIds.size} wallpapers shown recently")
             
             // Step 6: Filter candidates (not downloaded, not recent)
-            val candidates = allWallpapers.filter { wallpaper ->
+            val candidates = sourceFilteredWallpapers.filter { wallpaper ->
                 wallpaper.id !in downloadedIds && wallpaper.id !in recentIds
             }
             

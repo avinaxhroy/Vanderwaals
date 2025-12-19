@@ -72,6 +72,15 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
         
+        <!-- WallpaperChangeService - Short-lived foreground service for scheduled changes -->
+        <!-- Started by WallpaperAlarmReceiver to handle wallpaper changes when app is killed -->
+        <service
+            android:name=".service.WallpaperChangeService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        
         <!-- BootCompletedReceiver - Reschedules workers after device reboot -->
         <!-- CRITICAL: Ensures auto-change feature works after phone restart -->
         <!-- Requires RECEIVE_BOOT_COMPLETED permission -->

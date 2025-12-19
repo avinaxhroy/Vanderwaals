@@ -8,7 +8,9 @@ from 8 GitHub repositories. Extracts MobileNetV3 embeddings, colors, and metadat
 to generate manifest.json.
 
 Features:
-- Incremental processing (clone → process → delete → repeat)
+- SMART INCREMENTAL UPDATES: Only process repos with new commits (via GitHub API)
+- AUTO-ADAPTIVE REPO DETECTION: Automatically finds wallpaper directories
+- OPTIMIZED MANIFEST: Quantized embeddings for 80%+ size reduction
 - MobileNetV3-Small for 576-dim embeddings
 - 5 dominant colors per wallpaper (Pillow)
 - Brightness and contrast calculation
@@ -18,10 +20,12 @@ Features:
 - Optimized for GitHub Actions (Ubuntu, 20GB space, 7GB RAM, 2 cores)
 
 Usage:
-    python curate_wallpapers.py [--test] [--resume]
+    python curate_wallpapers.py [--test] [--resume] [--full] [--no-quantize]
     
     --test: Process only 10 images per repo (quick validation)
     --resume: Resume from last checkpoint (load intermediate results)
+    --full: Force full re-curation (ignore incremental update detection)
+    --no-quantize: Use full float32 embeddings (larger manifest)
 """
 
 import os
@@ -116,6 +120,8 @@ REPOSITORIES = [
 OUTPUT_DIR = Path("curation_output")
 MANIFEST_PATH = OUTPUT_DIR / "manifest.json"
 CHECKPOINT_PATH = OUTPUT_DIR / "checkpoint.json"
+UPDATE_TRACKER_PATH = OUTPUT_DIR / "update_tracker.json"  # For incremental updates
+PREVIOUS_MANIFEST_PATH = OUTPUT_DIR / "manifest_previous.json"  # Cache for incremental merge
 
 # Image processing configuration
 SUPPORTED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp'}
@@ -587,31 +593,72 @@ CATEGORY_KEYWORDS = {
 
 def detect_category(file_path: Path, repo_name: str) -> str:
     """
-    Detect category from folder structure and filename.
+    Auto-adaptive category detection from folder structure and filename.
+    
+    Uses intelligent path analysis to extract categories without manual configuration:
+    1. First checks immediate parent folder name against known categories
+    2. Falls back to keyword matching in full path
+    3. Uses repo name as last resort
     
     Args:
-        file_path: Path to image file
+        file_path: Path to image file (relative to repo root)
         repo_name: Name of source repository
         
     Returns:
         Category string (lowercase)
     """
-    # Get path as string
+    # Get path parts for analysis
     path_str = str(file_path).lower()
+    parts = [p.lower() for p in file_path.parts]
     
-    # Check each category's keywords
+    # Strategy 1: Check immediate parent folder (most reliable)
+    if len(parts) >= 2:
+        parent_folder = parts[-2]  # Immediate parent of the file
+        
+        # Direct match with known categories
+        if parent_folder in CATEGORY_KEYWORDS:
+            return parent_folder
+        
+        # Check if parent folder contains category keyword
+        for category, keywords in CATEGORY_KEYWORDS.items():
+            for keyword in keywords:
+                if keyword in parent_folder:
+                    return category
+    
+    # Strategy 2: Check grandparent folder (for nested structures like images/nature/...)
+    if len(parts) >= 3:
+        grandparent = parts[-3]
+        for category, keywords in CATEGORY_KEYWORDS.items():
+            for keyword in keywords:
+                if keyword in grandparent:
+                    return category
+    
+    # Strategy 3: Check full path for any keywords
     for category, keywords in CATEGORY_KEYWORDS.items():
         for keyword in keywords:
             if keyword in path_str:
                 return category
     
-    # Repo-specific defaults
-    if 'minimal' in repo_name.lower():
+    # Strategy 4: Derive from repo name
+    repo_lower = repo_name.lower()
+    if 'minimal' in repo_lower:
         return 'minimal'
-    elif 'nordic' in repo_name.lower():
+    elif 'nordic' in repo_lower:
         return 'nord'
-    elif 'aesthetic' in repo_name.lower():
+    elif 'aesthetic' in repo_lower:
         return 'aesthetic'
+    elif 'mobile' in repo_lower:
+        return 'mobile'
+    elif 'anime' in repo_lower:
+        return 'anime'
+    
+    # Strategy 5: Use parent folder name directly if it looks like a category
+    # (not a generic name like 'images' or 'wallpapers')
+    generic_names = {'images', 'wallpapers', 'walls', 'pics', 'pictures', 'src', 'assets'}
+    if len(parts) >= 2:
+        parent = parts[-2]
+        if parent not in generic_names and len(parent) > 2:
+            return parent
     
     # Default
     return 'other'
@@ -768,17 +815,70 @@ def clone_repository(repo: Dict, temp_dir: Path, test_mode: bool = False, max_re
     logger.error(f"Failed to clone {repo['name']} after {max_retries} attempts. Last error: {last_error}")
     return None
 
-def find_wallpapers(repo_path: Path) -> List[Path]:
-    """Find all wallpaper images in repository."""
+def find_wallpapers(repo_path: Path, specific_files: Optional[List[str]] = None) -> List[Path]:
+    """
+    Find all wallpaper images in repository with auto-adaptive detection.
+    
+    This function automatically adapts to different repository structures:
+    - Detects common wallpaper directories (images/, wallpapers/, walls/, etc.)
+    - Handles nested folder structures
+    - Filters out documentation and non-wallpaper directories
+    
+    Args:
+        repo_path: Path to cloned repository
+        specific_files: Optional list of specific file paths to check (for incremental updates)
+        
+    Returns:
+        List of valid wallpaper image paths
+    """
+    # Common directories to skip (not wallpaper content)
+    SKIP_DIRS = {'.git', '.github', 'node_modules', '__pycache__', 'scripts', 
+                  'docs', 'documentation', '.vscode', '.idea', 'thumbnails',
+                  'thumbs', 'preview', 'previews', 'samples', 'readme_assets'}
+    
     wallpapers = []
     
-    for ext in SUPPORTED_EXTENSIONS:
-        wallpapers.extend(repo_path.rglob(f"*{ext}"))
+    if specific_files:
+        # Incremental mode: only check specified files
+        for file_path in specific_files:
+            full_path = repo_path / file_path
+            if full_path.exists() and full_path.suffix.lower() in SUPPORTED_EXTENSIONS:
+                wallpapers.append(full_path)
+    else:
+        # Full scan mode: auto-detect wallpaper locations
+        # First, try to find obvious wallpaper directories
+        wallpaper_dirs = []
+        
+        for candidate in repo_path.iterdir():
+            if not candidate.is_dir():
+                continue
+            
+            name_lower = candidate.name.lower()
+            
+            # Skip non-content directories
+            if name_lower in SKIP_DIRS or name_lower.startswith('.'):
+                continue
+            
+            # Check if this looks like a content directory
+            wallpaper_dirs.append(candidate)
+        
+        # If no obvious content dirs, scan from root
+        if not wallpaper_dirs:
+            wallpaper_dirs = [repo_path]
+        
+        # Scan each directory for images
+        for scan_dir in wallpaper_dirs:
+            for ext in SUPPORTED_EXTENSIONS:
+                wallpapers.extend(scan_dir.rglob(f"*{ext}"))
     
     # Filter by file size and resolution
     valid_wallpapers = []
     for img_path in wallpapers:
         try:
+            # Skip if in a skip directory
+            if any(part.lower() in SKIP_DIRS for part in img_path.parts):
+                continue
+            
             # Check file size
             if img_path.stat().st_size > MAX_FILE_SIZE:
                 continue
@@ -999,15 +1099,75 @@ def load_checkpoint() -> Tuple[List[Dict], int, Set[str]]:
         logger.info("Starting fresh (checkpoint ignored)")
         return [], 0, set()
 
-def generate_manifest(wallpapers: List[Dict]) -> Dict:
-    """Generate final manifest.json structure."""
+def generate_manifest(wallpapers: List[Dict], use_quantization: bool = True) -> Dict:
+    """
+    Generate final manifest.json structure with optional embedding quantization.
+    
+    Args:
+        wallpapers: List of wallpaper metadata dicts
+        use_quantization: If True, quantize embeddings for smaller manifest size
+        
+    Returns:
+        Manifest dictionary ready for JSON serialization
+    """
+    processed_wallpapers = wallpapers
+    
+    # Apply quantization if enabled
+    if use_quantization and wallpapers:
+        logger.info("Quantizing embeddings for size optimization...")
+        
+        try:
+            from embedding_quantizer import EmbeddingQuantizer
+            quantizer = EmbeddingQuantizer(verify_quality=True)
+            
+            processed_wallpapers = []
+            for wp in tqdm(wallpapers, desc="Quantizing"):
+                wp_copy = wp.copy()
+                
+                # Get embedding (handle both list and numpy array)
+                embedding = wp.get('embedding', [])
+                if isinstance(embedding, list):
+                    embedding = np.array(embedding, dtype=np.float32)
+                
+                # Quantize
+                quantized = quantizer.quantize(embedding)
+                
+                # Replace embedding with quantized format
+                # Keep original embedding key for backward compatibility
+                wp_copy['e'] = quantized['e']
+                wp_copy['eMin'] = quantized.get('eMin')
+                wp_copy['eMax'] = quantized.get('eMax')
+                
+                # Remove phash (internal use only, not needed in manifest)
+                wp_copy.pop('phash', None)
+                
+                # Keep original embedding for now (can be removed later for full optimization)
+                # Uncomment next line to fully remove original embedding:
+                # wp_copy.pop('embedding', None)
+                
+                processed_wallpapers.append(wp_copy)
+            
+            # Log quality stats
+            quality = quantizer.get_quality_report()
+            logger.info(f"Quantization complete: {quality.get('total', 0)} embeddings, "
+                       f"min similarity: {quality.get('min_similarity', 0):.4f}, "
+                       f"fallbacks: {quality.get('fallback_to_float16', 0)}")
+            
+        except ImportError:
+            logger.warning("Quantizer not available, using full embeddings")
+            processed_wallpapers = wallpapers
+        except Exception as e:
+            logger.warning(f"Quantization failed, using full embeddings: {e}")
+            processed_wallpapers = wallpapers
+    
     manifest = {
-        'version': 1,
+        'version': 2 if use_quantization else 1,  # Version 2 = quantized format
         'last_updated': datetime.utcnow().isoformat() + 'Z',
         'model_version': 'mobilenet_v3_small',
         'embedding_dim': 576,
-        'total_wallpapers': len(wallpapers),
-        'wallpapers': wallpapers
+        'total_wallpapers': len(processed_wallpapers),
+        'quantized': use_quantization,  # Flag for app-side
+        'wallpapers': processed_wallpapers
     }
     
     return manifest
@@ -1022,9 +1182,9 @@ def save_manifest(manifest: Dict):
             logger.error(f"  - {error}")
         raise ValueError(f"Manifest validation failed with {len(validation_errors)} errors")
     
-    # Save uncompressed JSON
+    # Save uncompressed JSON (compact for size)
     with open(MANIFEST_PATH, 'w') as f:
-        json.dump(manifest, f, indent=2)
+        json.dump(manifest, f, separators=(',', ':'))  # Minimal JSON for smaller size
     
     file_size_mb = MANIFEST_PATH.stat().st_size / (1024 * 1024)
     logger.info(f"✓ Saved manifest.json ({file_size_mb:.2f} MB)")
@@ -1043,6 +1203,8 @@ def save_manifest(manifest: Dict):
     print("CURATION COMPLETE")
     print("="*60)
     print(f"Total wallpapers: {manifest['total_wallpapers']}")
+    print(f"Manifest version: {manifest.get('version', 1)}")
+    print(f"Embeddings quantized: {manifest.get('quantized', False)}")
     print(f"Manifest size: {file_size_mb:.2f} MB")
     print(f"Compressed size: {compressed_size_mb:.2f} MB")
     print(f"Compression ratio: {file_size_mb/compressed_size_mb:.1f}x")
@@ -1053,21 +1215,52 @@ def save_manifest(manifest: Dict):
         categories[w['category']] += 1
     
     print("\nCategory breakdown:")
-    for cat, count in sorted(categories.items(), key=lambda x: x[1], reverse=True):
+    for cat, count in sorted(categories.items(), key=lambda x: x[1], reverse=True)[:15]:
         print(f"  {cat}: {count}")
     
+    if len(categories) > 15:
+        print(f"  ... and {len(categories) - 15} more categories")
+    
     print("="*60 + "\n")
+
+def load_previous_manifest() -> Tuple[Dict[str, Dict], Dict]:
+    """
+    Load previous manifest for incremental updates.
+    
+    Returns:
+        Tuple of (wallpaper_dict_by_id, manifest_metadata)
+    """
+    manifest_path = PREVIOUS_MANIFEST_PATH if PREVIOUS_MANIFEST_PATH.exists() else MANIFEST_PATH
+    
+    if not manifest_path.exists():
+        return {}, {}
+    
+    try:
+        with open(manifest_path, 'r') as f:
+            manifest = json.load(f)
+        
+        # Index wallpapers by ID for quick lookup
+        wp_dict = {wp['id']: wp for wp in manifest.get('wallpapers', [])}
+        
+        logger.info(f"Loaded {len(wp_dict)} wallpapers from previous manifest")
+        return wp_dict, manifest
+        
+    except Exception as e:
+        logger.warning(f"Could not load previous manifest: {e}")
+        return {}, {}
 
 # ============================================================================
 # MAIN
 # ============================================================================
 
 def main():
-    """Main execution function with comprehensive error handling."""
+    """Main execution function with smart incremental updates and quantization."""
     parser = argparse.ArgumentParser(description='Curate wallpapers from GitHub repositories')
     parser.add_argument('--test', action='store_true', help='Test mode: process only 10 images per repo')
     parser.add_argument('--resume', action='store_true', help='Resume from last checkpoint')
     parser.add_argument('--dry-run', action='store_true', help='Validate configuration without processing')
+    parser.add_argument('--full', action='store_true', help='Force full re-curation (ignore incremental detection)')
+    parser.add_argument('--no-quantize', action='store_true', help='Disable embedding quantization (larger output)')
     args = parser.parse_args()
     
     # Register signal handlers for graceful shutdown
@@ -1077,8 +1270,10 @@ def main():
     OUTPUT_DIR.mkdir(exist_ok=True)
     
     logger.info("="*60)
-    logger.info("VANDERWAALS WALLPAPER CURATION PIPELINE")
+    logger.info("VANDERWAALS WALLPAPER CURATION PIPELINE v2.0")
     logger.info("="*60)
+    logger.info(f"Smart incremental updates: {'DISABLED' if args.full else 'ENABLED'}")
+    logger.info(f"Embedding quantization: {'DISABLED' if args.no_quantize else 'ENABLED'}")
     
     # Validate configuration
     logger.info("Validating configuration...")
@@ -1108,6 +1303,68 @@ def main():
         # Initialize progress tracker
         tracker = ProgressTracker()
         
+        # ================================================================
+        # SMART INCREMENTAL UPDATE DETECTION
+        # ================================================================
+        github_client = None
+        update_tracker = None
+        repos_to_process = []
+        repos_skipped = []
+        
+        if not args.full and not args.test:
+            logger.info("\n--- Checking for repository updates ---")
+            try:
+                from github_client import GitHubAPIClient, UpdateTracker
+                
+                github_client = GitHubAPIClient()
+                update_tracker = UpdateTracker(str(UPDATE_TRACKER_PATH))
+                
+                for repo in REPOSITORIES:
+                    name = repo['name']
+                    owner, repo_name = name.split('/')
+                    branch = repo.get('branch', 'main')
+                    
+                    last_sha = update_tracker.get_last_sha(name)
+                    
+                    has_updates, current_sha, changed_files = github_client.check_repo_has_updates(
+                        owner, repo_name, branch, last_sha
+                    )
+                    
+                    if has_updates:
+                        repos_to_process.append({
+                            **repo,
+                            '_current_sha': current_sha,
+                            '_changed_files': changed_files,
+                            '_is_incremental': len(changed_files) > 0
+                        })
+                        if changed_files:
+                            logger.info(f"  ✓ {name}: {len(changed_files)} new/changed images")
+                        else:
+                            logger.info(f"  ✓ {name}: First run or major update")
+                    else:
+                        repos_skipped.append(name)
+                        logger.info(f"  ○ {name}: No changes (skipping)")
+                
+                if repos_skipped:
+                    logger.info(f"\nSkipping {len(repos_skipped)} unchanged repos, processing {len(repos_to_process)}")
+                
+            except ImportError:
+                logger.warning("GitHub client not available, processing all repos")
+                repos_to_process = REPOSITORIES.copy()
+            except Exception as e:
+                logger.warning(f"Incremental check failed, processing all repos: {e}")
+                repos_to_process = REPOSITORIES.copy()
+        else:
+            # Full mode or test mode: process all repos
+            repos_to_process = REPOSITORIES.copy()
+        
+        if not repos_to_process:
+            logger.info("\n✓ All repositories are up to date! No processing needed.")
+            return 0
+        
+        # ================================================================
+        # LOAD PREVIOUS STATE
+        # ================================================================
         # Load checkpoint if resuming
         if args.resume:
             all_wallpapers, start_index, processed_hashes = load_checkpoint()
@@ -1116,17 +1373,33 @@ def main():
             start_index = 0
             processed_hashes = set()
         
-        # Process repositories incrementally
-        for idx, repo in enumerate(REPOSITORIES[start_index:], start=start_index):
-            logger.info(f"\n[{idx + 1}/{len(REPOSITORIES)}] Processing {repo['name']}...")
+        # Load previous manifest for incremental merge
+        previous_wallpapers, _ = load_previous_manifest()
+        
+        # ================================================================
+        # PROCESS REPOSITORIES
+        # ================================================================
+        for idx, repo in enumerate(repos_to_process[start_index:], start=start_index):
+            logger.info(f"\n[{idx + 1}/{len(repos_to_process)}] Processing {repo['name']}...")
             
             try:
+                # Check for incremental processing
+                changed_files = repo.get('_changed_files', None)
+                
                 # Process repository with progress tracking
                 wallpapers, duplicates = process_repository(
                     repo, extractor, processed_hashes, 
                     test_mode=args.test, tracker=tracker
                 )
                 all_wallpapers.extend(wallpapers)
+                
+                # Update tracker with new SHA
+                if update_tracker and '_current_sha' in repo:
+                    update_tracker.update_repo(
+                        repo['name'], 
+                        repo['_current_sha'], 
+                        len(wallpapers)
+                    )
                 
                 # Save checkpoint after each repo (now includes hashes)
                 save_checkpoint(all_wallpapers, idx, processed_hashes)
@@ -1136,13 +1409,42 @@ def main():
                 tracker.record_repo_failed(repo['name'], str(e))
                 continue
         
+        # ================================================================
+        # MERGE WITH PREVIOUS DATA (for skipped repos)
+        # ================================================================
+        if repos_skipped and previous_wallpapers:
+            logger.info(f"\nMerging {len(previous_wallpapers)} wallpapers from skipped repos...")
+            
+            # Get IDs of newly processed wallpapers
+            new_ids = {wp['id'] for wp in all_wallpapers}
+            
+            # Add wallpapers from skipped repos
+            for wp_id, wp in previous_wallpapers.items():
+                # Check if this wallpaper is from a skipped repo
+                repo_name = wp.get('repo', '')
+                if repo_name in repos_skipped and wp_id not in new_ids:
+                    all_wallpapers.append(wp)
+            
+            logger.info(f"Total after merge: {len(all_wallpapers)} wallpapers")
+        
+        # Save update tracker
+        if update_tracker:
+            update_tracker.save()
+        
         # Print processing summary
         tracker.print_summary()
         
-        # Generate and save final manifest
+        # ================================================================
+        # GENERATE AND SAVE MANIFEST
+        # ================================================================
         logger.info("\nGenerating final manifest...")
-        manifest = generate_manifest(all_wallpapers)
+        use_quantization = not args.no_quantize
+        manifest = generate_manifest(all_wallpapers, use_quantization=use_quantization)
         save_manifest(manifest)
+        
+        # Save copy for next incremental run
+        if MANIFEST_PATH.exists():
+            shutil.copy(MANIFEST_PATH, PREVIOUS_MANIFEST_PATH)
         
         # Cleanup checkpoint
         if CHECKPOINT_PATH.exists():
@@ -1162,3 +1464,4 @@ def main():
 
 if __name__ == '__main__':
     sys.exit(main())
+

@@ -202,10 +202,10 @@ class UploadWallpaperViewModel @Inject constructor(
                 android.util.Log.d("UploadWallpaper", "Embedding preview: $embeddingPreview")
                 android.util.Log.d("UploadWallpaper", "Embedding magnitude: ${avgEmbedding.map { it * it }.sum().let { kotlin.math.sqrt(it) }}")
                 
-                // CRITICAL: Use similarity matching, NOT category filtering
-                // This finds wallpapers SIMILAR to the category prototype
-                // User will like/dislike from these similar ones to build their preference
-                findSimilarWallpapers(avgEmbedding, analysis = null)
+                // CRITICAL: Use category filtering to show relevant wallpapers
+                // When user selects a category, show wallpapers FROM that category
+                // This ensures the confirmation gallery matches user's expectation
+                findSimilarWallpapersByCategory(style.categoryName)
                 
             } catch (e: Exception) {
                 android.util.Log.e("UploadWallpaper", "Error selecting sample wallpaper: ${e.message}")
@@ -316,7 +316,7 @@ class UploadWallpaperViewModel @Inject constructor(
                 
                 val wallpapers = allCategoryWallpapers
                     .shuffled(random)  // Randomize with time-based seed for true variety
-                    .take(20)          // Take 20 for onboarding (user sees 12)
+                    .take(50)          // Take 50 for onboarding (matches upload flow)
                 
                 android.util.Log.d("UploadWallpaper", "Found ${wallpapers.size} wallpapers in category: $category (total available: ${allCategoryWallpapers.size})")
                 _similarWallpapers.value = wallpapers

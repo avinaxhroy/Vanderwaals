@@ -82,3 +82,7 @@ app/release/output-metadata.json
 # Manifest files (managed by GitHub Actions, ignore local copies)
 app/src/main/assets/manifest.json
 app/src/main/assets/manifest.json.gz
+app/src/main/assets/bing_manifest_lite.json
+app/src/main/assets/bing_manifest_lite.json.gz
+app/src/main/assets/bing_manifest_full.json
+app/src/main/assets/bing_manifest_full.json.gz

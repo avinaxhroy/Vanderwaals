@@ -5,27 +5,30 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.workDataOf
+import android.os.Build
 import dagger.hilt.android.AndroidEntryPoint
+import me.avinas.vanderwaals.service.WallpaperChangeService
 import java.util.Calendar
-import javax.inject.Inject
 
 /**
  * BroadcastReceiver that handles daily wallpaper change alarms.
  * 
  * When AlarmManager fires the daily alarm, this receiver:
- * 1. Enqueues a OneTimeWorkRequest to WallpaperChangeWorker
- * 2. Reschedules the alarm for the next day
+ * 1. Starts a foreground service to handle the wallpaper change
+ * 2. Reschedules the alarm for the next occurrence
  * 
- * This ensures daily wallpaper changes happen at the exact scheduled time.
+ * **CRITICAL: Uses startForegroundService() instead of WorkManager**
+ * 
+ * This ensures reliable execution even when the app was killed by the user:
+ * - When app is killed, process dies
+ * - AlarmManager fires alarm, Android creates new process
+ * - Receiver starts foreground service which properly initializes Hilt
+ * - Service changes wallpaper and stops itself
+ * 
+ * Inspired by Paperize's WallpaperReceiver implementation.
  */
 @AndroidEntryPoint
 class WallpaperAlarmReceiver : BroadcastReceiver() {
-    
-    @Inject
-    lateinit var workManager: WorkManager
     
     override fun onReceive(context: Context?, intent: Intent?) {
         if (context == null || intent == null) return
@@ -40,24 +43,24 @@ class WallpaperAlarmReceiver : BroadcastReceiver() {
         android.util.Log.d(TAG, "  Timestamp: ${System.currentTimeMillis()}")
         android.util.Log.d(TAG, "========================================")
         
-        // Create work request data
-        val inputData = workDataOf(
-            WallpaperChangeWorker.KEY_TARGET_SCREEN to targetScreen,
-            WallpaperChangeWorker.KEY_MODE to mode
-        )
+        // CRITICAL: Start foreground service instead of WorkManager
+        // This ensures reliable execution even when the app was killed
+        val serviceIntent = Intent(context, WallpaperChangeService::class.java).apply {
+            action = WallpaperChangeService.ACTION_CHANGE_WALLPAPER
+            putExtra(WallpaperChangeService.EXTRA_TARGET_SCREEN, targetScreen)
+            putExtra(WallpaperChangeService.EXTRA_MODE, mode)
+        }
         
-        // Enqueue wallpaper change work as UNIQUE work to prevent duplicates
-        // Using REPLACE ensures only one change runs even if multiple alarms fire
-        val changeWork = OneTimeWorkRequestBuilder<WallpaperChangeWorker>()
-            .setInputData(inputData)
-            .build()
-        
-        workManager.enqueueUniqueWork(
-            ALARM_TRIGGERED_WORK_NAME,
-            androidx.work.ExistingWorkPolicy.REPLACE, // Replace any pending work
-            changeWork
-        )
-        android.util.Log.d(TAG, "WallpaperChangeWorker enqueued from alarm (unique, REPLACE policy)")
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(serviceIntent)
+            } else {
+                context.startService(serviceIntent)
+            }
+            android.util.Log.d(TAG, "✅ WallpaperChangeService started successfully")
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "❌ Failed to start WallpaperChangeService", e)
+        }
         
         // Check if this is a repeating alarm (15-min or hourly) or daily alarm
         val intervalMillis = intent.getLongExtra("intervalMillis", 0L)

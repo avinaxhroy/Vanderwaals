@@ -75,11 +75,13 @@ class InitialSyncViewModel @Inject constructor(
                 _syncState.value = SyncState.Loading("Connecting to server...", 0.1f)
                 
                 // Perform sync with real-time progress updates
-                val result = manifestRepository.syncManifest { message, progress, count ->
-                    Log.d(TAG, "Sync progress: $message ($progress) - $count wallpapers")
-                    _syncState.value = SyncState.Loading(message, progress)
-                    _wallpaperCount.value = count
-                }
+                val result = manifestRepository.syncManifest(
+                    onProgress = { message, progress, count ->
+                        Log.d(TAG, "Sync progress: $message ($progress) - $count wallpapers")
+                        _syncState.value = SyncState.Loading(message, progress)
+                        _wallpaperCount.value = count
+                    }
+                )
                 
                 result.fold(
                     onSuccess = { count ->

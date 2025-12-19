@@ -11,39 +11,31 @@ import me.avinas.vanderwaals.data.entity.WallpaperMetadata
  * that processes wallpapers from multiple sources (dharmx/walls, makccr/wallpapers,
  * Bing daily, etc.).
  * 
+ * **Supports Two Versions:**
+ * - **v1**: Full float32 embeddings (legacy, larger file)
+ * - **v2**: Quantized int8 embeddings with base64 encoding (80% smaller)
+ * 
  * **JSON Structure:**
  * ```json
  * {
- *   "version": 1,
+ *   "version": 2,
  *   "last_updated": "2025-11-13T07:00:00Z",
  *   "model_version": "mobilenet_v3_small",
- *   "wallpapers": [
- *     {
- *       "id": "dharmx_gruvbox_001",
- *       "url": "https://cdn.jsdelivr.net/gh/yourrepo/wallpapers/001.jpg",
- *       "thumbnail": "https://cdn.jsdelivr.net/gh/yourrepo/thumbs/001.jpg",
- *       "source": "github",
- *       "repo": "dharmx/walls",
- *       "category": "gruvbox",
- *       "colors": ["#282828", "#cc241d"],
- *       "brightness": 35,
- *       "embedding": [0.234, -0.567, ...],
- *       "resolution": "2560x1440",
- *       "attribution": "dharmx/walls"
- *     }
- *   ]
+ *   "embedding_dim": 576,
+ *   "total_wallpapers": 6000,
+ *   "quantized": true,
+ *   "wallpapers": [...]
  * }
  * ```
  * 
- * **Compressed size:** ~6MB for 6000 wallpapers with 576-dim embeddings.
+ * **Compressed size:** ~8-12MB for 6000 wallpapers with quantized embeddings.
  * 
- * **Download source:**
- * - Primary: `https://cdn.jsdelivr.net/gh/{owner}/{repo}@{branch}/manifest.json`
- * - Fallback: GitHub raw URL
- * 
- * @property version Manifest format version (integer for versioning schema changes)
+ * @property version Manifest format version (1 = legacy, 2 = quantized)
  * @property lastUpdated ISO 8601 timestamp of last curation run
  * @property modelVersion ML model version used for embeddings (e.g., "mobilenet_v3_small")
+ * @property embeddingDim Embedding dimension (always 576)
+ * @property totalWallpapers Total wallpaper count
+ * @property quantized True if embeddings are quantized (v2 format)
  * @property wallpapers List of wallpaper metadata objects (6000+ entries)
  * 
  * @see WallpaperMetadataDto
@@ -59,6 +51,7 @@ data class ManifestDto(
     val embeddingDim: Int,
     @SerializedName("total_wallpapers")
     val totalWallpapers: Int,
+    val quantized: Boolean = false,  // Default false for backward compatibility
     val wallpapers: List<WallpaperMetadataDto>
 )
 
@@ -67,25 +60,9 @@ data class ManifestDto(
  * 
  * Bulk conversion of all wallpapers in the manifest from DTOs to Room entities.
  * This is called after downloading and parsing the manifest.json file.
+ * Handles both v1 (full embeddings) and v2 (quantized) formats automatically.
  * 
  * @return List of WallpaperMetadata entities ready for batch insertion
- * 
- * Example:
- * ```kotlin
- * val response = manifestService.getManifest()
- * if (response.isSuccessful) {
- *     val manifest = response.body()!!
- *     val entities = manifest.toWallpaperEntities()
- *     
- *     // Bulk insert into database
- *     database.wallpaperMetadataDao().insertAll(entities)
- *     
- *     Log.d("Manifest", "Synced ${entities.size} wallpapers")
- *     Log.d("Manifest", "Version: ${manifest.version}")
- *     Log.d("Manifest", "Updated: ${manifest.lastUpdated}")
- *     Log.d("Manifest", "Model: ${manifest.modelVersion}")
- * }
- * ```
  */
 fun ManifestDto.toWallpaperEntities(): List<WallpaperMetadata> {
     return wallpapers.map { it.toEntity() }
@@ -99,8 +76,9 @@ fun ManifestDto.toWallpaperEntities(): List<WallpaperMetadata> {
  * @return Estimated size in bytes
  */
 fun ManifestDto.getEstimatedSize(): Long {
-    // Rough estimate: each wallpaper ~4KB (2KB metadata + 2.3KB embedding)
-    return wallpapers.size * 4096L
+    // v2 (quantized): ~1KB per wallpaper, v1: ~4KB per wallpaper
+    val perWallpaperBytes = if (quantized) 1024L else 4096L
+    return wallpapers.size * perWallpaperBytes
 }
 
 /**
@@ -108,19 +86,35 @@ fun ManifestDto.getEstimatedSize(): Long {
  * 
  * Checks for:
  * - Non-empty wallpaper list
- * - Valid version number
+ * - Valid version number (1 or 2)
  * - Proper embedding dimensions (matches embeddingDim field)
  * - Total wallpapers count matches list size
  * 
  * @return true if manifest is valid, false otherwise
  */
 fun ManifestDto.isValid(): Boolean {
-    return version > 0 &&
-            lastUpdated.isNotBlank() &&
-            modelVersion.isNotBlank() &&
-            embeddingDim == 576 &&
-            wallpapers.isNotEmpty() &&
-            totalWallpapers == wallpapers.size &&
-            wallpapers.all { it.embedding.size == embeddingDim }
+    if (version < 1 || lastUpdated.isBlank() || modelVersion.isBlank()) {
+        return false
+    }
+    
+    if (embeddingDim != 576 || wallpapers.isEmpty() || totalWallpapers != wallpapers.size) {
+        return false
+    }
+    
+    // For v2 (quantized), check that quantized format fields are present
+    if (version >= 2 && quantized) {
+        val sample = wallpapers.firstOrNull() ?: return false
+        if (sample.e.isNullOrBlank()) {
+            return false  // Quantized format requires 'e' field
+        }
+    } else {
+        // For v1, check that full embedding is present
+        val sample = wallpapers.firstOrNull() ?: return false
+        if (sample.embedding.isNullOrEmpty() || sample.embedding.size != embeddingDim) {
+            return false
+        }
+    }
+    
+    return true
 }
 

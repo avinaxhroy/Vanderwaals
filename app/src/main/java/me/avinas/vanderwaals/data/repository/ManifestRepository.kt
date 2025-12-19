@@ -93,55 +93,35 @@ class ManifestRepository @Inject constructor(
     /**
      * Synchronizes the wallpaper manifest from the network to local database.
      * 
+     * **Smart Update Logic:**
+     * Uses HTTP If-Modified-Since header to check if manifest has changed.
+     * If unchanged (304 response), skips download entirely.
+     * 
      * **Process:**
-     * 1. Download manifest.json from jsDelivr/GitHub
-     * 2. Validate manifest structure (version, embeddings)
-     * 3. Convert DTOs to Room entities
-     * 4. Delete old wallpapers from database
-     * 5. Batch insert new wallpapers
-     * 6. Return count of synced wallpapers
+     * 1. Check if manifest has been modified since last sync (If-Modified-Since)
+     * 2. If not modified (304): Return existing count, skip download
+     * 3. If modified (200): Download, validate, and save manifest
      * 
      * **Retry Logic:**
      * - Retries network failures up to 3 times
      * - Uses exponential backoff: 1s, 2s, 4s
      * - Immediate failure for parse/validation errors
      * 
-     * **Error Messages:**
-     * - "Network error: ..." - Connection/timeout issues
-     * - "HTTP XXX: ..." - Server errors
-     * - "Parse error: ..." - Invalid JSON
-     * - "Invalid manifest: ..." - Structure validation failed
-     * - "Database error: ..." - Database operation failed
-     * 
      * @param onProgress Optional progress callback with (message, progress 0.0-1.0, count)
+     * @param forceUpdate If true, skip If-Modified-Since check and always download
      * @return Result<Int> Success with wallpaper count, or Failure with error
-     * 
-     * Example:
-     * ```kotlin
-     * suspend fun performSync() {
-     *     _syncState.value = SyncState.Loading
-     *     
-     *     manifestRepository.syncManifest { message, progress, count ->
-     *         _syncState.value = SyncState.Loading(message, progress)
-     *         _wallpaperCount.value = count
-     *     }
-     *         .onSuccess { count ->
-     *             _syncState.value = SyncState.Success(count)
-     *             _lastSyncTime.value = System.currentTimeMillis()
-     *         }
-     *         .onFailure { error ->
-     *             _syncState.value = SyncState.Error(error.message ?: "Unknown error")
-     *             Log.e(TAG, "Sync failed", error)
-     *         }
-     * }
-     * ```
      */
     suspend fun syncManifest(
-        onProgress: ((message: String, progress: Float, count: Int) -> Unit)? = null
+        onProgress: ((message: String, progress: Float, count: Int) -> Unit)? = null,
+        forceUpdate: Boolean = false
     ): Result<Int> {
-        Log.d(TAG, "Starting manifest sync...")
+        Log.d(TAG, "Starting manifest sync... (forceUpdate=$forceUpdate)")
         
         var lastError: Exception? = null
+        
+        // Get stored Last-Modified timestamp for conditional request
+        val prefs = context.getSharedPreferences("vanderwaals_sync", android.content.Context.MODE_PRIVATE)
+        val lastModified = if (forceUpdate) null else prefs.getString("manifest_last_modified", null)
         
         // Retry loop with exponential backoff
         repeat(MAX_RETRIES) { attempt ->
@@ -156,8 +136,22 @@ class ManifestRepository @Inject constructor(
                     localManifestService.getManifest()
                 } else {
                     Log.d(TAG, "Downloading manifest from network")
-                    // Don't set progress here - DownloadProgressManager handles real-time progress
-                    val response = manifestService.getManifest()
+                    onProgress?.invoke("Checking for updates...", 0.1f, 0)
+                    
+                    // Use conditional request if we have a previous Last-Modified
+                    val response = if (lastModified != null) {
+                        manifestService.getManifestConditional(lastModified)
+                    } else {
+                        manifestService.getManifest()
+                    }
+                    
+                    // Check for "Not Modified" response - manifest unchanged
+                    if (response.code() == 304) {
+                        Log.d(TAG, "Manifest not modified since last sync, skipping download")
+                        onProgress?.invoke("Catalog is up to date!", 1.0f, wallpaperDao.getCount())
+                        saveLastSyncTimestamp(System.currentTimeMillis())
+                        return Result.success(wallpaperDao.getCount())
+                    }
                     
                     // Check HTTP response
                     if (!response.isSuccessful) {
@@ -174,6 +168,12 @@ class ManifestRepository @Inject constructor(
                         }
                     }
                     
+                    // Save new Last-Modified header for next sync
+                    response.headers()["Last-Modified"]?.let { newLastModified ->
+                        prefs.edit().putString("manifest_last_modified", newLastModified).apply()
+                        Log.d(TAG, "Saved Last-Modified: $newLastModified")
+                    }
+                    
                     // Extract manifest
                     response.body()
                 }
@@ -186,6 +186,7 @@ class ManifestRepository @Inject constructor(
                 
                 Log.d(TAG, "Downloaded manifest: version=${manifest.version}, " +
                         "updated=${manifest.lastUpdated}, " +
+                        "quantized=${manifest.quantized}, " +
                         "wallpapers=${manifest.wallpapers.size}")
                 
                 onProgress?.invoke("Processing wallpapers...", 0.5f, manifest.wallpapers.size)
@@ -214,6 +215,9 @@ class ManifestRepository @Inject constructor(
                     
                     val finalCount = wallpaperDao.getCount()
                     Log.d(TAG, "Sync successful: $finalCount wallpapers in database")
+                    
+                    // Save sync timestamp
+                    saveLastSyncTimestamp(System.currentTimeMillis())
                     
                     onProgress?.invoke("Sync complete!", 1.0f, finalCount)
                     return Result.success(finalCount)
@@ -252,6 +256,7 @@ class ManifestRepository @Inject constructor(
         Log.e(TAG, errorMessage)
         return Result.failure(Exception(errorMessage, lastError))
     }
+
     
     /**
      * Applies exponential backoff delay before retry.

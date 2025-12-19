@@ -3,6 +3,7 @@ package me.avinas.vanderwaals.domain.usecase
 import kotlinx.coroutines.flow.first
 import me.avinas.vanderwaals.algorithm.EnhancedImageAnalyzer
 import me.avinas.vanderwaals.algorithm.SimilarityCalculator
+import me.avinas.vanderwaals.data.datastore.SettingsDataStore
 import me.avinas.vanderwaals.data.entity.WallpaperMetadata
 import me.avinas.vanderwaals.data.repository.WallpaperRepository
 import javax.inject.Inject
@@ -50,7 +51,8 @@ import javax.inject.Singleton
 @Singleton
 class FindSimilarWallpapersUseCase @Inject constructor(
     private val wallpaperRepository: WallpaperRepository,
-    private val similarityCalculator: SimilarityCalculator
+    private val similarityCalculator: SimilarityCalculator,
+    private val settingsDataStore: SettingsDataStore
 ) {
     /**
      * Finds the most similar wallpapers to a given embedding vector.
@@ -143,35 +145,48 @@ class FindSimilarWallpapersUseCase @Inject constructor(
             // The repository returns Flow, so we use .first() to get current value
             val allWallpapers = wallpaperRepository.getAllWallpapers().first()
             
+            // Step 1b: Filter by enabled sources (github/bing user settings)
+            val settings = settingsDataStore.settings.first()
+            val enabledSources = mutableListOf<String>()
+            if (settings.githubEnabled) enabledSources.add("github")
+            if (settings.bingEnabled) enabledSources.add("bing")
+            
+            val filteredWallpapers = if (enabledSources.isEmpty()) {
+                // If no sources enabled, fall back to all wallpapers
+                allWallpapers
+            } else {
+                allWallpapers.filter { it.source.lowercase() in enabledSources }
+            }
+            
             // Step 2: Handle empty database
-            if (allWallpapers.isEmpty()) {
+            if (filteredWallpapers.isEmpty()) {
                 return Result.success(emptyList())
             }
             
             // Step 3: Calculate similarity scores for all wallpapers
-            android.util.Log.d("FindSimilarWallpapers", "Comparing against ${allWallpapers.size} wallpapers in database")
+            android.util.Log.d("FindSimilarWallpapers", "Comparing against ${filteredWallpapers.size} wallpapers (filtered from ${allWallpapers.size} total, sources: $enabledSources)")
             
             // LOG: CRITICAL - Check if database embeddings are diverse or all similar
-            if (allWallpapers.isNotEmpty()) {
-                val sample = allWallpapers.take(10)
+            if (filteredWallpapers.isNotEmpty()) {
+                val sample = filteredWallpapers.take(10)
                 android.util.Log.d("FindSimilarWallpapers", "=== DATABASE EMBEDDING DIVERSITY CHECK ===")
                 sample.forEachIndexed { index, wallpaper ->
                     val embPreview = wallpaper.embedding.take(5).joinToString(", ", "[", ", ...]")
                     val magnitude = kotlin.math.sqrt(wallpaper.embedding.map { it * it }.sum())
                     val stats = "min=${wallpaper.embedding.minOrNull()}, max=${wallpaper.embedding.maxOrNull()}, avg=${wallpaper.embedding.average()}"
-                    android.util.Log.d("FindSimilarWallpapers", "DB[$index] ID:${wallpaper.id.take(20)} cat:${wallpaper.category}")
+                    android.util.Log.d("FindSimilarWallpapers", "DB[$index] ID:${wallpaper.id.take(20)} cat:${wallpaper.category} src:${wallpaper.source}")
                     android.util.Log.d("FindSimilarWallpapers", "  Embedding: $embPreview, mag=${"%.2f".format(magnitude)}, $stats")
                 }
                 
                 // Check if embeddings are too similar (sign of corruption)
-                val firstEmb = allWallpapers[0].embedding
-                val secondEmb = allWallpapers[1].embedding
+                val firstEmb = filteredWallpapers[0].embedding
+                val secondEmb = filteredWallpapers[1].embedding
                 val similarity = similarityCalculator.calculateSimilarity(firstEmb, secondEmb)
                 android.util.Log.d("FindSimilarWallpapers", "Similarity between first 2 wallpapers: $similarity")
                 android.util.Log.d("FindSimilarWallpapers", "=== END DIVERSITY CHECK ===")
             }
             
-            val rankedWallpapers = allWallpapers
+            val rankedWallpapers = filteredWallpapers
                 .map { wallpaper ->
                     val similarity = when {
                         // BEST: Enhanced similarity with image analysis (captures essence)

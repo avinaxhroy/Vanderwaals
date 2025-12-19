@@ -104,7 +104,24 @@ class DailyPlaylistWorker @AssistedInject constructor(
                 ))
                 return Result.failure()
             }
-            Log.d(TAG, "Catalog has ${allWallpapers.size} total wallpapers")
+            
+            // Step 1b: Filter by enabled sources (github/bing user settings)
+            val enabledSources = mutableListOf<String>()
+            if (settings.githubEnabled) enabledSources.add("github")
+            if (settings.bingEnabled) enabledSources.add("bing")
+            
+            val sourceFilteredWallpapers = if (enabledSources.isEmpty()) {
+                allWallpapers
+            } else {
+                allWallpapers.filter { it.source.lowercase() in enabledSources }
+            }
+            
+            if (sourceFilteredWallpapers.isEmpty()) {
+                Log.e(TAG, "No wallpapers available for enabled sources: $enabledSources")
+                return Result.failure()
+            }
+            
+            Log.d(TAG, "Catalog has ${allWallpapers.size} total, ${sourceFilteredWallpapers.size} from enabled sources: $enabledSources")
             
             // Step 2: Get user preferences for scoring (optional, fallback to random if not available)
             val preferences = preferenceRepository.getUserPreferences().first()
@@ -118,15 +135,15 @@ class DailyPlaylistWorker @AssistedInject constructor(
             Log.d(TAG, "${recentHistory.size} wallpapers shown recently")
             
             // Step 4: Filter candidates (not recently shown)
-            val candidates = allWallpapers.filter { wallpaper ->
+            val candidates = sourceFilteredWallpapers.filter { wallpaper ->
                 wallpaper.id !in recentHistory
             }
             
             if (candidates.isEmpty()) {
-                Log.w(TAG, "No new candidates available, using all wallpapers")
+                Log.w(TAG, "No new candidates available, using all source-filtered wallpapers")
             }
             
-            val availableCandidates = if (candidates.isNotEmpty()) candidates else allWallpapers
+            val availableCandidates = if (candidates.isNotEmpty()) candidates else sourceFilteredWallpapers
             Log.d(TAG, "${availableCandidates.size} candidates available for selection")
             
             // Step 5: Score and select wallpapers

@@ -73,6 +73,7 @@ import me.avinas.vanderwaals.domain.usecase.UserEngagementTracker
 import me.avinas.vanderwaals.ui.InitializationViewModel
 import me.avinas.vanderwaals.ui.VanderwaalsNavGraph
 import me.avinas.vanderwaals.ui.components.LoadingScreen
+import me.avinas.vanderwaals.ui.components.ManifestMigrationDialog
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -148,6 +149,12 @@ class MainActivity : ComponentActivity() {
             val loadingSubMessage by initViewModel.loadingSubMessage.collectAsState()
             val loadingProgress by initViewModel.loadingProgress.collectAsState()
             val syncFailed by initViewModel.syncFailed.collectAsState()
+            
+            // Migration dialog state
+            val showMigrationDialog by initViewModel.showMigrationDialog.collectAsState()
+            val migrationInProgress by initViewModel.migrationInProgress.collectAsState()
+            val migrationProgress by initViewModel.migrationProgress.collectAsState()
+            val migrationMessage by initViewModel.migrationMessage.collectAsState()
             
             // Observe settings for theme - directly derive darkTheme to ensure reactive updates
             val settings by settingsDataStore.settings.collectAsState(initial = null)
@@ -265,6 +272,18 @@ class MainActivity : ComponentActivity() {
                                 showAlarmPermissionDialog = false
                                 openAlarmPermissionSettings()
                             }
+                        )
+                    }
+                    
+                    // Manifest migration dialog for users upgrading from older versions
+                    if (showMigrationDialog) {
+                        ManifestMigrationDialog(
+                            onUpdateNow = { initViewModel.startMigration() },
+                            onLater = { initViewModel.dismissMigrationDialog() },
+                            onDismiss = { initViewModel.dismissMigrationDialog() },
+                            isLoading = migrationInProgress,
+                            progress = migrationProgress,
+                            progressMessage = migrationMessage
                         )
                     }
                 }

@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import me.avinas.vanderwaals.BuildConfig
+import me.avinas.vanderwaals.data.datastore.SettingsDataStore
 import me.avinas.vanderwaals.data.repository.ManifestRepository
 import javax.inject.Inject
 
@@ -21,12 +23,14 @@ import javax.inject.Inject
  * - Loading screen visibility
  * - Status messages for user feedback
  * - WorkManager sync progress
+ * - Manifest migration state for version upgrades
  */
 @HiltViewModel
 class InitializationViewModel @Inject constructor(
     private val manifestRepository: ManifestRepository,
     private val workManager: WorkManager,
-    private val downloadProgressManager: me.avinas.vanderwaals.network.DownloadProgressManager
+    private val downloadProgressManager: me.avinas.vanderwaals.network.DownloadProgressManager,
+    private val settingsDataStore: SettingsDataStore
 ) : ViewModel() {
     
     companion object {
@@ -48,10 +52,118 @@ class InitializationViewModel @Inject constructor(
     private val _syncFailed = MutableStateFlow(false)
     val syncFailed: StateFlow<Boolean> = _syncFailed.asStateFlow()
     
+    // Migration state for users upgrading from older versions
+    private val _showMigrationDialog = MutableStateFlow(false)
+    val showMigrationDialog: StateFlow<Boolean> = _showMigrationDialog.asStateFlow()
+    
+    private val _migrationInProgress = MutableStateFlow(false)
+    val migrationInProgress: StateFlow<Boolean> = _migrationInProgress.asStateFlow()
+    
+    private val _migrationProgress = MutableStateFlow<Float?>(null)
+    val migrationProgress: StateFlow<Float?> = _migrationProgress.asStateFlow()
+    
+    private val _migrationMessage = MutableStateFlow<String?>(null)
+    val migrationMessage: StateFlow<String?> = _migrationMessage.asStateFlow()
+    
     init {
+        checkMigrationNeeded()
         checkInitialization()
         observeDownloadProgress()
     }
+    
+    /**
+     * Checks if a manifest migration is needed after app upgrade.
+     * Shows migration dialog for users upgrading from v3.x to v4.0+
+     */
+    private fun checkMigrationNeeded() {
+        viewModelScope.launch {
+            try {
+                val currentVersionCode = BuildConfig.VERSION_CODE
+                val migrationNeeded = settingsDataStore.checkAndSetMigrationNeeded(currentVersionCode)
+                
+                if (migrationNeeded) {
+                    Log.i(TAG, "Manifest migration needed - user upgraded from old version")
+                    _showMigrationDialog.value = true
+                } else {
+                    Log.d(TAG, "No migration needed")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error checking migration status", e)
+            }
+        }
+    }
+    
+    /**
+     * Called when user taps "Update Now" on migration dialog.
+     * Triggers manifest re-sync with force update.
+     */
+    fun startMigration() {
+        viewModelScope.launch {
+            _migrationInProgress.value = true
+            _migrationProgress.value = 0.0f
+            _migrationMessage.value = "Connecting to server..."
+            
+            try {
+                manifestRepository.syncManifest(
+                    onProgress = { message, progress, count ->
+                        _migrationMessage.value = message
+                        _migrationProgress.value = progress
+                    },
+                    forceUpdate = true  // Force re-download even if not modified
+                ).fold(
+                    onSuccess = { count ->
+                        Log.i(TAG, "Migration completed successfully: $count wallpapers")
+                        _migrationMessage.value = "Updated $count wallpapers!"
+                        _migrationProgress.value = 1.0f
+                        
+                        // Update manifest version to v2
+                        settingsDataStore.updateManifestVersion(2)
+                        settingsDataStore.clearMigrationFlags()
+                        
+                        // Close dialog after brief delay
+                        kotlinx.coroutines.delay(1000L)
+                        _showMigrationDialog.value = false
+                        _migrationInProgress.value = false
+                    },
+                    onFailure = { error ->
+                        Log.e(TAG, "Migration failed", error)
+                        _migrationMessage.value = "Update failed: ${error.message}"
+                        _migrationProgress.value = null
+                        _migrationInProgress.value = false
+                    }
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Migration error", e)
+                _migrationMessage.value = "Error: ${e.message}"
+                _migrationProgress.value = null
+                _migrationInProgress.value = false
+            }
+        }
+    }
+    
+    /**
+     * Called when user taps "Later" on migration dialog.
+     * Dismisses dialog but keeps migration pending for next launch.
+     */
+    fun dismissMigrationDialog() {
+        viewModelScope.launch {
+            _showMigrationDialog.value = false
+            // Don't mark as dismissed permanently - will show again next launch
+            // User can manually sync from Settings
+        }
+    }
+    
+    /**
+     * Called when user taps "Don't Show Again".
+     * Permanently dismisses the migration dialog.
+     */
+    fun dismissMigrationPermanently() {
+        viewModelScope.launch {
+            settingsDataStore.setManifestMigrationDismissed(true)
+            _showMigrationDialog.value = false
+        }
+    }
+
     
     /**
      * Observes real-time download progress from DownloadProgressManager.
