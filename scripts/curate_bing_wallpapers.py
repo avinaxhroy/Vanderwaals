@@ -9,7 +9,7 @@ Generates TWO manifest files:
   - bing_manifest_full.json: Full archive (~5400+ wallpapers, ~15MB)
 
 Features:
-- Fetches from bing.npanuhin.me API (year-based endpoints for efficiency)
+- Fetches from bing.npanuhin.me full archive API
 - MobileNetV3-Small for 576-dim embeddings
 - 5 dominant colors per wallpaper (K-means)
 - Brightness and contrast calculation
@@ -284,31 +284,42 @@ class BingApiClient:
             'User-Agent': 'Vanderwaals-Curation/1.0'
         })
     
-    def fetch_year_data(self, year: int) -> List[Dict]:
-        """Fetch wallpapers for a specific year."""
-        url = f"{BING_API_BASE}/{self.region}/{self.language}.{year}.json"
+    def fetch_full_archive(self) -> List[Dict]:
+        """Fetch complete wallpaper archive from Bing."""
+        url = f"{BING_API_BASE}/{self.region}/{self.language}.json"
         
         try:
-            response = self.session.get(url, timeout=30)
-            if response.status_code == 404:
-                logger.info(f"No data for year {year}")
-                return []
+            logger.info(f"Fetching full archive from {url}")
+            response = self.session.get(url, timeout=60)
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            logger.info(f"Successfully fetched {len(data)} wallpapers from archive")
+            return data
         except requests.RequestException as e:
-            logger.warning(f"Failed to fetch year {year}: {e}")
+            logger.error(f"Failed to fetch full archive: {e}")
             return []
     
-    def fetch_all_years(self, start_year: int, end_year: int) -> List[Dict]:
-        """Fetch wallpapers for a range of years."""
-        all_wallpapers = []
+    def fetch_wallpapers_by_year_range(self, start_year: int, end_year: int) -> List[Dict]:
+        """Fetch wallpapers and filter by year range."""
+        all_data = self.fetch_full_archive()
         
-        for year in range(start_year, end_year + 1):
-            data = self.fetch_year_data(year)
-            all_wallpapers.extend(data)
-            logger.info(f"Fetched {len(data)} wallpapers from {year}")
+        if not all_data:
+            return []
         
-        return all_wallpapers
+        # Filter by year range
+        filtered = []
+        for item in all_data:
+            date_str = item.get('date', '')
+            if date_str:
+                try:
+                    year = int(date_str.split('-')[0])
+                    if start_year <= year <= end_year:
+                        filtered.append(item)
+                except (ValueError, IndexError):
+                    continue
+        
+        logger.info(f"Filtered {len(filtered)} wallpapers from {start_year} to {end_year}")
+        return filtered
     
     def download_image(self, url: str) -> Optional[Image.Image]:
         """Download image from URL."""
@@ -495,13 +506,13 @@ def main():
     # Fetch wallpaper data
     if args.full_only:
         logger.info(f"Fetching full archive: {full_start_year} to {CURRENT_YEAR}")
-        all_data = client.fetch_all_years(full_start_year, CURRENT_YEAR)
+        all_data = client.fetch_wallpapers_by_year_range(full_start_year, CURRENT_YEAR)
     elif args.lite_only:
         logger.info(f"Fetching lite archive: {lite_start_year} to {CURRENT_YEAR}")
-        all_data = client.fetch_all_years(lite_start_year, CURRENT_YEAR)
+        all_data = client.fetch_wallpapers_by_year_range(lite_start_year, CURRENT_YEAR)
     else:
         logger.info(f"Fetching full archive for both manifests: {full_start_year} to {CURRENT_YEAR}")
-        all_data = client.fetch_all_years(full_start_year, CURRENT_YEAR)
+        all_data = client.fetch_wallpapers_by_year_range(full_start_year, CURRENT_YEAR)
     
     # Sort by date (newest first for consistency)
     all_data.sort(key=lambda x: x.get('date', ''), reverse=True)
