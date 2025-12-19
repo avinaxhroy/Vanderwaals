@@ -2,7 +2,7 @@
 # Install with: pip install -r requirements.txt
 
 # Deep Learning - TensorFlow for MobileNetV3 embeddings
-tensorflow-cpu  # Use 'tensorflow' (not tensorflow-cpu) for macOS Apple Silicon
+tensorflow-cpu  # Use tensorflow-cpu for github actions
 
 # Image Processing
 Pillow                  # Image loading, color extraction, resizing

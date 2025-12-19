@@ -5,7 +5,7 @@ Vanderwaals Wallpaper Curation Pipeline
 
 Production-ready script optimized for GitHub Actions to process 6000+ wallpapers
 from 8 GitHub repositories. Extracts MobileNetV3 embeddings, colors, and metadata
-to generate manifest.json.
+to generate manifest_v2.json.
 
 Features:
 - SMART INCREMENTAL UPDATES: Only process repos with new commits (via GitHub API)
@@ -118,10 +118,10 @@ REPOSITORIES = [
 
 # Output configuration
 OUTPUT_DIR = Path("curation_output")
-MANIFEST_PATH = OUTPUT_DIR / "manifest.json"
+MANIFEST_PATH = OUTPUT_DIR / "manifest_v2.json"  # v2 format for v4.0.0+ (quantized embeddings)
 CHECKPOINT_PATH = OUTPUT_DIR / "checkpoint.json"
 UPDATE_TRACKER_PATH = OUTPUT_DIR / "update_tracker.json"  # For incremental updates
-PREVIOUS_MANIFEST_PATH = OUTPUT_DIR / "manifest_previous.json"  # Cache for incremental merge
+PREVIOUS_MANIFEST_PATH = OUTPUT_DIR / "manifest_v2_previous.json"  # Cache for incremental merge
 
 # Image processing configuration
 SUPPORTED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp'}

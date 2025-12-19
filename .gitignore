@@ -79,10 +79,14 @@ scripts/.DS_Store
 /app/release
 app/release/output-metadata.json
 
-# Manifest files (managed by GitHub Actions, ignore local copies)
+# Manifest files (managed by GitHub Actions, not synced locally)
+# GitHub Actions uses 'git add -f' to force-commit these despite being ignored
+app/src/main/assets/manifest_v2.json
+app/src/main/assets/manifest_v2.json.gz
 app/src/main/assets/manifest.json
 app/src/main/assets/manifest.json.gz
 app/src/main/assets/bing_manifest_lite.json
 app/src/main/assets/bing_manifest_lite.json.gz
 app/src/main/assets/bing_manifest_full.json
 app/src/main/assets/bing_manifest_full.json.gz
+

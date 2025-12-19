@@ -70,13 +70,13 @@ jobs:
           python curate_wallpapers.py $ARGS
           
           # Set output variables
-          WALLPAPER_COUNT=$(jq '.total_wallpapers' curation_output/manifest.json)
+          WALLPAPER_COUNT=$(jq '.total_wallpapers' curation_output/manifest_v2.json)
           echo "wallpaper_count=$WALLPAPER_COUNT" >> $GITHUB_OUTPUT
           
-          MANIFEST_SIZE=$(du -h curation_output/manifest.json | cut -f1)
+          MANIFEST_SIZE=$(du -h curation_output/manifest_v2.json | cut -f1)
           echo "manifest_size=$MANIFEST_SIZE" >> $GITHUB_OUTPUT
           
-          COMPRESSED_SIZE=$(du -h curation_output/manifest.json.gz | cut -f1)
+          COMPRESSED_SIZE=$(du -h curation_output/manifest_v2.json.gz | cut -f1)
           echo "compressed_size=$COMPRESSED_SIZE" >> $GITHUB_OUTPUT
       
       - name: Check disk space (after)
@@ -89,27 +89,27 @@ jobs:
         run: |
           cd scripts/curation_output
           
-          echo "Validating manifest.json..."
+          echo "Validating manifest_v2.json..."
           
           # Check JSON is valid
-          jq empty manifest.json || exit 1
+          jq empty manifest_v2.json || exit 1
           
           # Check required fields
-          jq -e '.version' manifest.json > /dev/null || { echo "Missing version"; exit 1; }
-          jq -e '.last_updated' manifest.json > /dev/null || { echo "Missing last_updated"; exit 1; }
-          jq -e '.model_version' manifest.json > /dev/null || { echo "Missing model_version"; exit 1; }
-          jq -e '.embedding_dim' manifest.json > /dev/null || { echo "Missing embedding_dim"; exit 1; }
-          jq -e '.wallpapers' manifest.json > /dev/null || { echo "Missing wallpapers array"; exit 1; }
+          jq -e '.version' manifest_v2.json > /dev/null || { echo "Missing version"; exit 1; }
+          jq -e '.last_updated' manifest_v2.json > /dev/null || { echo "Missing last_updated"; exit 1; }
+          jq -e '.model_version' manifest_v2.json > /dev/null || { echo "Missing model_version"; exit 1; }
+          jq -e '.embedding_dim' manifest_v2.json > /dev/null || { echo "Missing embedding_dim"; exit 1; }
+          jq -e '.wallpapers' manifest_v2.json > /dev/null || { echo "Missing wallpapers array"; exit 1; }
           
           # Validate embedding dimensions
-          EMBEDDING_DIM=$(jq '.embedding_dim' manifest.json)
+          EMBEDDING_DIM=$(jq '.embedding_dim' manifest_v2.json)
           if [[ "$EMBEDDING_DIM" != "576" ]]; then
             echo "Invalid embedding dimension: $EMBEDDING_DIM (expected 576)"
             exit 1
           fi
           
           # Check first wallpaper has correct structure
-          FIRST_EMBEDDING_LEN=$(jq '.wallpapers[0].embedding | length' manifest.json)
+          FIRST_EMBEDDING_LEN=$(jq '.wallpapers[0].embedding | length' manifest_v2.json)
           if [[ "$FIRST_EMBEDDING_LEN" != "576" ]]; then
             echo "First wallpaper has invalid embedding length: $FIRST_EMBEDDING_LEN"
             exit 1
@@ -123,10 +123,10 @@ jobs:
           mkdir -p app/src/main/assets
           
           # Copy uncompressed manifest (for debug builds)
-          cp scripts/curation_output/manifest.json app/src/main/assets/manifest.json
+          cp scripts/curation_output/manifest_v2.json app/src/main/assets/manifest_v2.json
           
           # Copy compressed manifest (for reference)
-          cp scripts/curation_output/manifest.json.gz app/src/main/assets/manifest.json.gz
+          cp scripts/curation_output/manifest_v2.json.gz app/src/main/assets/manifest_v2.json.gz
           
           echo "✓ Copied manifest to app/src/main/assets/"
       
@@ -136,8 +136,8 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          git add app/src/main/assets/manifest.json
-          git add app/src/main/assets/manifest.json.gz
+          git add -f app/src/main/assets/manifest_v2.json
+          git add -f app/src/main/assets/manifest_v2.json.gz
           
           # Check if there are changes
           if git diff --staged --quiet; then
@@ -166,8 +166,8 @@ jobs:
         with:
           name: manifest-artifacts
           path: |
-            scripts/curation_output/manifest.json
-            scripts/curation_output/manifest.json.gz
+            scripts/curation_output/manifest_v2.json
+            scripts/curation_output/manifest_v2.json.gz
             scripts/curation_output/curation.log
           retention-days: 30
       
@@ -190,7 +190,7 @@ jobs:
             ### CDN Access
             Access via jsDelivr CDN (recommended):
             ```
-            https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/app/src/main/assets/manifest.json.gz
+            https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/app/src/main/assets/manifest_v2.json.gz
             ```
             
             Note: Manifest files are no longer attached to releases. 

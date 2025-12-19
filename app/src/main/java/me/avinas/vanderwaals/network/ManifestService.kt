@@ -26,10 +26,11 @@ import retrofit2.http.Header
  * - Use [checkManifestHeaders] to check if manifest was updated without downloading
  * - Use [getManifestConditional] with If-Modified-Since header to skip unchanged manifests
  * 
- * **Manifest file:** `manifest.json`
+ * **Manifest file:** `manifest_v2.json`
  * - Size: ~6MB compressed (with v2 quantized embeddings)
  * - Format: JSON with wallpaper metadata array
  * - Updated: Weekly via GitHub Actions
+ * - Note: v3.8.x uses manifest.json (legacy), v4.0.0+ uses manifest_v2.json
  * 
  * @see ManifestDto
  * @see ManifestRepository
@@ -58,7 +59,7 @@ interface ManifestService {
      * 
      * @return Response wrapper containing ManifestDto on success
      */
-    @GET("app/src/main/assets/manifest.json")
+    @GET("app/src/main/assets/manifest_v2.json")
     suspend fun getManifest(): Response<ManifestDto>
     
     /**
@@ -74,7 +75,7 @@ interface ManifestService {
      * 
      * @return Response with headers only, no body
      */
-    @HEAD("app/src/main/assets/manifest.json")
+    @HEAD("app/src/main/assets/manifest_v2.json")
     suspend fun checkManifestHeaders(): Response<Void>
     
     /**
@@ -105,7 +106,7 @@ interface ManifestService {
      * @param ifModifiedSince Last-Modified header from previous successful download
      * @return Response with manifest (200) or empty body (304)
      */
-    @GET("app/src/main/assets/manifest.json")
+    @GET("app/src/main/assets/manifest_v2.json")
     suspend fun getManifestConditional(
         @Header("If-Modified-Since") ifModifiedSince: String?
     ): Response<ManifestDto>
