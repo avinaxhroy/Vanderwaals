@@ -61,6 +61,8 @@ jobs:
       
       - name: Run Bing curation script
         id: curate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd scripts
           

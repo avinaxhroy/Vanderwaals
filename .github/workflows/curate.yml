@@ -13,6 +13,11 @@ on:
         required: false
         type: boolean
         default: false
+      force_full_recuration:
+        description: 'Force full re-curation (ignore incremental)'
+        required: false
+        type: boolean
+        default: false
       skip_release:
         description: 'Skip creating GitHub release'
         required: false
@@ -56,6 +61,8 @@ jobs:
       
       - name: Run curation script
         id: curate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd scripts
           
@@ -66,18 +73,25 @@ jobs:
             echo "TEST_MODE=true" >> $GITHUB_ENV
           fi
           
+          if [[ "${{ github.event.inputs.force_full_recuration }}" == "true" ]]; then
+            ARGS="$ARGS --full"
+            echo "FULL_RECURATION=true" >> $GITHUB_ENV
+          fi
+          
           # Run curation
           python curate_wallpapers.py $ARGS
           
           # Set output variables
-          WALLPAPER_COUNT=$(jq '.total_wallpapers' curation_output/manifest_v2.json)
-          echo "wallpaper_count=$WALLPAPER_COUNT" >> $GITHUB_OUTPUT
-          
-          MANIFEST_SIZE=$(du -h curation_output/manifest_v2.json | cut -f1)
-          echo "manifest_size=$MANIFEST_SIZE" >> $GITHUB_OUTPUT
-          
-          COMPRESSED_SIZE=$(du -h curation_output/manifest_v2.json.gz | cut -f1)
-          echo "compressed_size=$COMPRESSED_SIZE" >> $GITHUB_OUTPUT
+          if [[ -f "curation_output/manifest_v2.json" ]]; then
+            WALLPAPER_COUNT=$(jq '.total_wallpapers' curation_output/manifest_v2.json)
+            echo "wallpaper_count=$WALLPAPER_COUNT" >> $GITHUB_OUTPUT
+            
+            MANIFEST_SIZE=$(du -h curation_output/manifest_v2.json | cut -f1)
+            echo "manifest_size=$MANIFEST_SIZE" >> $GITHUB_OUTPUT
+            
+            COMPRESSED_SIZE=$(du -h curation_output/manifest_v2.json.gz | cut -f1)
+            echo "compressed_size=$COMPRESSED_SIZE" >> $GITHUB_OUTPUT
+          fi
       
       - name: Check disk space (after)
         run: |
