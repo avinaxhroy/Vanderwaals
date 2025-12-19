@@ -35,7 +35,7 @@ import logging
 import argparse
 import tempfile
 import time
-import requests
+import cloudscraper  # Use cloudscraper instead of requests to bypass Cloudflare
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Set
 from datetime import datetime
@@ -274,37 +274,39 @@ def detect_category(title: str, description: str) -> str:
 # ============================================================================
 
 class BingApiClient:
-    """Client for fetching wallpapers from Bing Wallpaper Archive."""
+    """Client for fetching wallpapers from Bing Wallpaper Archive.
+    
+    Uses cloudscraper to bypass Cloudflare protection on bing.npanuhin.me.
+    """
     
     def __init__(self, region: str = DEFAULT_REGION, language: str = DEFAULT_LANGUAGE):
         self.region = region
         self.language = language
-        self.session = requests.Session()
-        # Use browser-like headers to avoid 403 blocking
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Referer': 'https://bing.npanuhin.me/',
-            'Connection': 'keep-alive'
-        })
+        # Use cloudscraper instead of requests.Session() to bypass Cloudflare
+        self.scraper = cloudscraper.create_scraper(
+            browser={
+                'browser': 'chrome',
+                'platform': 'windows',
+                'desktop': True
+            }
+        )
+        logger.info("Initialized cloudscraper to bypass Cloudflare protection")
     
     def fetch_year_data(self, year: int) -> List[Dict]:
         """Fetch wallpapers for a specific year."""
         url = f"{BING_API_BASE}/{self.region}/{self.language}.{year}.json"
         
         try:
-            # Add delay to avoid rate limiting
-            time.sleep(1.5)  # 1.5 seconds between requests
+            # Small delay to be respectful to the server
+            time.sleep(0.5)
             
-            response = self.session.get(url, timeout=30)
+            response = self.scraper.get(url, timeout=30)
             if response.status_code == 404:
                 logger.info(f"No data for year {year}")
                 return []
             response.raise_for_status()
             return response.json()
-        except requests.RequestException as e:
+        except Exception as e:
             logger.warning(f"Failed to fetch year {year}: {e}")
             return []
     
@@ -322,7 +324,7 @@ class BingApiClient:
     def download_image(self, url: str) -> Optional[Image.Image]:
         """Download image from URL."""
         try:
-            response = self.session.get(url, timeout=60)
+            response = self.scraper.get(url, timeout=60)
             response.raise_for_status()
             return Image.open(BytesIO(response.content))
         except Exception as e:
