@@ -280,8 +280,14 @@ class BingApiClient:
         self.region = region
         self.language = language
         self.session = requests.Session()
+        # Use browser-like headers to avoid 403 blocking
         self.session.headers.update({
-            'User-Agent': 'Vanderwaals-Curation/1.0'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Referer': 'https://bing.npanuhin.me/',
+            'Connection': 'keep-alive'
         })
     
     def fetch_year_data(self, year: int) -> List[Dict]:
@@ -289,6 +295,9 @@ class BingApiClient:
         url = f"{BING_API_BASE}/{self.region}/{self.language}.{year}.json"
         
         try:
+            # Add delay to avoid rate limiting
+            time.sleep(1.5)  # 1.5 seconds between requests
+            
             response = self.session.get(url, timeout=30)
             if response.status_code == 404:
                 logger.info(f"No data for year {year}")
