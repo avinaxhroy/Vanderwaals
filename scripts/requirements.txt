@@ -17,5 +17,6 @@ tqdm                  # Progress bars for long-running tasks
 
 # Networking - GitHub API for incremental updates
 requests              # HTTP client for GitHub API
+cloudscraper          # Bypass Cloudflare protection on bing.npanuhin.me
 
 # Note: Git is required for repository cloning (pre-installed on GitHub Actions)
