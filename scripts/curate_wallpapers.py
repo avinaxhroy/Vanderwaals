@@ -271,12 +271,16 @@ def validate_manifest(manifest: Dict) -> List[str]:
         else:
             # Validate first wallpaper as sample
             sample = manifest['wallpapers'][0]
-            required_wp_keys = ['id', 'url', 'embedding', 'category', 'colors', 'brightness', 'contrast']
+            required_wp_keys = ['id', 'url', 'category', 'colors', 'brightness', 'contrast']
             for key in required_wp_keys:
                 if key not in sample:
                     errors.append(f"Wallpaper missing required key: {key}")
             
-            # Validate embedding dimension
+            # Validate embedding (either full or quantized)
+            if 'embedding' not in sample and 'e' not in sample:
+                errors.append("Wallpaper must have either 'embedding' or 'e'")
+            
+            # Validate embedding dimension (only for full embeddings)
             if 'embedding' in sample:
                 if not isinstance(sample['embedding'], list):
                     errors.append("Embedding must be a list")

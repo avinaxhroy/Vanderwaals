@@ -122,10 +122,12 @@ jobs:
             exit 1
           fi
           
-          # Check first wallpaper has correct structure
-          FIRST_EMBEDDING_LEN=$(jq '.wallpapers[0].embedding | length' manifest_v2.json)
-          if [[ "$FIRST_EMBEDDING_LEN" != "576" ]]; then
-            echo "First wallpaper has invalid embedding length: $FIRST_EMBEDDING_LEN"
+          # Check first wallpaper has correct structure (either embedding or e)
+          HAS_EMBEDDING=$(jq 'if .wallpapers[0].embedding then "true" else "false" end' manifest_v2.json)
+          HAS_QUANTIZED=$(jq 'if .wallpapers[0].e then "true" else "false" end' manifest_v2.json)
+          
+          if [[ "$HAS_EMBEDDING" == "false" ]] && [[ "$HAS_QUANTIZED" == "false" ]]; then
+            echo "First wallpaper missing both embedding and e field"
             exit 1
           fi
           
