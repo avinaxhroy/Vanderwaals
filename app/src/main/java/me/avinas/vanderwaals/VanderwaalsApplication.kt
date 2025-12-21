@@ -244,6 +244,9 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
                     "unlock" -> me.avinas.vanderwaals.worker.ChangeInterval.EVERY_UNLOCK
                     "15min" -> me.avinas.vanderwaals.worker.ChangeInterval.FIFTEEN_MINUTES
                     "hourly" -> me.avinas.vanderwaals.worker.ChangeInterval.HOURLY
+                    "3hours" -> me.avinas.vanderwaals.worker.ChangeInterval.THREE_HOURS
+                    "6hours" -> me.avinas.vanderwaals.worker.ChangeInterval.SIX_HOURS
+                    "12hours" -> me.avinas.vanderwaals.worker.ChangeInterval.TWELVE_HOURS
                     "daily" -> me.avinas.vanderwaals.worker.ChangeInterval.DAILY
                     "never" -> me.avinas.vanderwaals.worker.ChangeInterval.NEVER
                     else -> me.avinas.vanderwaals.worker.ChangeInterval.NEVER
@@ -255,9 +258,12 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
                 }
                 
                 // Check if alarm permission is granted (Android 12+) for ALL alarm-based intervals
-                // CRITICAL FIX: Must include FIFTEEN_MINUTES - it also uses exact alarms!
+                // CRITICAL FIX: Must include FIFTEEN_MINUTES and hour-based intervals - they use exact alarms!
                 if (interval == me.avinas.vanderwaals.worker.ChangeInterval.DAILY || 
                     interval == me.avinas.vanderwaals.worker.ChangeInterval.HOURLY ||
+                    interval == me.avinas.vanderwaals.worker.ChangeInterval.THREE_HOURS ||
+                    interval == me.avinas.vanderwaals.worker.ChangeInterval.SIX_HOURS ||
+                    interval == me.avinas.vanderwaals.worker.ChangeInterval.TWELVE_HOURS ||
                     interval == me.avinas.vanderwaals.worker.ChangeInterval.FIFTEEN_MINUTES) {
                     
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {

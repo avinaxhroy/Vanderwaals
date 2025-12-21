@@ -107,6 +107,9 @@ class QueueNextWallpapersUseCase @Inject constructor(
             val queueSize = when (interval) {
                 "unlock" -> PREDOWNLOAD_COUNT_EVERY_UNLOCK
                 "hourly" -> PREDOWNLOAD_COUNT_HOURLY
+                "3hours" -> PREDOWNLOAD_COUNT_HOURLY   // 3-hour interval - medium frequency
+                "6hours" -> PREDOWNLOAD_COUNT_DAILY    // 6-hour interval - low-medium frequency
+                "12hours" -> PREDOWNLOAD_COUNT_DAILY   // 12-hour interval - low frequency
                 "daily" -> PREDOWNLOAD_COUNT_DAILY
                 "never" -> {
                     Log.d(TAG, "User has 'Never' interval, skipping pre-download")
@@ -124,7 +127,17 @@ class QueueNextWallpapersUseCase @Inject constructor(
                 return Result.success(0)
             }
             
-            // Step 3: Get all wallpapers from catalog
+            // Step 3: FAST PATH - Check if all wallpapers already downloaded
+            // This avoids loading 8K wallpaper metadata when there's nothing to pre-download
+            val catalogCount = wallpaperRepository.getWallpaperCount()
+            val downloadedCount = wallpaperRepository.getDownloadedWallpaperCount()
+            
+            if (downloadedCount >= catalogCount) {
+                Log.d(TAG, "All $catalogCount wallpapers already downloaded, skipping queue")
+                return Result.success(0)
+            }
+            
+            // Step 4: Get all wallpapers from catalog (only if not all downloaded)
             val allWallpapers = wallpaperRepository.getAllWallpapers().first()
             if (allWallpapers.isEmpty()) {
                 Log.w(TAG, "No wallpapers in catalog")

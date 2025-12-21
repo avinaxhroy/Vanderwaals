@@ -13,6 +13,34 @@ Lme/avinas/vanderwaals/worker/WorkScheduler;
 Lme/avinas/vanderwaals/core/SmartCrop;
 Lme/avinas/vanderwaals/core/LiveWallpaperDetector;
 
+# Algorithm classes (core recommendation system)
+Lme/avinas/vanderwaals/algorithm/YouTubeLikeRecommender;
+Lme/avinas/vanderwaals/algorithm/SimilarityCalculator;
+Lme/avinas/vanderwaals/algorithm/PreferenceUpdater;
+Lme/avinas/vanderwaals/algorithm/EmbeddingExtractor;
+Lme/avinas/vanderwaals/algorithm/ExplorationStrategy;
+
+# Domain layer (use cases)
+Lme/avinas/vanderwaals/domain/usecase/SelectNextWallpaperUseCase;
+Lme/avinas/vanderwaals/domain/usecase/FindSimilarWallpapersUseCase;
+Lme/avinas/vanderwaals/domain/usecase/UpdatePreferencesUseCase;
+Lme/avinas/vanderwaals/domain/NextWallpaperCacheManager;
+
+# Repository hot paths
+Lme/avinas/vanderwaals/data/repository/ManifestRepository;
+Lme/avinas/vanderwaals/data/repository/WallpaperRepositoryImpl;
+Lme/avinas/vanderwaals/data/repository/CategoryPreferenceRepositoryImpl;
+Lme/avinas/vanderwaals/data/repository/ColorPreferenceRepositoryImpl;
+
+# Network utilities
+Lme/avinas/vanderwaals/network/SegmentedDownloader;
+Lme/avinas/vanderwaals/network/ManifestService;
+
 # Compose critical path
 Landroidx/compose/runtime/Composer;
 Landroidx/compose/ui/node/LayoutNode;
+
+# UI screens
+Lme/avinas/vanderwaals/ui/main/MainScreen;
+Lme/avinas/vanderwaals/ui/history/HistoryScreen;
+Lme/avinas/vanderwaals/ui/settings/SettingsScreen;

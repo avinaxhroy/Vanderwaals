@@ -195,13 +195,13 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
          * - Users can adjust contrast preferences as they use the app
          */
         private val MIGRATION_1_2 = object : Migration(1, 2) {
-            override fun migrate(database: SupportSQLiteDatabase) {
+            override fun migrate(db: SupportSQLiteDatabase) {
                 // Add contrast column with default value of 50
-                database.execSQL(
+                db.execSQL(
                     "ALTER TABLE wallpaper_metadata ADD COLUMN contrast INTEGER DEFAULT 50 NOT NULL"
                 )
                 // Create index on contrast for efficient filtering
-                database.execSQL(
+                db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_wallpaper_metadata_contrast ON wallpaper_metadata(contrast)"
                 )
             }
@@ -222,22 +222,22 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
          * - Category preferences table starts empty (will populate as user interacts)
          */
         private val MIGRATION_2_3 = object : Migration(2, 3) {
-            override fun migrate(database: SupportSQLiteDatabase) {
+            override fun migrate(db: SupportSQLiteDatabase) {
                 // Add momentumVector column to user_preferences
                 // Store as TEXT (JSON array) for consistency with other FloatArray columns
-                database.execSQL(
+                db.execSQL(
                     "ALTER TABLE user_preferences ADD COLUMN momentumVector TEXT NOT NULL DEFAULT '[]'"
                 )
                 
                 // Add originalEmbedding column to user_preferences
                 // This column stores the prime reference from upload/category (Personalize) or empty (Auto)
                 // Store as TEXT (JSON array) for consistency with other FloatArray columns
-                database.execSQL(
+                db.execSQL(
                     "ALTER TABLE user_preferences ADD COLUMN originalEmbedding TEXT NOT NULL DEFAULT '[]'"
                 )
                 
                 // Create category_preferences table
-                database.execSQL("""
+                db.execSQL("""
                     CREATE TABLE IF NOT EXISTS category_preferences (
                         category TEXT PRIMARY KEY NOT NULL,
                         likes INTEGER NOT NULL DEFAULT 0,
@@ -248,7 +248,7 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
                 """)
                 
                 // Create index on lastShown for efficient recent category queries
-                database.execSQL(
+                db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_category_preferences_lastShown ON category_preferences(lastShown)"
                 )
             }
@@ -269,9 +269,9 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
          * - Uses RGB Euclidean distance for color similarity matching
          */
         private val MIGRATION_3_4 = object : Migration(3, 4) {
-            override fun migrate(database: SupportSQLiteDatabase) {
+            override fun migrate(db: SupportSQLiteDatabase) {
                 // Create color_preferences table
-                database.execSQL("""
+                db.execSQL("""
                     CREATE TABLE IF NOT EXISTS color_preferences (
                         colorHex TEXT PRIMARY KEY NOT NULL,
                         likes INTEGER NOT NULL DEFAULT 0,
@@ -282,7 +282,7 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
                 """)
                 
                 // Create index on lastShown for efficient recent color queries
-                database.execSQL(
+                db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_color_preferences_lastShown ON color_preferences(lastShown)"
                 )
             }
@@ -303,10 +303,10 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
          * - New feedback will include context information
          */
         private val MIGRATION_4_5 = object : Migration(4, 5) {
-            override fun migrate(database: SupportSQLiteDatabase) {
+            override fun migrate(db: SupportSQLiteDatabase) {
                 // Add feedbackContext column to wallpaper_history
                 // Store as TEXT (JSON) for FeedbackContext object
-                database.execSQL(
+                db.execSQL(
                     "ALTER TABLE wallpaper_history ADD COLUMN feedbackContext TEXT DEFAULT NULL"
                 )
             }
@@ -327,9 +327,9 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
          * - Default values are neutral (0.5) for all metrics
          */
         private val MIGRATION_5_6 = object : Migration(5, 6) {
-            override fun migrate(database: SupportSQLiteDatabase) {
+            override fun migrate(db: SupportSQLiteDatabase) {
                 // Create composition_preferences table
-                database.execSQL("""
+                db.execSQL("""
                     CREATE TABLE IF NOT EXISTS composition_preferences (
                         id INTEGER PRIMARY KEY NOT NULL DEFAULT 1,
                         averageSymmetry REAL NOT NULL DEFAULT 0.5,
@@ -365,11 +365,11 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
          * - No data transformation required
          */
         private val MIGRATION_6_7 = object : Migration(6, 7) {
-            override fun migrate(database: SupportSQLiteDatabase) {
+            override fun migrate(db: SupportSQLiteDatabase) {
                 // Add index on wallpaper_history.userFeedback
                 // Optimizes queries filtering by feedback (likes, dislikes)
                 // Used by: getEntriesWithFeedback(), feedback analytics
-                database.execSQL(
+                db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_wallpaper_history_userFeedback " +
                     "ON wallpaper_history(userFeedback)"
                 )
@@ -377,7 +377,7 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
                 // Add index on wallpaper_history.removedAt
                 // Optimizes queries for active wallpaper (WHERE removedAt IS NULL)
                 // Used by: getActiveWallpaper(), getActiveWallpaperFlow()
-                database.execSQL(
+                db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_wallpaper_history_removedAt " +
                     "ON wallpaper_history(removedAt)"
                 )
@@ -387,7 +387,7 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
                 // Used by: getTopUndownloaded(), queue management
                 // SQLite will use this for covering index queries (index-only scans)
                 // Note: Room's @Index annotation doesn't support DESC, so we create index without it
-                database.execSQL(
+                db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_download_queue_downloaded_priority " +
                     "ON download_queue(downloaded, priority)"
                 )
@@ -411,11 +411,11 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
          * - Single-column indexes remain for backward compatibility
          */
         private val MIGRATION_7_8 = object : Migration(7, 8) {
-            override fun migrate(database: SupportSQLiteDatabase) {
+            override fun migrate(db: SupportSQLiteDatabase) {
                 // Add composite index on wallpaper_metadata(category, brightness)
                 // Optimizes queries filtering by both category and brightness range
                 // Used by: getByCategoryAndBrightnessRange(), contextual filtering
-                database.execSQL(
+                db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_wallpaper_metadata_category_brightness " +
                     "ON wallpaper_metadata(category, brightness)"
                 )
@@ -423,7 +423,7 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
                 // Add composite index on wallpaper_metadata(source, brightness)
                 // Optimizes queries filtering by both source and brightness range
                 // Used by: getBySourceAndBrightnessRange(), source-specific contextual filtering
-                database.execSQL(
+                db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_wallpaper_metadata_source_brightness " +
                     "ON wallpaper_metadata(source, brightness)"
                 )

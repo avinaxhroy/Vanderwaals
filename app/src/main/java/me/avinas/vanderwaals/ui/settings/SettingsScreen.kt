@@ -9,6 +9,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.only
@@ -33,7 +34,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -42,7 +43,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import me.avinas.vanderwaals.ui.theme.LocalThemeIsDark
-import me.avinas.vanderwaals.ui.theme.components.GlassCard
+import me.avinas.vanderwaals.ui.theme.components.*
 import me.avinas.vanderwaals.ui.theme.*
 
 // Mockup Colors
@@ -144,7 +145,7 @@ fun SettingsScreen(
 
                 // MODE Section
                 item {
-                    SettingsSectionHeader(title = "MODE")
+                    LabelSectionHeader(title = "MODE")
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(0.dp)
@@ -174,7 +175,7 @@ fun SettingsScreen(
                                         Icon(
                                             imageVector = Icons.Default.Shuffle,
                                             contentDescription = null,
-                                            tint = if (isDark) DarkIndigo400 else LightPrimary,
+                                            tint = if (isDark) InfoColorDark else LightPrimary,
                                             modifier = Modifier.size(24.dp)
                                         )
                                     }
@@ -200,7 +201,7 @@ fun SettingsScreen(
                                     },
                                     colors = SwitchDefaults.colors(
                                         checkedThumbColor = Color.White,
-                                        checkedTrackColor = if (isDark) DarkIndigo400 else LightPrimary,
+                                        checkedTrackColor = if (isDark) InfoColorDark else LightPrimary,
                                         uncheckedThumbColor = Color.White,
                                         uncheckedTrackColor = if (isDark) Color.Gray else Color(0xFFE5E7EB)
                                     )
@@ -226,7 +227,7 @@ fun SettingsScreen(
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                         contentDescription = null,
-                                        tint = if (isDark) Color.Gray else Color(0xFF9CA3AF)
+                                        tint = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF9CA3AF)
                                     )
                                 }
                             }
@@ -236,7 +237,7 @@ fun SettingsScreen(
 
                 // APPEARANCE Section
                 item {
-                    SettingsSectionHeader(title = "APPEARANCE")
+                    LabelSectionHeader(title = "APPEARANCE")
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(8.dp)
@@ -254,7 +255,7 @@ fun SettingsScreen(
 
                 // AUTO-CHANGE Section
                 item {
-                    SettingsSectionHeader(title = "AUTO-CHANGE")
+                    LabelSectionHeader(title = "AUTO-CHANGE")
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(0.dp)
@@ -348,7 +349,7 @@ fun SettingsScreen(
                                             text = "${settings.dailyPlaylistSize} wallpapers",
                                             style = MaterialTheme.typography.bodyMedium,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (isDark) DarkIndigo400 else LightPrimary
+                                            color = if (isDark) InfoColorDark else LightPrimary
                                         )
                                     }
                                     
@@ -360,8 +361,8 @@ fun SettingsScreen(
                                         valueRange = 10f..50f,
                                         steps = 39,
                                         colors = SliderDefaults.colors(
-                                            thumbColor = if (isDark) DarkIndigo400 else LightPrimary,
-                                            activeTrackColor = if (isDark) DarkIndigo400 else LightPrimary,
+                                            thumbColor = if (isDark) InfoColorDark else LightPrimary,
+                                            activeTrackColor = if (isDark) InfoColorDark else LightPrimary,
                                             inactiveTrackColor = if (isDark) Color.Gray.copy(alpha = 0.3f) else Color(0xFFE5E7EB)
                                         )
                                     )
@@ -369,7 +370,7 @@ fun SettingsScreen(
                                     Text(
                                         text = "A fresh set of wallpapers is downloaded daily and rotated on unlock.",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = if (isDark) Color.Gray else Color(0xFF6B7280),
+                                        color = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF6B7280),
                                         modifier = Modifier.padding(top = 4.dp)
                                     )
                                     
@@ -402,7 +403,7 @@ fun SettingsScreen(
                                             Text(
                                                 text = "This mode has a 1-minute cooldown between changes to save battery. Frequent wallpaper changes may increase battery usage.",
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = if (isDark) Color.Gray else Color(0xFF6B7280)
+                                                color = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF6B7280)
                                             )
                                         }
                                     }
@@ -424,7 +425,7 @@ fun SettingsScreen(
                                             CircularProgressIndicator(
                                                 modifier = Modifier.size(16.dp),
                                                 strokeWidth = 2.dp,
-                                                color = if (isDark) DarkIndigo400 else LightPrimary
+                                                color = if (isDark) InfoColorDark else LightPrimary
                                             )
                                             Text(
                                                 text = if (settings.playlistDownloadProgress.isApplying) 
@@ -448,7 +449,7 @@ fun SettingsScreen(
                                                     .fillMaxWidth()
                                                     .height(4.dp)
                                                     .clip(RoundedCornerShape(2.dp)),
-                                                color = if (isDark) DarkIndigo400 else LightPrimary,
+                                                color = if (isDark) InfoColorDark else LightPrimary,
                                                 trackColor = if (isDark) Color.Gray.copy(alpha = 0.3f) else Color(0xFFE5E7EB)
                                             )
                                         }
@@ -464,7 +465,7 @@ fun SettingsScreen(
                                             .fillMaxWidth()
                                             .padding(16.dp),
                                         colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (isDark) DarkIndigo400 else LightPrimary,
+                                            containerColor = if (isDark) InfoColorDark else LightPrimary,
                                             contentColor = Color.White
                                         ),
                                         shape = RoundedCornerShape(8.dp),
@@ -527,7 +528,7 @@ fun SettingsScreen(
                     }
                     
                     if (batteryOptimized && settings.interval != ChangeInterval.NEVER) {
-                        SettingsSectionHeader(title = "BATTERY & PERFORMANCE")
+                        LabelSectionHeader(title = "BATTERY & PERFORMANCE")
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -580,7 +581,7 @@ fun SettingsScreen(
 
                 // APPLY TO Section
                 item {
-                    SettingsSectionHeader(title = "APPLY TO")
+                    LabelSectionHeader(title = "APPLY TO")
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(8.dp)
@@ -598,7 +599,7 @@ fun SettingsScreen(
 
                 // SOURCES Section
                 item {
-                    SettingsSectionHeader(title = "SOURCES")
+                    LabelSectionHeader(title = "SOURCES")
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(16.dp)
@@ -630,7 +631,7 @@ fun SettingsScreen(
                                         modifier = Modifier
                                             .size(24.dp)
                                             .clip(RoundedCornerShape(6.dp))
-                                            .background(if (enabled) (if (isDark) DarkIndigo400 else LightPrimary) else Color.Transparent)
+                                            .background(if (enabled) (if (isDark) InfoColorDark else LightPrimary) else Color.Transparent)
                                             .border(
                                                 1.dp, 
                                                 if (enabled) Color.Transparent else (if (isDark) Color.Gray else Color(0xFFD1D5DB)),
@@ -693,14 +694,14 @@ fun SettingsScreen(
                                 Text(
                                     text = "Last synced: ${settings.lastSynced}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (isDark) Color.Gray else Color(0xFF6B7280)
+                                    color = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF6B7280)
                                 )
                                 
                                 if (settings.lastSynced == "Never synced") {
                                     Text(
                                         text = "Sync wallpaper catalog to start",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = if (isDark) DarkRose400 else Color(0xFFEF4444),
+                                        color = if (isDark) ErrorColorDark else Color(0xFFEF4444),
                                         fontWeight = FontWeight.Medium,
                                         modifier = Modifier.padding(top = 4.dp)
                                     )
@@ -712,7 +713,7 @@ fun SettingsScreen(
 
                 // STORAGE Section
                 item {
-                    SettingsSectionHeader(title = "STORAGE")
+                    LabelSectionHeader(title = "STORAGE")
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(16.dp)
@@ -756,8 +757,8 @@ fun SettingsScreen(
                                 onClick = { showClearCacheDialog = true },
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isDark) DarkRose400.copy(alpha = 0.2f) else Color(0xFFEF4444).copy(alpha = 0.1f),
-                                    contentColor = if (isDark) DarkRose400 else Color(0xFFEF4444)
+                                    containerColor = if (isDark) ErrorColorDark.copy(alpha = 0.2f) else Color(0xFFEF4444).copy(alpha = 0.1f),
+                                    contentColor = if (isDark) ErrorColorDark else Color(0xFFEF4444)
                                 ),
                                 shape = RoundedCornerShape(8.dp),
                                 contentPadding = PaddingValues(vertical = 10.dp)
@@ -770,7 +771,7 @@ fun SettingsScreen(
 
                 // INSIGHTS Section
                 item {
-                    SettingsSectionHeader(title = "INSIGHTS")
+                    LabelSectionHeader(title = "INSIGHTS")
                     GlassCard(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -799,7 +800,7 @@ fun SettingsScreen(
                                     Icon(
                                         imageVector = Icons.Default.Analytics,
                                         contentDescription = null,
-                                        tint = if (isDark) DarkIndigo400 else LightPrimary,
+                                        tint = if (isDark) InfoColorDark else LightPrimary,
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
@@ -829,7 +830,7 @@ fun SettingsScreen(
 
                 // ABOUT Section
                 item {
-                    SettingsSectionHeader(title = "ABOUT")
+                    LabelSectionHeader(title = "ABOUT")
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(0.dp)
@@ -855,7 +856,7 @@ fun SettingsScreen(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                                     contentDescription = null,
-                                    tint = if (isDark) Color.Gray else Color(0xFF9CA3AF)
+                                    tint = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF9CA3AF)
                                 )
                             }
                             
@@ -1044,98 +1045,4 @@ fun SettingsScreen(
     }
 }
 
-@Composable
-fun SettingsSectionHeader(title: String) {
-    val isDark = LocalThemeIsDark.current
-    Text(
-        text = title,
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.Bold,
-        color = if (isDark) Color.Gray else Color(0xFF6B7280),
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        letterSpacing = 1.2.sp
-    )
-}
 
-@Composable
-fun SettingsRow(
-    title: String,
-    subtitle: String? = null,
-    onClick: (() -> Unit)? = null,
-    textColor: Color = Color.Unspecified,
-    trailing: @Composable (() -> Unit)? = null
-) {
-    val isDark = LocalThemeIsDark.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = textColor
-            )
-            subtitle?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (isDark) Color.Gray else Color(0xFF6B7280)
-                )
-            }
-        }
-        trailing?.invoke()
-    }
-}
-
-@Composable
-fun SegmentedControl(
-    items: List<String>,
-    selectedIndex: Int,
-    onItemSelected: (Int) -> Unit,
-    isDark: Boolean
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                if (isDark) Color.Black.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.05f),
-                RoundedCornerShape(8.dp)
-            )
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        items.forEachIndexed { index, item ->
-            val isSelected = index == selectedIndex
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(
-                        if (isSelected) {
-                            if (isDark) DarkIndigo400 else LightPrimary
-                        } else {
-                            Color.Transparent
-                        }
-                    )
-                    .clickable { onItemSelected(index) }
-                    .padding(vertical = 12.dp, horizontal = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = item,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium,
-                    color = if (isSelected) Color.White else (if (isDark) Color.Gray else Color(0xFF4B5563)),
-                    maxLines = 2,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-    }
-}

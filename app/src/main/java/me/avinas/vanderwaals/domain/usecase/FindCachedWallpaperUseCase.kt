@@ -35,7 +35,7 @@ import javax.inject.Inject
  * @property wallpaperRepository Repository for wallpaper data
  */
 class FindCachedWallpaperUseCase @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val wallpaperRepository: WallpaperRepository
 ) {
     companion object {

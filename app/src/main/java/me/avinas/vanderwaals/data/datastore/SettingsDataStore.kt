@@ -208,28 +208,45 @@ class SettingsDataStore @Inject constructor(
      * Checks if a manifest migration is needed based on version upgrade.
      * 
      * @param currentVersionCode Current app version code
+     * @param databaseHasWallpapers Whether the database contains wallpapers (indicates existing user)
      * @return true if migration dialog should be shown
      */
-    suspend fun checkAndSetMigrationNeeded(currentVersionCode: Int): Boolean {
+    suspend fun checkAndSetMigrationNeeded(
+        currentVersionCode: Int,
+        databaseHasWallpapers: Boolean
+    ): Boolean {
         val prefs = context.dataStore.data.first()
         val lastKnownVersion = prefs[LAST_KNOWN_VERSION_CODE] ?: 0
         val manifestVersion = prefs[MANIFEST_VERSION] ?: 1
         val migrationDismissed = prefs[MANIFEST_MIGRATION_DISMISSED] ?: false
         
-        // If this is a fresh install or already dismissed, no migration needed
-        if (lastKnownVersion == 0 || migrationDismissed) {
-            // Update version code for future checks
+        // If user already dismissed, don't show again
+        if (migrationDismissed) {
             context.dataStore.edit { it[LAST_KNOWN_VERSION_CODE] = currentVersionCode }
             return false
         }
         
-        // Check if upgrading from old version AND manifest is old format
-        val isUpgradingToV4 = lastKnownVersion < MANIFEST_V2_MIN_VERSION_CODE && 
-                              currentVersionCode >= MANIFEST_V2_MIN_VERSION_CODE
+        // TRUE fresh install: no version tracking AND no database wallpapers
+        val isTrueFreshInstall = lastKnownVersion == 0 && !databaseHasWallpapers
+        
+        if (isTrueFreshInstall) {
+            // Fresh install - no migration needed, set to v2 manifest
+            context.dataStore.edit { 
+                it[LAST_KNOWN_VERSION_CODE] = currentVersionCode
+                it[MANIFEST_VERSION] = 2  // Fresh installs use v2
+            }
+            return false
+        }
+        
+        // Existing user check
+        val isUpgradingToV4 = currentVersionCode >= MANIFEST_V2_MIN_VERSION_CODE
         val hasOldManifest = manifestVersion < 2
         
-        if (isUpgradingToV4 && hasOldManifest) {
-            // Mark migration as pending
+        // Show migration if:
+        // 1. Upgrading to v4.0.0+ AND
+        // 2. Has old manifest (v1) AND
+        // 3. Has wallpapers in database (existing user)
+        if (isUpgradingToV4 && hasOldManifest && databaseHasWallpapers) {
             context.dataStore.edit { 
                 it[MANIFEST_MIGRATION_PENDING] = true
                 it[LAST_KNOWN_VERSION_CODE] = currentVersionCode
@@ -237,7 +254,7 @@ class SettingsDataStore @Inject constructor(
             return true
         }
         
-        // Update version code
+        // No migration needed
         context.dataStore.edit { it[LAST_KNOWN_VERSION_CODE] = currentVersionCode }
         return false
     }

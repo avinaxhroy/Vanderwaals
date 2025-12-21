@@ -1,23 +1,27 @@
 package me.avinas.vanderwaals.ui.onboarding
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -27,437 +31,274 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import com.bumptech.glide.load.resource.bitmap.CenterCrop
-import com.bumptech.glide.request.RequestOptions
-import com.skydoves.landscapist.glide.GlideImage
-import com.skydoves.landscapist.ImageOptions
-import me.avinas.vanderwaals.core.SmartCrop
-import me.avinas.vanderwaals.core.SmartCropTransformation
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import me.avinas.vanderwaals.data.entity.WallpaperMetadata
-import me.avinas.vanderwaals.ui.theme.components.GlassCard
-import androidx.compose.ui.draw.blur
-import androidx.compose.foundation.isSystemInDarkTheme
+import me.avinas.vanderwaals.ui.theme.components.*
 
-/**
- * Confirmation Gallery Screen - Third screen in personalize flow.
- * 
- * Displays 12 diverse wallpapers from top 20 matches.
- * User provides initial feedback:
- * - Tap to like (shows heart)
- * - Long-press to dislike (shows X)
- * - Must like 3+ to continue
- * 
- * **Preference Learning:**
- * On continue:
- * 1. Average embeddings of liked wallpapers
- * 2. Initialize preference vector
- * 3. Store feedback in database
- * 
- * **UI:**
- * - 2-column grid
- * - Each card shows thumbnail with overlay icons
- * - Continue button enabled after 3+ likes
- * 
- * @param onContinue Callback when user continues to settings
- * @param onBackPressed Callback when back button is pressed
- * @param viewModel ViewModel managing gallery state
- */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConfirmationGalleryScreen(
     onContinue: () -> Unit,
-    onBackPressed: () -> Unit = {},
+    onBack: () -> Unit,
     viewModel: ConfirmationGalleryViewModel = hiltViewModel()
 ) {
-    // Handle system back button
-    androidx.activity.compose.BackHandler {
-        android.util.Log.d("ConfirmationGalleryScreen", "BackHandler triggered!")
-        onBackPressed()
-    }
-    
     val displayedWallpapers by viewModel.displayedWallpapers.collectAsState()
     val likedWallpapers by viewModel.likedWallpapers.collectAsState()
     val dislikedWallpapers by viewModel.dislikedWallpapers.collectAsState()
     val canContinue by viewModel.canContinue.collectAsState()
     val finishState by viewModel.finishState.collectAsState()
     
-    // Navigate when initialization succeeds
+    val isDark = isSystemInDarkTheme()
+    val scrollState = rememberLazyGridState()
+
+    // Count rated items
+    val ratedCount = likedWallpapers.size + dislikedWallpapers.size
+    
+    // Create ratings map for UI simplification
+    // true = like, false = dislike, null = unrated
+    // This is derived state for UI
+    
+    // Handle Finish State side effects
     LaunchedEffect(finishState) {
         if (finishState is FinishState.Success) {
             onContinue()
         }
     }
-    
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0), // Disable default insets
-        topBar = {
-            Column {
-                Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-                TopAppBar(
-                title = { },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        android.util.Log.d("ConfirmationGalleryScreen", "Back icon clicked!")
-                        onBackPressed()
-                    }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                windowInsets = WindowInsets(0, 0, 0, 0),
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                )
-            )
-        }
-    },
-        bottomBar = {
-            Surface(
-                tonalElevation = 3.dp,
-                shadowElevation = 8.dp,
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            // Pass all wallpapers for embedding lookup
-                            viewModel.finishOnboarding(displayedWallpapers)
-                        },
-                        enabled = canContinue && finishState !is FinishState.Initializing,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp)
-                    ) {
-                        if (finishState is FinishState.Initializing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                        } else {
-                            Text(
-                                text = "Continue",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                    
-                    if (!canContinue) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        val remaining = 4 - likedWallpapers.size
-                        Text(
-                            text = "Like at least $remaining more wallpaper${if (remaining > 1) "s" else ""}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                    
-                    // Manual bottom padding
-                    Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
-                }
-            }
-        }
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = Color.Transparent
     ) { paddingValues ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surface)
+            modifier = Modifier.fillMaxSize()
         ) {
-            // Dynamic Background Blobs
-            val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-            val infiniteTransition = rememberInfiniteTransition(label = "blobs")
-
-            // Animate positions
-            val offset1 by infiniteTransition.animateFloat(
-                initialValue = 0f, targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(10000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ), label = "offset1"
+            // Premium Background
+            PremiumBackground(
+                modifier = Modifier.fillMaxSize(),
+                isDark = isDark
             )
-            val offset2 by infiniteTransition.animateFloat(
-                initialValue = 0f, targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(15000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ), label = "offset2"
-            )
-
-            Canvas(modifier = Modifier.fillMaxSize().blur(80.dp)) {
-                val w = size.width
-                val h = size.height
-
-                if (isDark) {
-                    // Dark Mode Blobs (Indigo/Rose/Sky)
-                    drawCircle(
-                        color = Color(0xFF5C6BC0).copy(alpha = 0.2f), // Indigo 400
-                        center = Offset(w * 0.2f + (offset1 * 100f), h * 0.2f),
-                        radius = 400.dp.toPx()
-                    )
-                    drawCircle(
-                        color = Color(0xFFEC407A).copy(alpha = 0.15f), // Rose 400
-                        center = Offset(w * 0.8f - (offset2 * 100f), h * 0.5f),
-                        radius = 350.dp.toPx()
-                    )
-                    drawCircle(
-                        color = Color(0xFF29B6F6).copy(alpha = 0.15f), // Sky 400
-                        center = Offset(w * 0.4f, h * 0.8f + (offset1 * 50f)),
-                        radius = 450.dp.toPx()
-                    )
-                } else {
-                    // Light Mode Blobs (Purple/Orange/Teal)
-                    drawCircle(
-                        color = Color(0xFFAB47BC).copy(alpha = 0.3f), // Purple 400
-                        center = Offset(w * 0.8f - (offset1 * 100f), h * 0.1f),
-                        radius = 500.dp.toPx()
-                    )
-                    drawCircle(
-                        color = Color(0xFFFFA726).copy(alpha = 0.25f), // Orange 400
-                        center = Offset(w * 0.1f + (offset2 * 100f), h * 0.6f),
-                        radius = 400.dp.toPx()
-                    )
-                    drawCircle(
-                        color = Color(0xFF26A69A).copy(alpha = 0.25f), // Teal 400
-                        center = Offset(w * 0.6f, h * 0.9f - (offset1 * 50f)),
-                        radius = 450.dp.toPx()
-                    )
-                }
-            }
 
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(horizontal = 24.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Title with Refresh Button
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Pick Your Favorites",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.weight(1f)
-                    )
-                    
-                    // Refresh Button
-                    IconButton(
-                        onClick = { viewModel.refreshWallpapers() },
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh wallpapers",
-                            tint = MaterialTheme.colorScheme.onSurface // Changed from primary
-                        )
+                 OnboardingTopAppBar(
+                    onBack = onBack,
+                    showBack = true,
+                    title = {
+                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                             Text(
+                                 text = "Refine Your Taste",
+                                 style = MaterialTheme.typography.titleMedium,
+                                 fontWeight = FontWeight.Bold,
+                                 color = if (isDark) Color.White else Color(0xFF111827)
+                             )
+                             Text(
+                                 text = "${likedWallpapers.size}/4 likes needed",
+                                 style = MaterialTheme.typography.bodySmall,
+                                 color = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF6B7280)
+                             )
+                         }
+                    },
+                    actions = {
+                        IconButton(onClick = { viewModel.refreshWallpapers() }) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Refresh",
+                                tint = if (isDark) Color.White else Color(0xFF111827)
+                            )
+                        }
                     }
-                }
-                
-                Text(
-                    text = "Tap to like, long-press to dislike",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
                 )
                 
-                // Check if wallpapers are available
-                when {
-                    displayedWallpapers.isEmpty() -> {
-                        // Empty state - show loading or error
-                        Box(
+                // Content
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
+                    if (displayedWallpapers.isEmpty()) {
+                        // Empty State / Loading
+                        Column(
                             modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                CircularProgressIndicator()
-                                Text(
-                                    text = "Loading wallpapers...",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            CircularProgressIndicator(
+                                color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary
+                            )
                         }
-                    }
-                    else -> {
-                        // Gallery Grid
+                    } else {
                         LazyVerticalGrid(
-                            columns = GridCells.Fixed(2),
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            state = scrollState,
+                            columns = GridCells.Adaptive(minSize = 150.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.fillMaxSize()
                         ) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Text(
+                                    text = "Tap to like, hold to hide.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF4B5563),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(bottom = 16.dp, start = 32.dp, end = 32.dp)
+                                )
+                            }
+                            
                             items(displayedWallpapers) { wallpaper ->
-                                WallpaperCard(
+                                val isLiked = likedWallpapers.contains(wallpaper.id)
+                                val isDisliked = dislikedWallpapers.contains(wallpaper.id)
+                                val rating = when {
+                                    isLiked -> true
+                                    isDisliked -> false
+                                    else -> null
+                                }
+                                
+                                WallpaperRatingCard(
                                     wallpaper = wallpaper,
-                                    isLiked = likedWallpapers.contains(wallpaper.id),
-                                    isDisliked = dislikedWallpapers.contains(wallpaper.id),
-                                    onLike = { viewModel.toggleLike(wallpaper.id) },
-                                    onDislike = { viewModel.markDislike(wallpaper.id) }
+                                    rating = rating,
+                                    onRate = { liked -> 
+                                        if (liked) {
+                                            if (isLiked) viewModel.toggleLike(wallpaper.id) // Toggle off
+                                            else viewModel.toggleLike(wallpaper.id) // Toggle on
+                                        } else {
+                                            if (isDisliked) viewModel.markDislike(wallpaper.id) // Toggle off (assuming markDislike toggles or we rely on logic)
+                                            // VM logic check needed. Usually distinct like/dislike calls.
+                                            else viewModel.markDislike(wallpaper.id)
+                                        }
+                                    }
                                 )
                             }
                         }
                     }
                 }
-            }
-        }
-        
-        // Error Snackbar
-        if (finishState is FinishState.Error) {
-            Snackbar(
-                modifier = Modifier
-                    .padding(16.dp),
-                action = {
-                    TextButton(onClick = { viewModel.resetFinishState() }) {
-                        Text("Dismiss")
+                
+                // Bottom Bar
+                GlassSheet(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                     Button(
+                        onClick = { 
+                             viewModel.finishOnboarding()
+                        },
+                        enabled = canContinue && finishState !is FinishState.Initializing,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        if (finishState is FinishState.Initializing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Color.White
+                            )
+                        } else {
+                            Text(
+                                text = "Finish Setup",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
-            ) {
-                Text((finishState as FinishState.Error).message)
             }
         }
     }
 }
 
-/**
- * Wallpaper card with like/dislike interactions.
- * 
- * @param wallpaper Wallpaper metadata
- * @param isLiked Whether wallpaper is liked
- * @param isDisliked Whether wallpaper is disliked
- * @param onLike Like callback
- * @param onDislike Dislike callback
- */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun WallpaperCard(
+fun WallpaperRatingCard(
     wallpaper: WallpaperMetadata,
-    isLiked: Boolean,
-    isDisliked: Boolean,
-    onLike: () -> Unit,
-    onDislike: () -> Unit
+    rating: Boolean?,
+    onRate: (Boolean) -> Unit
 ) {
-    // Get screen dimensions for smart crop
-    val configuration = LocalConfiguration.current
-    val screenWidth = configuration.screenWidthDp
-    val screenHeight = configuration.screenHeightDp
-    
-    // Calculate card dimensions (2 columns with spacing)
-    // Use 9:16 aspect ratio for better wallpaper preview (matches phone screen proportions)
-    val cardWidth = (screenWidth - 48 - 12) / 2 // padding + spacing
-    val cardHeight = (cardWidth / 0.5625f).toInt() // aspect ratio 9:16 = 0.5625
+    val isDark = isSystemInDarkTheme()
     
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(9f / 16f) // 9:16 aspect ratio for phone-like preview
-            .combinedClickable(
-                onClick = onLike,
-                onLongClick = onDislike
-            ),
-        shape = RoundedCornerShape(16.dp),
-        contentPadding = PaddingValues(0.dp)
+            .aspectRatio(0.65f),
+        contentPadding = PaddingValues(0.dp),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            // Wallpaper Thumbnail
-            // Smart Thumbnail Logic
-            val thumbnailUrl = remember(wallpaper) {
-                when {
-                    wallpaper.thumbnailUrl.isNotEmpty() -> wallpaper.thumbnailUrl
-                    wallpaper.url.contains("images.unsplash.com") -> "${wallpaper.url}&w=400&q=80"
-                    wallpaper.url.contains("bing.com") -> "${wallpaper.url}&w=400"
-                    else -> wallpaper.url
-                }
-            }
-
-            GlideImage(
-                imageModel = { thumbnailUrl },
-                modifier = Modifier.fillMaxSize(),
-                imageOptions = ImageOptions(contentScale = ContentScale.Crop),
-                requestOptions = {
-                    RequestOptions().override(500)
-                }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .combinedClickable(
+                    onClick = { onRate(true) },
+                    onLongClick = { onRate(false) }
+                )
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(wallpaper.url)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (rating == false) Modifier.background(Color.Black.copy(alpha = 0.5f)) else Modifier),
+                contentScale = ContentScale.Crop,
+                alpha = if (rating == false) 0.4f else 1f
             )
             
-            // Like Icon (Top Right)
-            if (isLiked) {
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp),
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Favorite,
-                        contentDescription = "Liked",
-                        modifier = Modifier.padding(8.dp),
-                        tint = MaterialTheme.colorScheme.onSurface // Changed from primary
-                    )
-                }
-            } else {
-                // Subtle overlay for unliked state to encourage interaction
+            // Rating Indicator Overlay
+            androidx.compose.animation.AnimatedVisibility(
+                visible = rating != null,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut(),
+                modifier = Modifier.align(Alignment.Center)
+            ) {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .size(40.dp)
+                        .size(56.dp)
+                        .clip(CircleShape)
                         .background(
-                            color = Color.Black.copy(alpha = 0.3f),
-                            shape = RoundedCornerShape(8.dp)
+                            when(rating) {
+                                true -> Color.Black.copy(alpha = 0.5f) // Dark bg for heart
+                                false -> Color.Transparent
+                                null -> Color.Transparent
+                            }
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.FavoriteBorder,
-                        contentDescription = "Not liked",
-                        tint = Color.White
+                        imageVector = if (rating == true) Icons.Default.Favorite else Icons.Default.Close,
+                        contentDescription = null,
+                        tint = if (rating == true) Color(0xFFEC4899) else Color.White,
+                        modifier = Modifier.size(32.dp)
                     )
                 }
             }
             
-            // Dislike Icon (Top Left)
-            if (isDisliked) {
-                Surface(
+            // Selection Border (if liked)
+            if (rating == true) {
+                Box(
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(8.dp),
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.9f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Disliked",
-                        modifier = Modifier.padding(8.dp),
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
+                        .fillMaxSize()
+                        .border(
+                            width = 3.dp, 
+                            color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else me.avinas.vanderwaals.ui.theme.LightPrimary,
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                )
             }
         }
     }

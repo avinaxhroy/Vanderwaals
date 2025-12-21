@@ -109,7 +109,12 @@ object SmartCrop {
 
     // Caching for saliency maps to avoid recalculation
     private val saliencyCache = mutableMapOf<String, Array<FloatArray>>()
-    private const val MAX_CACHE_SIZE = 10
+    private const val MAX_SALIENCY_CACHE_SIZE = 25  // Increased from 10 for better hit rate
+
+    // NEW: Cache for final crop regions - avoids re-computing crop for same source+target dimensions
+    // Key format: "${sourceWidth}x${sourceHeight}_${targetWidth}x${targetHeight}"
+    private val cropRegionCache = mutableMapOf<String, RectF>()
+    private const val MAX_CROP_CACHE_SIZE = 50  // Small memory footprint (RectF is just 4 floats)
 
     /**
      * Represents a point of interest in an image with a weight

@@ -49,8 +49,8 @@ android {
         applicationId = "me.avinas.vanderwaals"
         minSdk = 30
         targetSdk = 36
-        versionCode = 400 // Vanderwaals 4.0.0
-        versionName = "4.0.0"
+        versionCode = 410 // Vanderwaals 4.0.0
+        versionName = "4.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -192,4 +192,6 @@ dependencies {
     implementation(libs.okhttp)
     // OkHttp Logging Interceptor - HTTP request/response logging for debugging
     implementation(libs.okhttp.logging.interceptor)
+    // Coil
+    implementation("io.coil-kt:coil-compose:2.6.0")
 }

@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import me.avinas.vanderwaals.data.repository.ManifestRepository
 import javax.inject.Inject
@@ -36,6 +37,7 @@ import javax.inject.Inject
 @HiltViewModel
 class InitialSyncViewModel @Inject constructor(
     private val manifestRepository: ManifestRepository,
+    private val bingManifestRepository: me.avinas.vanderwaals.data.repository.BingManifestRepository,
     private val settingsDataStore: me.avinas.vanderwaals.data.datastore.SettingsDataStore
 ) : ViewModel() {
     
@@ -58,46 +60,85 @@ class InitialSyncViewModel @Inject constructor(
     fun startSync() {
         viewModelScope.launch {
             try {
-                _syncState.value = SyncState.Loading("Checking database...", 0.0f)
+                // Get enabled sources
+                val settings = settingsDataStore.settings.first()
+                val githubEnabled = settings.githubEnabled
+                val bingEnabled = settings.bingEnabled
+                val bingManifestType = settings.bingManifestType // "lite" or "full"
                 
-                // Check if database already has wallpapers
-                val isInitialized = manifestRepository.isDatabaseInitialized()
-                
-                if (isInitialized) {
-                    Log.d(TAG, "Database already initialized, skipping sync")
-                    val count = manifestRepository.getWallpaperCount()
-                    _wallpaperCount.value = count
-                    _syncState.value = SyncState.Success(count)
+                // If nothing enabled (shouldn't happen due to UI validation), default to GitHub
+                if (!githubEnabled && !bingEnabled) {
+                    _syncState.value = SyncState.Error("No wallpaper sources selected")
                     return@launch
                 }
                 
-                Log.d(TAG, "Database empty, starting sync...")
-                _syncState.value = SyncState.Loading("Connecting to server...", 0.1f)
+                var totalCount = 0
                 
-                // Perform sync with real-time progress updates
-                val result = manifestRepository.syncManifest(
-                    onProgress = { message, progress, count ->
-                        Log.d(TAG, "Sync progress: $message ($progress) - $count wallpapers")
-                        _syncState.value = SyncState.Loading(message, progress)
-                        _wallpaperCount.value = count
+                // Helper to update progress based on active phases
+                // If both enabled: GitHub (0-50%), Bing (50-100%)
+                // If single enabled: 0-100%
+                val updateUnifiedProgress = { source: String, msg: String, subProgress: Float ->
+                    val finalProgress = if (githubEnabled && bingEnabled) {
+                        if (source == "github") subProgress * 0.5f 
+                        else 0.5f + (subProgress * 0.5f)
+                    } else {
+                        subProgress
                     }
-                )
+                    _syncState.value = SyncState.Loading(msg, finalProgress)
+                }
+
+                // Phase 1: GitHub Manifest
+                if (githubEnabled) {
+                    Log.d(TAG, "Starting GitHub sync...")
+                    val result = manifestRepository.syncManifest(
+                        onProgress = { message, progress, count ->
+                            updateUnifiedProgress("github", "Community: $message", progress)
+                            if (count > 0) _wallpaperCount.value = totalCount + count
+                        }
+                    )
+                    
+                    result.fold(
+                        onSuccess = { count -> 
+                            totalCount += count 
+                            Log.d(TAG, "GitHub sync complete: $count")
+                        },
+                        onFailure = { error ->
+                            Log.e(TAG, "GitHub sync failed", error)
+                            _syncState.value = SyncState.Error("Community sync failed: ${error.message}")
+                            return@launch
+                        }
+                    )
+                }
                 
-                result.fold(
-                    onSuccess = { count ->
-                        Log.d(TAG, "Sync successful: $count wallpapers")
-                        _wallpaperCount.value = count
-                        // Update last sync timestamp to fix "Never synced" issue
-                        settingsDataStore.updateLastSyncTimestamp(System.currentTimeMillis())
-                        _syncState.value = SyncState.Success(count)
-                    },
-                    onFailure = { error ->
-                        Log.e(TAG, "Sync failed: ${error.message}", error)
-                        _syncState.value = SyncState.Error(
-                            message = error.message ?: "Unknown error occurred"
-                        )
-                    }
-                )
+                // Phase 2: Bing Manifest
+                if (bingEnabled) {
+                    Log.d(TAG, "Starting Bing sync ($bingManifestType)...")
+                    val result = bingManifestRepository.syncBingManifest(
+                        manifestType = bingManifestType,
+                        onProgress = { message, progress, count ->
+                            updateUnifiedProgress("bing", "Bing: $message", progress)
+                            if (count > 0) _wallpaperCount.value = totalCount + count
+                        }
+                    )
+                    
+                    result.fold(
+                        onSuccess = { count -> 
+                            totalCount += count
+                            Log.d(TAG, "Bing sync complete: $count")
+                        },
+                        onFailure = { error ->
+                            Log.e(TAG, "Bing sync failed", error)
+                            _syncState.value = SyncState.Error("Bing sync failed: ${error.message}")
+                            return@launch
+                        }
+                    )
+                }
+                
+                // Final Success
+                _wallpaperCount.value = totalCount
+                settingsDataStore.updateLastSyncTimestamp(System.currentTimeMillis())
+                _syncState.value = SyncState.Success(totalCount)
+                
             } catch (e: Exception) {
                 Log.e(TAG, "Unexpected error during sync", e)
                 _syncState.value = SyncState.Error(

@@ -1,78 +1,33 @@
 package me.avinas.vanderwaals.ui.onboarding
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import me.avinas.vanderwaals.ui.theme.animations.bounceOnAppear
-import me.avinas.vanderwaals.ui.theme.animations.pressAnimation
+import me.avinas.vanderwaals.ui.theme.components.*
 import me.avinas.vanderwaals.worker.ChangeInterval
-import me.avinas.vanderwaals.worker.WorkScheduler
 import java.time.LocalTime
-import me.avinas.vanderwaals.ui.theme.components.GlassCard
-import me.avinas.vanderwaals.ui.theme.components.GlassSheet
 
-/**
- * Application Settings Screen - Final screen in onboarding flow.
- * 
- * Configures wallpaper application settings:
- * - **Apply To**: Lock Screen, Home Screen, or Both
- * - **Change Interval**: Every unlock, Hourly, Daily, or Never
- * - **Daily Time**: Time picker (if Daily selected)
- * 
- * **On Start:**
- * 1. Save settings to SharedPreferences
- * 2. Schedule WorkManager tasks
- * 3. Apply first wallpaper immediately
- * 4. Navigate to main screen
- * 
- * @param onStartUsing Callback when app starts
- * @param onBackPressed Callback when back button is pressed
- * @param selectedMode Selected mode from ModeSelectionScreen (Auto or Personalize)
- * @param viewModel ViewModel managing settings
- */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ApplicationSettingsScreen(
     onStartUsing: () -> Unit,
@@ -82,480 +37,272 @@ fun ApplicationSettingsScreen(
 ) {
     // Handle system back button
     androidx.activity.compose.BackHandler {
-        android.util.Log.d("ApplicationSettingsScreen", "BackHandler triggered!")
         onBackPressed()
     }
-    
+
     val applyTo by viewModel.applyTo.collectAsStateWithLifecycle()
     val changeInterval by viewModel.changeInterval.collectAsStateWithLifecycle()
     val dailyTime by viewModel.dailyTime.collectAsStateWithLifecycle()
     val startState by viewModel.startState.collectAsStateWithLifecycle()
     val needsAlarmPermission by viewModel.needsAlarmPermission.collectAsStateWithLifecycle()
-    val warningMessage by viewModel.warningMessage.collectAsStateWithLifecycle()
-    
+    val warningMessage by viewModel.warningMessage.collectAsStateWithLifecycle() // Assuming this exists or added
+
+    val isDark = isSystemInDarkTheme()
     var showTimePicker by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
-    
-    // Lifecycle observer to detect when user returns from permission settings
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.onResume()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-    
-    // Show warning messages as Snackbar
-    LaunchedEffect(warningMessage) {
-        warningMessage?.let {
-            snackbarHostState.showSnackbar(
-                message = it,
-                duration = SnackbarDuration.Short
-            )
-            viewModel.clearWarningMessage()
-        }
-    }
-    
-    // Navigate when start succeeds
+
+    // Start using effect - trigger navigation
     LaunchedEffect(startState) {
         if (startState is StartState.Success) {
             onStartUsing()
         }
-    }
-    
-    Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        snackbarHost = { 
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 100.dp)
-            ) 
-        },
-
-        bottomBar = {
-            GlassSheet(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 48.dp)
-                ) {
-                    // Show progress indicator when starting
-                    if (startState is StartState.Starting) {
-                        val progress = (startState as StartState.Starting).progress
-                        val step = (startState as StartState.Starting).step
-                        
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            // Progress text
-                            Text(
-                                text = step,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
-                            
-                            // Progress bar or indeterminate indicator
-                            if (progress != null) {
-                                // Show determinate progress with percentage
-                                LinearProgressIndicator(
-                                    progress = { progress },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(8.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
-                                )
-                                
-                                // Percentage text
-                                Text(
-                                    text = "${(progress * 100).toInt()}%",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 4.dp)
-                                )
-                            } else {
-                                // Show indeterminate progress
-                                LinearProgressIndicator(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(8.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
-                                )
-                            }
-                        }
-                    } else {
-                        // Show button when not starting
-                        Button(
-                            onClick = { viewModel.startUsing(selectedMode) },
-                            enabled = startState !is StartState.Starting,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
-                            ),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
-                                .pressAnimation()
-                                .shadow(
-                                    elevation = 8.dp,
-                                    shape = RoundedCornerShape(16.dp),
-                                    spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-                                )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "Start Using Vanderwaals",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
+        if (startState is StartState.Error) {
+             val error = (startState as StartState.Error).message
+             snackbarHostState.showSnackbar(error)
+             viewModel.resetStartState()
         }
+    }
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = Color.Transparent,
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surface)
+            modifier = Modifier.fillMaxSize()
         ) {
-            // Dynamic Background Blobs
-            val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-            val infiniteTransition = rememberInfiniteTransition(label = "blobs")
-
-            // Animate positions
-            val offset1 by infiniteTransition.animateFloat(
-                initialValue = 0f, targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(10000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ), label = "offset1"
+            // Premium Background
+            PremiumBackground(
+                modifier = Modifier.fillMaxSize(),
+                isDark = isDark
             )
-            val offset2 by infiniteTransition.animateFloat(
-                initialValue = 0f, targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(15000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ), label = "offset2"
-            )
-
-            Canvas(modifier = Modifier.fillMaxSize().blur(80.dp)) {
-                val w = size.width
-                val h = size.height
-
-                if (isDark) {
-                    // Dark Mode Blobs (Indigo/Rose/Sky)
-                    drawCircle(
-                        color = Color(0xFF5C6BC0).copy(alpha = 0.2f), // Indigo 400
-                        center = Offset(w * 0.2f + (offset1 * 100f), h * 0.2f),
-                        radius = 400.dp.toPx()
-                    )
-                    drawCircle(
-                        color = Color(0xFFEC407A).copy(alpha = 0.15f), // Rose 400
-                        center = Offset(w * 0.8f - (offset2 * 100f), h * 0.5f),
-                        radius = 350.dp.toPx()
-                    )
-                    drawCircle(
-                        color = Color(0xFF29B6F6).copy(alpha = 0.15f), // Sky 400
-                        center = Offset(w * 0.4f, h * 0.8f + (offset1 * 50f)),
-                        radius = 450.dp.toPx()
-                    )
-                } else {
-                    // Light Mode Blobs (Purple/Orange/Teal)
-                    drawCircle(
-                        color = Color(0xFFAB47BC).copy(alpha = 0.3f), // Purple 400
-                        center = Offset(w * 0.8f - (offset1 * 100f), h * 0.1f),
-                        radius = 500.dp.toPx()
-                    )
-                    drawCircle(
-                        color = Color(0xFFFFA726).copy(alpha = 0.25f), // Orange 400
-                        center = Offset(w * 0.1f + (offset2 * 100f), h * 0.6f),
-                        radius = 400.dp.toPx()
-                    )
-                    drawCircle(
-                        color = Color(0xFF26A69A).copy(alpha = 0.25f), // Teal 400
-                        center = Offset(w * 0.6f, h * 0.9f - (offset1 * 50f)),
-                        radius = 450.dp.toPx()
-                    )
-                }
-            }
 
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp)
-                    .padding(top = 8.dp, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                Spacer(modifier = Modifier.height(4.dp))
-                
-                // Title with animation
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .bounceOnAppear()
-                ) {
-                    Text(
-                        text = "Configure Settings",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    Text(
-                        text = "Choose how and when to change wallpapers",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                }
-                
-                // Apply To Section
-                SettingsSection(
-                    title = "Apply To",
-                    description = "Where should wallpapers be applied?"
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectableGroup()
-                    ) {
-                        ApplyTo.values().forEach { option ->
-                            SettingsRadioButton(
-                                text = option.displayName,
-                                selected = applyTo == option,
-                                onClick = { viewModel.setApplyTo(option) }
-                            )
-                        }
-                    }
-                }
-                
-                // Change Interval Section
-                SettingsSection(
-                    title = "Change Wallpaper",
-                    description = "How often should wallpapers change?"
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectableGroup()
-                    ) {
-                        ChangeInterval.values().forEach { option ->
-                            SettingsRadioButton(
-                                text = option.displayName,
-                                selected = changeInterval == option,
-                                onClick = { viewModel.setChangeInterval(option) }
-                            )
-                        }
-                    }
-                    
-                    // Rate Limit and Battery Warning Note for Every Unlock
-                    if (changeInterval == ChangeInterval.EVERY_UNLOCK) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp)
-                                .background(
-                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-                                    shape = RoundedCornerShape(8.dp)
-                                )
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.secondary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Column {
-                                Text(
-                                    text = "Battery Notice",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.secondary
-                                )
-                                Text(
-                                    text = "Changes are limited to once per minute to save battery. This mode may increase battery usage with frequent unlocks.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                    
-                    // Time Picker for Daily
-                    if (changeInterval == ChangeInterval.DAILY) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
-                        GlassCard(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showTimePicker = true },
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Change at",
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                                Text(
-                                    text = "${dailyTime.hour.toString().padStart(2, '0')}:${dailyTime.minute.toString().padStart(2, '0')}",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            // TopAppBar Overlay
-            TopAppBar(
-                title = { },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        try {
-                            onBackPressed()
-                        } catch (e: Exception) {
-                            android.util.Log.e("ApplicationSettingsScreen", "ERROR calling onBackPressed!", e)
-                        }
-                    }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                OnboardingTopAppBar(
+                    onBack = onBackPressed,
+                    showBack = true,
+                    title = {
+                        Text(
+                            text = "Final Polish",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDark) Color.White else Color(0xFF111827)
                         )
                     }
-                },
-                windowInsets = WindowInsets(0, 0, 0, 0),
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                ),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(vertical = 16.dp)
-            )
-        }
-    }
-    
-    // Time Picker Dialog
-    if (showTimePicker) {
-        TimePickerDialog(
-            initialTime = dailyTime,
-            onDismiss = { showTimePicker = false },
-            onConfirm = { time ->
-                viewModel.setDailyTime(time)
-                showTimePicker = false
-            }
-        )
-    }
-    
-    // Alarm Permission Dialog
-    if (needsAlarmPermission) {
-        AlarmPermissionDialog(viewModel = viewModel)
-    }
-    
-    // Error Snackbar
-    if (startState is StartState.Error) {
-        Snackbar(
-            modifier = Modifier.padding(16.dp),
-            action = {
-                TextButton(onClick = { viewModel.resetStartState() }) {
-                    Text("Dismiss")
+                )
+
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 16.dp),
+                    contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp),
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    item {
+                        Text(
+                            text = "Customize how Vanderwaals works for you.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF4B5563),
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                    }
+
+                    // APPLY TO SECTION
+                    item {
+                        LabelSectionHeader(title = "APPLY WALLPAPERS TO")
+                        GlassCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(16.dp)
+                        ) {
+                             // Use ApplyTo enum values
+                             val options = ApplyTo.values().toList()
+                             val selectedIndex = options.indexOf(applyTo).coerceAtLeast(0)
+                             
+                             SegmentedControl(
+                                 items = options.map { it.displayName },
+                                 selectedIndex = selectedIndex,
+                                 onItemSelected = { index ->
+                                     viewModel.setApplyTo(options[index])
+                                 },
+                                 isDark = isDark
+                             )
+                        }
+                    }
+
+                    // CHANGE INTERVAL SECTION
+                    item {
+                        LabelSectionHeader(title = "UPDATE FREQUENCY")
+                        GlassCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Column {
+                                // We can use SettingsRow here for selection if list is long, 
+                                // OR SegmentedControl if short. 
+                                // ChangeInterval has 5 options. A vertical list of radio rows might be cleaner than a cramped 5-item segmented control.
+                                
+                                ChangeInterval.values().forEachIndexed { index, interval ->
+                                    SettingsRadioButton(
+                                        text = interval.displayName,
+                                        selected = changeInterval == interval,
+                                        onClick = { viewModel.setChangeInterval(interval) }
+                                    )
+                                    if (index < ChangeInterval.values().lastIndex) {
+                                         ModernDivider(isDark = isDark)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // DAILY TIME SETTING (Conditional)
+                    if (changeInterval == ChangeInterval.DAILY) {
+                        item {
+                            GlassCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showTimePicker = true },
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                SettingsRow(
+                                    title = "Update Time",
+                                    subtitle = "Wallpapers will change at this time daily",
+                                    onClick = { showTimePicker = true },
+                                    trailing = {
+                                        Text(
+                                            text = String.format("%02d:%02d", dailyTime.hour, dailyTime.minute),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    
+                    // Note regarding battery for high frequency
+                    if (changeInterval == ChangeInterval.EVERY_UNLOCK) {
+                        item {
+                             Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle, // Using generic icon or battery if available
+                                    contentDescription = null,
+                                    tint = if (isDark) Color.White.copy(alpha = 0.5f) else Color.Gray,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "Changes happen once per minute max to preserve battery.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isDark) Color.White.copy(alpha = 0.5f) else Color.Gray
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                // Bottom Bar
+                GlassSheet(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Button(
+                        onClick = { viewModel.startUsing(selectedMode) },
+                        enabled = startState !is StartState.Starting,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        if (startState is StartState.Starting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = (startState as StartState.Starting).step,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        } else {
+                            Text(
+                                text = "Start Using Vanderwaals",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null
+                            )
+                        }
+                    }
                 }
             }
-        ) {
-            Text((startState as StartState.Error).message)
         }
+    }
+    
+    // Time Picker Logic (Simplified)
+    if (showTimePicker) {
+         // Use a custom Date/Time picker dialog or standard Material one
+         // For simplicity here, assuming TimePickerDialog component exists or we use one from library.
+         // If not, we might need to implement a simple one.
+         // `ApplicationSettingsScreen` Step 145 included `TimePickerDialog`. I will assume it exists or needs to be retained.
+         // Checking Step 144 view... it referenced `TimePickerDialog`.
+         // I'll add a minimal implementation if needed, or rely on import if previously defined.
+         // I'll add a basic AlertDialog with time inputs if needed.
+         
+         // Assuming TimePickerDialog composable exists in the file or nearby.
+         // Wait, I am overwriting the file. If `TimePickerDialog` was in the file, I need to include it.
+         // Step 144 showed `TimePickerDialog` at line 600+. I should copy it back or reimplement it.
+         // I'll reimplement it briefly.
+         
+         BasicTimePickerDialog(
+             initialTime = dailyTime,
+             onConfirm = { 
+                 viewModel.setDailyTime(it)
+                 showTimePicker = false
+             },
+             onDismiss = { showTimePicker = false }
+         )
+    }
+    
+    // Alarm Permission
+    if (needsAlarmPermission) {
+         AlertDialog(
+             onDismissRequest = { viewModel.dismissAlarmPermissionDialog() },
+             title = { Text("Permission Required") },
+             text = { Text("To change wallpapers at exact times, Vanderwaals needs 'Alarms & Reminders' permission. Without it, times may be inexact.") },
+             confirmButton = {
+                 TextButton(onClick = { viewModel.openAlarmPermissionSettings() }) {
+                     Text("Grant")
+                 }
+             },
+             dismissButton = {
+                 TextButton(onClick = { viewModel.dismissAlarmPermissionDialog() }) {
+                     Text("Use Inexact Timing")
+                 }
+             }
+         )
     }
 }
 
-/**
- * Settings section with title and description.
- * 
- * @param title Section title
- * @param description Section description
- * @param content Section content
- */
 @Composable
-private fun SettingsSection(
-    title: String,
-    description: String,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-            
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-        }
-        
-        GlassCard(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(16.dp)
-        ) {
-            content()
-        }
-    }
-}
-
-/**
- * Radio button option.
- * 
- * @param text Option text
- * @param selected Whether option is selected
- * @param onClick Click callback
- */
-@Composable
-private fun SettingsRadioButton(
+fun SettingsRadioButton(
     text: String,
     selected: Boolean,
     onClick: () -> Unit
@@ -563,78 +310,42 @@ private fun SettingsRadioButton(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .selectable(
-                selected = selected,
-                onClick = onClick,
-                role = Role.RadioButton
-            )
-            .background(
-                if (selected) 
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                else 
-                    Color.Transparent
-            )
-            .padding(vertical = 12.dp, horizontal = 12.dp),
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         RadioButton(
             selected = selected,
-            onClick = null,
-            colors = RadioButtonDefaults.colors(
-                selectedColor = MaterialTheme.colorScheme.primary,
-                unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            onClick = null // Handled by row
         )
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(16.dp))
         Text(
             text = text,
             style = MaterialTheme.typography.bodyLarge,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
         )
     }
 }
 
-/**
- * Time picker dialog.
- * 
- * @param initialTime Initial time
- * @param onDismiss Dismiss callback
- * @param onConfirm Confirm callback with selected time
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TimePickerDialog(
+fun BasicTimePickerDialog(
     initialTime: LocalTime,
-    onDismiss: () -> Unit,
-    onConfirm: (LocalTime) -> Unit
+    onConfirm: (LocalTime) -> Unit,
+    onDismiss: () -> Unit
 ) {
     val timePickerState = rememberTimePickerState(
         initialHour = initialTime.hour,
-        initialMinute = initialTime.minute,
-        is24Hour = true
+        initialMinute = initialTime.minute
     )
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Select Time") },
-        text = {
-            TimePicker(
-                state = timePickerState
-            )
-        },
         confirmButton = {
-            TextButton(
-                onClick = {
-                    onConfirm(
-                        LocalTime.of(
-                            timePickerState.hour,
-                            timePickerState.minute
-                        )
-                    )
-                }
-            ) {
+            TextButton(onClick = {
+                onConfirm(LocalTime.of(timePickerState.hour, timePickerState.minute))
+            }) {
                 Text("OK")
             }
         },
@@ -642,29 +353,9 @@ private fun TimePickerDialog(
             TextButton(onClick = onDismiss) {
                 Text("Cancel")
             }
-        }
-    )
-}
-
-@Composable
-private fun AlarmPermissionDialog(
-    viewModel: ApplicationSettingsViewModel
-) {
-    AlertDialog(
-        onDismissRequest = { viewModel.dismissAlarmPermissionDialog() },
-        title = { Text("Alarm Permission Required") },
-        text = { 
-            Text("To schedule automatic wallpaper changes at precise intervals, Vanderwaals needs permission to set alarms. This ensures your wallpaper changes reliably at the exact frequency you choose (15 minutes, hourly, or daily).")
         },
-        confirmButton = {
-            TextButton(onClick = { viewModel.openAlarmPermissionSettings() }) {
-                Text("Grant Permission")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = { viewModel.dismissAlarmPermissionDialog() }) {
-                Text("Cancel")
-            }
+        text = {
+            TimePicker(state = timePickerState)
         }
     )
 }

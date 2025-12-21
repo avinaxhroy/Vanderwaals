@@ -318,6 +318,24 @@ class WorkScheduler @Inject constructor(
                 scheduleRepeatingAlarm(60 * 60 * 1000L, targetScreen) // 1 hour in milliseconds
             }
 
+            ChangeInterval.THREE_HOURS -> {
+                android.util.Log.d(TAG, "Scheduling 3-hour wallpaper change for target: $targetScreen")
+                stopWallpaperMonitorService() // Ensure service is stopped
+                scheduleRepeatingAlarm(3 * 60 * 60 * 1000L, targetScreen) // 3 hours in milliseconds
+            }
+
+            ChangeInterval.SIX_HOURS -> {
+                android.util.Log.d(TAG, "Scheduling 6-hour wallpaper change for target: $targetScreen")
+                stopWallpaperMonitorService() // Ensure service is stopped
+                scheduleRepeatingAlarm(6 * 60 * 60 * 1000L, targetScreen) // 6 hours in milliseconds
+            }
+
+            ChangeInterval.TWELVE_HOURS -> {
+                android.util.Log.d(TAG, "Scheduling 12-hour wallpaper change for target: $targetScreen")
+                stopWallpaperMonitorService() // Ensure service is stopped
+                scheduleRepeatingAlarm(12 * 60 * 60 * 1000L, targetScreen) // 12 hours in milliseconds
+            }
+
             ChangeInterval.FIFTEEN_MINUTES -> {
                 android.util.Log.d(TAG, "Scheduling 15-minute wallpaper change for target: $targetScreen")
                 stopWallpaperMonitorService() // Ensure service is stopped
@@ -854,9 +872,24 @@ class WorkScheduler @Inject constructor(
     
     /**
      * Starts the WallpaperMonitorService.
+     * 
+     * **Android 15+ Compatibility:**
+     * On Android 15+ (API 35+), foreground services with `dataSync` type cannot be started
+     * directly from BOOT_COMPLETED receivers. This method catches the exception and
+     * schedules a deferred start using WorkManager.
+     * 
+     * @param fromBootReceiver If true, uses extra caution on Android 15+ to avoid crash
      */
-    private fun startWallpaperMonitorService() {
+    fun startWallpaperMonitorService(fromBootReceiver: Boolean = false) {
         try {
+            // On Android 15+, if called from boot receiver, use deferred start immediately
+            // to avoid the ForegroundServiceStartNotAllowedException entirely
+            if (fromBootReceiver && android.os.Build.VERSION.SDK_INT >= 35) {
+                android.util.Log.d(TAG, "Android 15+ detected from boot - using deferred service start")
+                scheduleDeferredServiceStart()
+                return
+            }
+            
             val intent = Intent(context, me.avinas.vanderwaals.service.WallpaperMonitorService::class.java)
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -864,9 +897,43 @@ class WorkScheduler @Inject constructor(
                 context.startService(intent)
             }
             android.util.Log.d(TAG, "✅ WallpaperMonitorService started")
+        } catch (e: android.app.ForegroundServiceStartNotAllowedException) {
+            // Android 15+ restriction: Cannot start dataSync foreground service from boot
+            android.util.Log.w(TAG, "⚠️ ForegroundServiceStartNotAllowedException caught (Android 15+)")
+            android.util.Log.w(TAG, "   Scheduling deferred service start via WorkManager")
+            scheduleDeferredServiceStart()
         } catch (e: Exception) {
             android.util.Log.e(TAG, "❌ Failed to start WallpaperMonitorService", e)
         }
+    }
+    
+    /**
+     * Schedules a deferred start of WallpaperMonitorService using WorkManager.
+     * 
+     * This is used on Android 15+ when foreground service cannot be started directly
+     * from BOOT_COMPLETED broadcast. The worker will start the service after a short
+     * delay, when the device is in a state that allows foreground service creation.
+     */
+    private fun scheduleDeferredServiceStart() {
+        android.util.Log.d(TAG, "Scheduling deferred service start via ServiceStarterWorker")
+        
+        // Short initial delay to allow boot to complete and user to unlock
+        val deferredWork = OneTimeWorkRequestBuilder<ServiceStarterWorker>()
+            .setInitialDelay(5, TimeUnit.SECONDS)
+            .setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                30,
+                TimeUnit.SECONDS
+            )
+            .build()
+        
+        workManager.enqueueUniqueWork(
+            ServiceStarterWorker.WORK_NAME,
+            ExistingWorkPolicy.REPLACE,
+            deferredWork
+        )
+        
+        android.util.Log.d(TAG, "✅ Deferred service start scheduled (will run in ~5 seconds)")
     }
 
     /**
@@ -897,6 +964,21 @@ enum class ChangeInterval(val displayName: String) {
      * Change wallpaper every hour.
      */
     HOURLY("Hourly"),
+
+    /**
+     * Change wallpaper every 3 hours.
+     */
+    THREE_HOURS("3 Hours"),
+
+    /**
+     * Change wallpaper every 6 hours.
+     */
+    SIX_HOURS("6 Hours"),
+
+    /**
+     * Change wallpaper every 12 hours.
+     */
+    TWELVE_HOURS("12 Hours"),
 
     /**
      * Change wallpaper every 15 minutes.

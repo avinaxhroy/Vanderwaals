@@ -68,7 +68,7 @@ class ManifestRepository @Inject constructor(
     private val manifestService: ManifestService,
     private val localManifestService: LocalManifestService,
     private val wallpaperDao: WallpaperMetadataDao,
-    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
+    @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) {
     
     companion object {
@@ -206,8 +206,8 @@ class ManifestRepository @Inject constructor(
                 // Save to database (replace all)
                 try {
                     onProgress?.invoke("Clearing old wallpapers...", 0.7f, entities.size)
-                    wallpaperDao.deleteAll()
-                    Log.d(TAG, "Cleared old wallpapers")
+                    wallpaperDao.deleteBySource("github")
+                    Log.d(TAG, "Cleared old GitHub wallpapers")
                     
                     onProgress?.invoke("Saving ${entities.size} wallpapers...", 0.8f, entities.size)
                     wallpaperDao.insertAll(entities)

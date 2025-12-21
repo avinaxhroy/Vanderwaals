@@ -120,8 +120,7 @@
         <!-- Used by BatchDownloadWorker for downloading wallpapers with dataSync foreground service type -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
-            android:foregroundServiceType="dataSync"
-            tools:replace="android:foregroundServiceType" />
+            android:foregroundServiceType="dataSync" />
     </application>
 </manifest>
 

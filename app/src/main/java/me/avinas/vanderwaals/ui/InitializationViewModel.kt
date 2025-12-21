@@ -79,7 +79,12 @@ class InitializationViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val currentVersionCode = BuildConfig.VERSION_CODE
-                val migrationNeeded = settingsDataStore.checkAndSetMigrationNeeded(currentVersionCode)
+                val databaseHasWallpapers = manifestRepository.isDatabaseInitialized()
+                
+                val migrationNeeded = settingsDataStore.checkAndSetMigrationNeeded(
+                    currentVersionCode,
+                    databaseHasWallpapers
+                )
                 
                 if (migrationNeeded) {
                     Log.i(TAG, "Manifest migration needed - user upgraded from old version")
@@ -213,91 +218,17 @@ class InitializationViewModel @Inject constructor(
                     return@launch
                 }
                 
-                // Only show loading for first-time users
-                _loadingMessage.value = "Preparing Wallpapers"
-                _loadingSubMessage.value = "Setting up your wallpaper collection..."
-                _loadingProgress.value = 0.0f
-                _syncFailed.value = false
-                
-                if (!isDbInitialized) {
-                    Log.d(TAG, "Database not initialized, waiting for download...")
-                    
-                    // Initial state - download progress will be updated by observeDownloadProgress()
-                    _loadingMessage.value = "Downloading Catalog"
-                    _loadingSubMessage.value = "Preparing download..."
-                    _loadingProgress.value = 0.0f
-                    
-                    // Monitor WorkManager for completion only (progress is tracked by DownloadProgressManager)
-                    val startTime = System.currentTimeMillis()
-                    val timeout = 300000L // 5 minute timeout (same as READ_TIMEOUT)
-                    var downloadComplete = false
-                    
-                    // Wait for download to complete
-                    while (!downloadComplete && (System.currentTimeMillis() - startTime) < timeout) {
-                        val currentWorkInfos = workManager.getWorkInfosForUniqueWork("catalog_sync_initial").get()
-                        
-                        if (currentWorkInfos.isNotEmpty()) {
-                            val workInfo = currentWorkInfos[0]
-                            
-                            when (workInfo.state) {
-                                WorkInfo.State.SUCCEEDED -> {
-                                    val finalCount = workInfo.outputData.getInt("synced_count", 0)
-                                    _loadingProgress.value = 1.0f
-                                    _loadingMessage.value = "Download Complete!"
-                                    _loadingSubMessage.value = "Downloaded $finalCount wallpapers successfully"
-                                    kotlinx.coroutines.delay(500L)
-                                    downloadComplete = true
-                                }
-                                WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
-                                    Log.w(TAG, "WorkManager sync failed or cancelled")
-                                    _syncFailed.value = true
-                                    downloadComplete = true
-                                }
-                                else -> {
-                                    // RUNNING, ENQUEUED, or BLOCKED - continue waiting
-                                    // Progress is updated by observeDownloadProgress()
-                                }
-                            }
-                        }
-                        
-                        // Check database periodically
-                        if (manifestRepository.isDatabaseInitialized()) {
-                            downloadComplete = true
-                        }
-                        
-                        if (!downloadComplete) {
-                            kotlinx.coroutines.delay(500L) // Check every 500ms
-                        }
-                    }
-                    
-                    // Final check
-                    if (!manifestRepository.isDatabaseInitialized()) {
-                        Log.w(TAG, "Initialization timeout or failure - database still empty")
-                        _syncFailed.value = true
-                        _loadingMessage.value = "Download Failed"
-                        _loadingSubMessage.value = "Network timeout. Please check your internet connection and retry."
-                        _loadingProgress.value = null
-                        // Do NOT set isInitialized = true here
-                        return@launch
-                    }
-                }
-                
-                // Mark as initialized ONLY if successful
-                if (!_syncFailed.value) {
-                    _loadingMessage.value = "All Set!"
-                    _loadingSubMessage.value = "Opening your wallpaper collection..."
-                    _loadingProgress.value = 1.0f
-                    kotlinx.coroutines.delay(500L) // Brief delay for visual feedback
-                    _isInitialized.value = true
-                    Log.d(TAG, "App initialization complete")
-                }
+                // Database not initialized (Fresh Install)
+                // Skip auto-download effectively letting VanderwaalsNavGraph handle the Onboarding flow
+                // which includes Source Selection and Initial Sync
+                Log.d(TAG, "Database not initialized, proceeding to onboarding flow")
+                _isInitialized.value = true
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Error during initialization", e)
                 _syncFailed.value = true
                 _loadingMessage.value = "Error"
                 _loadingSubMessage.value = "Please check your connection and retry."
-                // Do NOT set isInitialized = true here
             }
         }
     }

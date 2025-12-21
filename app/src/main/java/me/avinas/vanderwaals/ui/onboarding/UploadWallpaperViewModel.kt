@@ -48,6 +48,7 @@ class UploadWallpaperViewModel @Inject constructor(
     private val findSimilarWallpapersUseCase: FindSimilarWallpapersUseCase,
     private val enhancedImageAnalyzer: EnhancedImageAnalyzer,
     private val wallpaperRepository: me.avinas.vanderwaals.data.repository.WallpaperRepository,
+    private val settingsDataStore: me.avinas.vanderwaals.data.datastore.SettingsDataStore,
     @param:ApplicationContext private val context: Context
 ) : ViewModel() {
     
@@ -164,17 +165,30 @@ class UploadWallpaperViewModel @Inject constructor(
             android.util.Log.d("UploadWallpaper", "Selecting sample wallpaper for style: ${style.displayName}")
             
             try {
+                // Get user's enabled sources
+                val settings = settingsDataStore.settings.first()
+                val enabledSources = mutableListOf<String>()
+                if (settings.githubEnabled) enabledSources.add("github")
+                if (settings.bingEnabled) enabledSources.add("bing")
+                
                 // IMPROVED: Get actual wallpapers from category first
                 // Then use their embeddings as the "user preference"
-                val categoryWallpapers = withContext(Dispatchers.IO) {
+                val allCategoryWallpapers = withContext(Dispatchers.IO) {
                     wallpaperRepository.getWallpapersByCategory(style.categoryName)
                         .first()
                 }
                 
+                // Filter by enabled sources
+                val categoryWallpapers = if (enabledSources.isEmpty()) {
+                    allCategoryWallpapers
+                } else {
+                    allCategoryWallpapers.filter { it.source.lowercase() in enabledSources }
+                }
+                
                 if (categoryWallpapers.isEmpty()) {
-                    android.util.Log.w("UploadWallpaper", "No wallpapers found for category: ${style.categoryName}")
+                    android.util.Log.w("UploadWallpaper", "No wallpapers found for category: ${style.categoryName} from sources: $enabledSources")
                     _uploadState.value = UploadState.Error(
-                        "No '${style.displayName}' wallpapers available yet. The app is syncing in the background. Please try another style or wait a few minutes."
+                        "No '${style.displayName}' wallpapers available from your enabled sources. Please try another style or wait for the catalog to sync."
                     )
                     return@launch
                 }
@@ -297,16 +311,33 @@ class UploadWallpaperViewModel @Inject constructor(
         android.util.Log.d("UploadWallpaper", "Finding wallpapers by category: $category")
         
         try {
+            // Get user's enabled sources
+            val settings = settingsDataStore.settings.first()
+            val enabledSources = mutableListOf<String>()
+            if (settings.githubEnabled) enabledSources.add("github")
+            if (settings.bingEnabled) enabledSources.add("bing")
+            
+            android.util.Log.d("UploadWallpaper", "Enabled sources: $enabledSources")
+            
             // Get wallpapers directly from category
             val allCategoryWallpapers = withContext(Dispatchers.IO) {
                 wallpaperRepository.getWallpapersByCategory(category)
                     .first()
             }
             
-            if (allCategoryWallpapers.isEmpty()) {
-                android.util.Log.w("UploadWallpaper", "No wallpapers found for category: $category")
+            // CRITICAL FIX: Filter by enabled sources
+            val filteredWallpapers = if (enabledSources.isEmpty()) {
+                allCategoryWallpapers
+            } else {
+                allCategoryWallpapers.filter { it.source.lowercase() in enabledSources }
+            }
+            
+            android.util.Log.d("UploadWallpaper", "Category wallpapers: ${allCategoryWallpapers.size} total, ${filteredWallpapers.size} after source filter")
+            
+            if (filteredWallpapers.isEmpty()) {
+                android.util.Log.w("UploadWallpaper", "No wallpapers found for category: $category with sources: $enabledSources")
                 _uploadState.value = UploadState.Error(
-                    "No wallpapers found in the '$category' category. Try another style or wait for the catalog to sync."
+                    "No wallpapers found in the '$category' category from your enabled sources. Try another style or wait for the catalog to sync."
                 )
             } else {
                 // IMPROVED: Use time-based seed for randomization
@@ -314,11 +345,11 @@ class UploadWallpaperViewModel @Inject constructor(
                 val seed = System.currentTimeMillis() + android.os.SystemClock.uptimeMillis()
                 val random = kotlin.random.Random(seed.toInt())
                 
-                val wallpapers = allCategoryWallpapers
+                val wallpapers = filteredWallpapers
                     .shuffled(random)  // Randomize with time-based seed for true variety
                     .take(50)          // Take 50 for onboarding (matches upload flow)
                 
-                android.util.Log.d("UploadWallpaper", "Found ${wallpapers.size} wallpapers in category: $category (total available: ${allCategoryWallpapers.size})")
+                android.util.Log.d("UploadWallpaper", "Found ${wallpapers.size} wallpapers in category: $category (sources: $enabledSources)")
                 _similarWallpapers.value = wallpapers
                 _uploadState.value = UploadState.Success(wallpapers.size)
             }

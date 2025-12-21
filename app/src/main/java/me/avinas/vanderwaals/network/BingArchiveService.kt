@@ -1,6 +1,5 @@
 package me.avinas.vanderwaals.network
 
-import me.avinas.vanderwaals.network.dto.BingArchiveManifestDto
 import me.avinas.vanderwaals.network.dto.BingArchiveWallpaperDto
 import me.avinas.vanderwaals.network.dto.BingWallpaperDto
 import retrofit2.Response

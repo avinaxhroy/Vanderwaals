@@ -223,10 +223,8 @@ class ConfirmationGalleryViewModel @Inject constructor(
      * 
      * NOTE: First liked wallpaper is applied later in ApplicationSettingsViewModel
      * when user clicks "Start Using Vanderwaals"
-     * 
-     * @param allWallpapers All 50 similar wallpapers (for lookup)
      */
-    fun finishOnboarding(allWallpapers: List<WallpaperMetadata>) {
+    fun finishOnboarding() {
         viewModelScope.launch {
             _finishState.value = FinishState.Initializing
             

@@ -3,7 +3,6 @@ package me.avinas.vanderwaals.data
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import androidx.core.content.ContextCompat.startActivity
 
 /**
  * Opens an email intent to contact the developer.
@@ -19,6 +18,6 @@ fun SendContactIntent(context: Context) {
             "&body=" + Uri.encode(bodyText)
 
     val emailIntent = Intent(Intent.ACTION_SENDTO)
-    emailIntent.setData(Uri.parse(mailto))
-    startActivity(context, emailIntent, null)
+    emailIntent.data = Uri.parse(mailto)
+    context.startActivity(emailIntent)
 }

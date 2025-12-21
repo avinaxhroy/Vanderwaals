@@ -31,6 +31,7 @@ import me.avinas.vanderwaals.ui.settings.SettingsScreen
  */
 sealed class Screen(val route: String) {
     // Onboarding flow
+    object SourceSelection : Screen("source_selection")
     object InitialSync : Screen("initial_sync")
     object ModeSelection : Screen("mode_selection")
     object UploadWallpaper : Screen("upload_wallpaper")
@@ -49,7 +50,7 @@ sealed class Screen(val route: String) {
  * 
  * Determines start destination based on onboarding completion flag.
  * If user has completed onboarding → Main
- * If new user → ModeSelection
+ * If new user → SourceSelection
  * 
  * @param onboardingComplete Whether user has completed onboarding
  * @param navController Optional NavController (defaults to rememberNavController)
@@ -61,23 +62,48 @@ fun VanderwaalsNavGraph(
 ) {
     NavHost(
         navController = navController,
-        // FIXED: Go directly to ModeSelection
-        // InitializationViewModel handles catalog download during app startup
-        // No need for separate InitialSyncScreen (was causing duplicate downloads)
-        startDestination = if (onboardingComplete) Screen.Main.route else Screen.ModeSelection.route
+        // Start with SourceSelection for new users
+        startDestination = if (onboardingComplete) Screen.Main.route else Screen.SourceSelection.route
     ) {
         // ========== ONBOARDING FLOW ==========
         
-        // Step 1: Mode Selection (catalog already downloaded by InitializationViewModel)
+        // Step 0: Source Selection (New)
+        composable(Screen.SourceSelection.route) {
+            WallpaperSourceSelectionScreen(
+                onContinue = {
+                    navController.navigate(Screen.InitialSync.route)
+                }
+            )
+        }
+        
+        // Step 1: Initial Sync (Manual download)
+        composable(Screen.InitialSync.route) {
+            InitialSyncScreen(
+                onSyncComplete = {
+                    // Navigate to Mode Selection, pop off initial sync so user can't go back to download
+                    navController.navigate(Screen.ModeSelection.route) {
+                        popUpTo(Screen.SourceSelection.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+        
+        // Step 2: Mode Selection
         composable(Screen.ModeSelection.route) {
             ModeSelectionScreen(
-                onAutoModeSelected = {
-                    // Keep ModeSelection in backstack for back navigation
-                    navController.navigate(Screen.ApplicationSettings.route)
-                },
-                onPersonalizeModeSelected = {
-                    // Keep ModeSelection in backstack for back navigation
-                    navController.navigate(Screen.UploadWallpaper.route)
+                onModeSelected = { mode ->
+                    when (mode) {
+                        OnboardingMode.AUTO -> {
+                             // Auto mode: Go to Application Settings (Source selection already done in Step 0)
+                             // Wait, Source Selection -> Step 1 Init -> Step 2 Mode.
+                             // Logic in NavGraph: "Auto: ApplicationSettings"
+                             navController.navigate(Screen.ApplicationSettings.route)
+                        }
+                        OnboardingMode.PERSONALIZE -> {
+                             // Personalize: Go to upload
+                             navController.navigate(Screen.UploadWallpaper.route)
+                        }
+                    }
                 }
             )
         }
@@ -136,7 +162,7 @@ fun VanderwaalsNavGraph(
                         navController.navigate(Screen.ApplicationSettings.route)
                     }
                 },
-                onBackPressed = {
+                onBack = {
                     // Always go back to upload wallpaper screen
                     navController.popBackStack()
                 },

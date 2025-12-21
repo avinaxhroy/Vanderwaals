@@ -38,7 +38,7 @@ class ModeSelectionViewModel @Inject constructor(
      * 
      * @param mode Selected mode (Auto or Personalize)
      */
-    fun selectMode(mode: OnboardingMode) {
+    fun selectMode(mode: OnboardingMode, onComplete: () -> Unit) {
         _selectedMode.value = mode
         
         // Save mode to DataStore
@@ -49,13 +49,10 @@ class ModeSelectionViewModel @Inject constructor(
             }
             settingsDataStore.updateMode(modeString)
             
-            // Auto-enable Bing Wallpapers when selecting Auto mode
-            if (mode == OnboardingMode.AUTO) {
-                settingsDataStore.toggleSource("bing", true)
-            } else {
-                // Disable Bing for Personalized mode (GitHub only)
-                settingsDataStore.toggleSource("bing", false)
-            }
+            // Note: Source selection (Bing/GitHub) is now handled exclusively 
+            // by WallpaperSourceSelectionScreen to avoid overwriting user choices.
+            
+            onComplete()
         }
     }
     

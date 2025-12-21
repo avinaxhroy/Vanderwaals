@@ -55,15 +55,12 @@ fun OnboardingNavGraph(
         // Screen 1: Mode Selection
         composable(OnboardingRoutes.MODE_SELECTION) {
             ModeSelectionScreen(
-                onAutoModeSelected = {
-                    // Auto mode: Keep MODE_SELECTION in backstack for back navigation
-                    navController.navigate(OnboardingRoutes.APPLICATION_SETTINGS)
+                onModeSelected = { mode ->
+                    when (mode) {
+                        OnboardingMode.AUTO -> navController.navigate(OnboardingRoutes.WALLPAPER_SOURCE_SELECTION)
+                        OnboardingMode.PERSONALIZE -> navController.navigate(OnboardingRoutes.UPLOAD_WALLPAPER)
+                    }
                 },
-                onPersonalizeModeSelected = {
-                    // Personalize mode: Go to upload screen
-                    navController.navigate(OnboardingRoutes.UPLOAD_WALLPAPER)
-                },
-                onBackPressed = onExitOnboarding,
                 viewModel = modeSelectionViewModel
             )
         }
@@ -115,9 +112,9 @@ fun OnboardingNavGraph(
             ConfirmationGalleryScreen(
                 onContinue = {
                     // Keep backstack for back navigation
-                    navController.navigate(OnboardingRoutes.APPLICATION_SETTINGS)
+                    navController.navigate(OnboardingRoutes.WALLPAPER_SOURCE_SELECTION)
                 },
-                onBackPressed = {
+                onBack = {
                     android.util.Log.d("OnboardingNav", "CONFIRMATION_GALLERY back pressed")
                     
                     // CRITICAL: Reset confirmation state when going back
@@ -135,7 +132,31 @@ fun OnboardingNavGraph(
             )
         }
         
-        // Screen 4: Application Settings (Both flows)
+        // Screen 4: Wallpaper Source Selection (New)
+        composable(OnboardingRoutes.WALLPAPER_SOURCE_SELECTION) {
+            WallpaperSourceSelectionScreen(
+                onContinue = {
+                    navController.navigate(OnboardingRoutes.INITIAL_SYNC)
+                }
+            )
+        }
+        
+        // Screen 5: Initial Sync (New)
+        composable(OnboardingRoutes.INITIAL_SYNC) {
+            InitialSyncScreen(
+                onSyncComplete = {
+                    navController.navigate(OnboardingRoutes.APPLICATION_SETTINGS) {
+                        // Pop up to Source Selection (exclusive) to remove Initial Sync from back stack
+                        // This prevents user from pressing Back and going into the specific sync screen
+                        popUpTo(OnboardingRoutes.WALLPAPER_SOURCE_SELECTION) {
+                            inclusive = false
+                        }
+                    }
+                }
+            )
+        }
+        
+        // Screen 6: Application Settings (Both flows)
         composable(OnboardingRoutes.APPLICATION_SETTINGS) {
             val selectedMode by modeSelectionViewModel.selectedMode.collectAsState()
             

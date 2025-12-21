@@ -52,7 +52,7 @@ class ApplicationSettingsViewModel @Inject constructor(
     private val preferenceRepository: PreferenceRepository,
     private val manifestRepository: me.avinas.vanderwaals.data.repository.ManifestRepository,
     private val wallpaperRepository: me.avinas.vanderwaals.data.repository.WallpaperRepository,
-    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
+    @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
     
     private val _applyTo = MutableStateFlow(ApplyTo.BOTH)
@@ -205,6 +205,9 @@ class ApplicationSettingsViewModel @Inject constructor(
                     ChangeInterval.EVERY_UNLOCK -> "unlock"
                     ChangeInterval.FIFTEEN_MINUTES -> "15min"
                     ChangeInterval.HOURLY -> "hourly"
+                    ChangeInterval.THREE_HOURS -> "3hours"
+                    ChangeInterval.SIX_HOURS -> "6hours"
+                    ChangeInterval.TWELVE_HOURS -> "12hours"
                     ChangeInterval.DAILY -> "daily"
                     ChangeInterval.NEVER -> "never"
                 }
@@ -285,6 +288,39 @@ class ApplicationSettingsViewModel @Inject constructor(
                             targetScreen = targetScreen
                         )
                         // Handle permission denial for hourly alarms
+                        if (schedulingResult is me.avinas.vanderwaals.worker.SchedulingResult.PermissionDenied) {
+                            _needsAlarmPermission.value = true
+                            _startState.value = StartState.Error(schedulingResult.message)
+                            return@launch
+                        }
+                    }
+                    ChangeInterval.THREE_HOURS -> {
+                        val schedulingResult = workScheduler.scheduleWallpaperChange(
+                            interval = ChangeInterval.THREE_HOURS,
+                            targetScreen = targetScreen
+                        )
+                        if (schedulingResult is me.avinas.vanderwaals.worker.SchedulingResult.PermissionDenied) {
+                            _needsAlarmPermission.value = true
+                            _startState.value = StartState.Error(schedulingResult.message)
+                            return@launch
+                        }
+                    }
+                    ChangeInterval.SIX_HOURS -> {
+                        val schedulingResult = workScheduler.scheduleWallpaperChange(
+                            interval = ChangeInterval.SIX_HOURS,
+                            targetScreen = targetScreen
+                        )
+                        if (schedulingResult is me.avinas.vanderwaals.worker.SchedulingResult.PermissionDenied) {
+                            _needsAlarmPermission.value = true
+                            _startState.value = StartState.Error(schedulingResult.message)
+                            return@launch
+                        }
+                    }
+                    ChangeInterval.TWELVE_HOURS -> {
+                        val schedulingResult = workScheduler.scheduleWallpaperChange(
+                            interval = ChangeInterval.TWELVE_HOURS,
+                            targetScreen = targetScreen
+                        )
                         if (schedulingResult is me.avinas.vanderwaals.worker.SchedulingResult.PermissionDenied) {
                             _needsAlarmPermission.value = true
                             _startState.value = StartState.Error(schedulingResult.message)
@@ -449,6 +485,9 @@ class ApplicationSettingsViewModel @Inject constructor(
                     ChangeInterval.EVERY_UNLOCK -> "unlock"
                     ChangeInterval.FIFTEEN_MINUTES -> "15min"
                     ChangeInterval.HOURLY -> "hourly"
+                    ChangeInterval.THREE_HOURS -> "3hours"
+                    ChangeInterval.SIX_HOURS -> "6hours"
+                    ChangeInterval.TWELVE_HOURS -> "12hours"
                     ChangeInterval.DAILY -> "daily"
                     ChangeInterval.NEVER -> "never"
                 }

@@ -58,7 +58,7 @@ data class WallpaperMetadataDto(
     val id: String,
     val url: String,
     @SerializedName("thumbnail")
-    val thumbnail: String,
+    val thumbnail: String?,  // Nullable to handle missing fields in JSON
     val source: String,
     val repo: String,
     val category: String,
@@ -128,7 +128,7 @@ private fun dequantizeEmbedding(base64Data: String, min: Float, max: Float): Flo
  * 
  * Transforms the DTO from network JSON to the Room entity format:
  * - Handles both full and quantized embedding formats
- * - Maps `thumbnail` field to `thumbnailUrl`
+ * - Maps `thumbnail` field to `thumbnailUrl` (falls back to `url` if null)
  * - Preserves all metadata fields
  * 
  * @return WallpaperMetadata entity ready for database insertion
@@ -137,7 +137,7 @@ fun WallpaperMetadataDto.toEntity(): WallpaperMetadata {
     return WallpaperMetadata(
         id = id,
         url = url,
-        thumbnailUrl = thumbnail,
+        thumbnailUrl = thumbnail ?: url, // Fallback to full URL if thumbnail is missing
         source = source,
         category = category,
         colors = colors,

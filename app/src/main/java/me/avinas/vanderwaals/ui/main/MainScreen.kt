@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material3.*
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,7 +101,16 @@ fun MainScreen(
 ) {
     val currentWallpaper by viewModel.currentWallpaper.collectAsState()
     val showOverlay by viewModel.showOverlay.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val loadingState by viewModel.loadingState.collectAsState()
+    val isLoading = loadingState != MainViewModel.KoalaLoadingState.IDLE
+    
+    // Dynamic button text based on real-time worker state
+    val buttonText = when (loadingState) {
+        MainViewModel.KoalaLoadingState.IDLE -> "Change Wallpaper"
+        MainViewModel.KoalaLoadingState.THINKING -> "Koala is thinking..."
+        MainViewModel.KoalaLoadingState.FINDING -> "Koala is finding matches..."
+        MainViewModel.KoalaLoadingState.APPLYING -> "Koala is applying..."
+    }
     
     // Get device screen dimensions for SmartCrop
     val context = LocalContext.current
@@ -166,11 +176,27 @@ fun MainScreen(
                     label = "wallpaper_transition"
                 ) { wallpaper ->
                     if (wallpaper != null) {
+                        // Check for pre-cropped file (created by WallpaperChangeWorker)
+                        // Path format: cache/wallpapers/{wallpaperId}_cropped.png
                         val croppedFile = java.io.File(context.cacheDir, "wallpapers/${wallpaper.id}_cropped.png")
-                        val imageSource = if (croppedFile.exists()) {
-                            croppedFile.absolutePath
-                        } else {
-                            wallpaper.url
+                        val originalFile = java.io.File(context.cacheDir, "wallpapers/${wallpaper.id}.jpg")
+                        
+                        // Determine image source with priority:
+                        // 1. Cropped file (fastest - no processing needed)
+                        // 2. Original local file (avoid network, apply SmartCrop)
+                        // 3. Remote URL (last resort - network + SmartCrop)
+                        val (imageSource, needsSmartCrop) = when {
+                            croppedFile.exists() -> {
+                                croppedFile.absolutePath to false
+                            }
+                            originalFile.exists() -> {
+                                // Use local original file instead of downloading from URL
+                                originalFile.absolutePath to true
+                            }
+                            else -> {
+                                // No local files - must download from URL
+                                wallpaper.url to true
+                            }
                         }
                         
                         GlideImage(
@@ -180,9 +206,8 @@ fun MainScreen(
                                 alignment = Alignment.Center
                             ),
                             requestOptions = {
-                                if (croppedFile.exists()) {
-                                    RequestOptions()
-                                } else {
+                                if (needsSmartCrop) {
+                                    // Apply SmartCrop transformation
                                     RequestOptions()
                                         .override(com.bumptech.glide.request.target.Target.SIZE_ORIGINAL)
                                         .transform(
@@ -191,6 +216,9 @@ fun MainScreen(
                                                 targetHeight = screenHeight
                                             )
                                         )
+                                } else {
+                                    // No transformation needed for pre-cropped files
+                                    RequestOptions()
                                 }
                             },
                             modifier = Modifier
@@ -257,7 +285,7 @@ fun MainScreen(
 
         // Vanderwaals branding logo
         AnimatedVisibility(
-            visible = !showOverlay && currentWallpaper != null,
+            visible = !showOverlay && (currentWallpaper as? MainViewModel.MainUiState.Success)?.wallpaper != null,
             enter = fadeIn(animationSpec = tween(600)) + slideInVertically(
                 initialOffsetY = { -it / 2 },
                 animationSpec = tween(600, easing = FastOutSlowInEasing)
@@ -276,13 +304,12 @@ fun MainScreen(
                     .width(260.dp)
                     .height(80.dp)
             ) {
-                // Outer Glow removed as per UI polish request
-                
-                // Glass Logo Container
-                me.avinas.vanderwaals.ui.theme.components.GlassCard(
+                // Vibrant Glass Logo Container for contrast
+                me.avinas.vanderwaals.ui.theme.components.TintedGlassCard(
                     modifier = Modifier.matchParentSize(),
                     shape = RoundedCornerShape(44.dp),
-                    contentPadding = PaddingValues(0.dp)
+                    contentPadding = PaddingValues(0.dp),
+                    tintColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) // Add subtle primary tint for vibrancy
                 ) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
@@ -295,7 +322,7 @@ fun MainScreen(
                                 .fillMaxWidth(0.85f)
                                 .padding(horizontal = 24.dp, vertical = 16.dp),
                             contentScale = ContentScale.Fit,
-                            alpha = 0.95f
+                            alpha = 1.0f // Full opacity for logo
                         )
                     }
                 }
@@ -331,18 +358,23 @@ fun MainScreen(
                             .padding(24.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
+                        val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
+                        
                         // Primary Action: Change Now (Premium Gradient)
                         // Primary Action: Change Now (Premium Gradient)
                         me.avinas.vanderwaals.ui.theme.components.GradientButton(
-                            text = "Change Wallpaper",
+                            text = buttonText,
                             onClick = {
-                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                viewModel.changeNow()
+                                if (!isLoading) {
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    viewModel.changeNow()
+                                }
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(64.dp),
-                            enabled = !isLoading,
+                            // Keep enabled=true to preserve gradient visuals, but handle click above
+                            enabled = true,
                             gradient = Brush.horizontalGradient(
                                 colors = listOf(
                                     Color(0xFF8B5CF6), // Violet
@@ -447,7 +479,7 @@ fun MainScreen(
                         }
 
                         // Feedback buttons
-                        if (currentWallpaper != null) {
+                        if ((currentWallpaper as? MainViewModel.MainUiState.Success)?.wallpaper != null) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -476,7 +508,7 @@ fun MainScreen(
                                     Icon(
                                         imageVector = Icons.Default.Favorite,
                                         contentDescription = "Like",
-                                        tint = Color(0xFFEC4899),
+                                        tint = MaterialTheme.colorScheme.tertiary,
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
@@ -495,7 +527,7 @@ fun MainScreen(
                                     Icon(
                                         imageVector = Icons.Default.ThumbDown,
                                         contentDescription = "Dislike",
-                                        tint = Color(0xFF60A5FA),
+                                        tint = MaterialTheme.colorScheme.secondary,
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
@@ -516,24 +548,76 @@ fun MainScreen(
                                     Icon(
                                         imageVector = Icons.Default.Download,
                                         contentDescription = "Download to gallery",
-                                        tint = Color(0xFF22C55E), // Green for save/download
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
                             }
                         }
 
-                        // Source attribution
+                        // Source attribution with clickable link
                         (currentWallpaper as? MainViewModel.MainUiState.Success)?.wallpaper?.let { wallpaper ->
-                            Text(
-                                text = "From ${wallpaper.source}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                textAlign = TextAlign.Center,
+                            val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                            
+                            // Determine display text and link
+                            val (sourceText, sourceUrl) = remember(wallpaper) {
+                                when (wallpaper.source.lowercase()) {
+                                    "github" -> {
+                                        // Try to extract user/repo from raw URL
+                                        // Format: https://raw.githubusercontent.com/USER/REPO/branch/...
+                                        // or simple fallback
+                                        val parts = wallpaper.url.split("/")
+                                        if (parts.size >= 5 && parts[2] == "raw.githubusercontent.com") {
+                                            val user = parts[3]
+                                            val repo = parts[4]
+                                            "From $user/$repo" to "https://github.com/$user/$repo"
+                                        } else {
+                                            "From Community Collection" to "https://github.com/dharmx/walls"
+                                        }
+                                    }
+                                    "bing" -> {
+                                        // Enhanced Bing attribution
+                                        "From Bing Daily Wallpaper" to "https://www.bing.com"
+                                    }
+                                    else -> {
+                                        "From ${wallpaper.source}" to null
+                                    }
+                                }
+                            }
+                            
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 4.dp)
-                            )
+                                    .padding(top = 8.dp)
+                                    .clickable(enabled = sourceUrl != null) {
+                                        sourceUrl?.let { url ->
+                                            try {
+                                                uriHandler.openUri(url)
+                                            } catch (e: Exception) {
+                                                // Ignore deep link errors
+                                            }
+                                        }
+                                    },
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = sourceText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    textAlign = TextAlign.Center
+                                )
+                                
+                                if (sourceUrl != null) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                                        contentDescription = "Open source",
+                                        modifier = Modifier.size(12.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
                         }
                         
                         // Manual bottom padding for navigation bar

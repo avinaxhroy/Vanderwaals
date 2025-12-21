@@ -1,15 +1,9 @@
 package me.avinas.vanderwaals.ui.onboarding
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -17,10 +11,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.draw.blur
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -28,276 +23,268 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import me.avinas.vanderwaals.ui.theme.animations.bounceOnAppear
-import me.avinas.vanderwaals.ui.theme.animations.pressAnimation
-import me.avinas.vanderwaals.ui.theme.components.GlassCard
+import me.avinas.vanderwaals.ui.theme.components.*
 
-/**
- * Mode Selection Screen - First screen in onboarding flow.
- * 
- * Presents two options:
- * - **Auto Mode**: Algorithm selects wallpapers, learns from usage
- * - **Personalize Mode**: User uploads sample for instant matching
- * 
- * **Layout:**
- * - App logo at top
- * - Two elevated cards with icons and descriptions
- * - Material 3 design with proper spacing
- * 
- * **Navigation:**
- * - Auto Mode → ApplicationSettings
- * - Personalize Mode → UploadWallpaper
- * 
- * @param onAutoModeSelected Callback when Auto Mode is selected
- * @param onPersonalizeModeSelected Callback when Personalize Mode is selected
- * @param onBackPressed Callback when back button is pressed (optional - exits onboarding)
- * @param viewModel ViewModel managing selection state
- */
 @Composable
 fun ModeSelectionScreen(
-    onAutoModeSelected: () -> Unit,
-    onPersonalizeModeSelected: () -> Unit,
-    onBackPressed: (() -> Unit)? = null,
+    onModeSelected: (OnboardingMode) -> Unit,
     viewModel: ModeSelectionViewModel = hiltViewModel()
 ) {
     val selectedMode by viewModel.selectedMode.collectAsState()
     
-    // Handle system back button if callback provided
-    if (onBackPressed != null) {
-        androidx.activity.compose.BackHandler {
-            onBackPressed()
-        }
-    }
+    // Auto-navigate if mode is already selected and confirmed (optional logic, but here we just show selection)
     
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = Color.Transparent
     ) { paddingValues ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surface)
+            modifier = Modifier.fillMaxSize()
         ) {
-            // Dynamic Background Blobs
-            val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-            val infiniteTransition = rememberInfiniteTransition(label = "blobs")
-
-            // Animate positions
-            val offset1 by infiniteTransition.animateFloat(
-                initialValue = 0f, targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(10000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ), label = "offset1"
+            // Premium Background
+            val isDark = isSystemInDarkTheme()
+            PremiumBackground(
+                modifier = Modifier.fillMaxSize(),
+                isDark = isDark
             )
-            val offset2 by infiniteTransition.animateFloat(
-                initialValue = 0f, targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(15000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                ), label = "offset2"
-            )
-
-            Canvas(modifier = Modifier.fillMaxSize().blur(80.dp)) {
-                val w = size.width
-                val h = size.height
-
-                if (isDark) {
-                    // Dark Mode Blobs (Indigo/Rose/Sky)
-                    drawCircle(
-                        color = Color(0xFF5C6BC0).copy(alpha = 0.2f), // Indigo 400
-                        center = Offset(w * 0.2f + (offset1 * 100f), h * 0.2f),
-                        radius = 400.dp.toPx()
-                    )
-                    drawCircle(
-                        color = Color(0xFFEC407A).copy(alpha = 0.15f), // Rose 400
-                        center = Offset(w * 0.8f - (offset2 * 100f), h * 0.5f),
-                        radius = 350.dp.toPx()
-                    )
-                    drawCircle(
-                        color = Color(0xFF29B6F6).copy(alpha = 0.15f), // Sky 400
-                        center = Offset(w * 0.4f, h * 0.8f + (offset1 * 50f)),
-                        radius = 450.dp.toPx()
-                    )
-                } else {
-                    // Light Mode Blobs (Purple/Orange/Teal)
-                    drawCircle(
-                        color = Color(0xFFAB47BC).copy(alpha = 0.3f), // Purple 400
-                        center = Offset(w * 0.8f - (offset1 * 100f), h * 0.1f),
-                        radius = 500.dp.toPx()
-                    )
-                    drawCircle(
-                        color = Color(0xFFFFA726).copy(alpha = 0.25f), // Orange 400
-                        center = Offset(w * 0.1f + (offset2 * 100f), h * 0.6f),
-                        radius = 400.dp.toPx()
-                    )
-                    drawCircle(
-                        color = Color(0xFF26A69A).copy(alpha = 0.25f), // Teal 400
-                        center = Offset(w * 0.6f, h * 0.9f - (offset1 * 50f)),
-                        radius = 450.dp.toPx()
-                    )
-                }
-            }
 
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .systemBarsPadding()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Logo at top with animation - clear background, larger size
-                // Determine logo based on background luminance (low luminance = dark background = white logo)
-                val isDarkBackground = androidx.compose.material3.MaterialTheme.colorScheme.background.luminance() < 0.5f
-                val logoResId = if (isDarkBackground) {
-                    me.avinas.vanderwaals.R.drawable.vanderwaals_logo
-                } else {
-                    me.avinas.vanderwaals.R.drawable.vanderwaals_logo_black
-                }
-                
-                Image(
-                    painter = painterResource(id = logoResId),
-                    contentDescription = "Vanderwaals Logo",
-                    modifier = Modifier
-                        .size(160.dp)
-                        .bounceOnAppear()
+                // Top Bar with consistent spacing 
+                OnboardingTopAppBar(
+                    onBack = {},
+                    showBack = false
                 )
                 
-                // Title
                 Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(32.dp)
                 ) {
-                    Text(
-                        text = "Welcome to Vanderwaals",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
-                    )
+                    // Logo and Welcome
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.padding(top = 16.dp)
+                    ) {
+                        // App Logo
+                        // App Logo
+                        Box(
+                            modifier = Modifier
+                                .width(260.dp)
+                                .height(80.dp)
+                        ) {
+                            // Tinted Glass Logo Container
+                            me.avinas.vanderwaals.ui.theme.components.TintedGlassCard(
+                                modifier = Modifier.matchParentSize(),
+                                shape = RoundedCornerShape(44.dp),
+                                contentPadding = PaddingValues(0.dp),
+                                tintColor = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark.copy(alpha = 0.3f) 
+                                          else me.avinas.vanderwaals.ui.theme.LightPrimary.copy(alpha = 0.3f)
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Image(
+                                        painter = androidx.compose.ui.res.painterResource(id = me.avinas.vanderwaals.R.drawable.vanderwaals_logo),
+                                        contentDescription = "Vanderwaals",
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.85f)
+                                            .padding(horizontal = 24.dp, vertical = 16.dp),
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                                        alpha = 1.0f
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Text(
+                            text = "Welcome to Vanderwaals",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            color = if (isDark) Color.White else Color(0xFF111827)
+                        )
+                        
+                        Text(
+                            text = "Choose how you want to experience your wallpapers.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = TextAlign.Center,
+                            color = if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF4B5563)
+                        )
+                    }
                     
-                    Text(
-                        text = "Choose how you'd like to start",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
+                    // Options
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
+                        ModeOption(
+                            title = "Personalized Mode",
+                            description = "Upload one favorite wallpaper or choose category and instantly get similar matches. The algorithm analyzes Deep Visual Features (70%), Color Palette (20%), and Category Affinity (10%) to find your perfect style.",
+                            icon = Icons.Default.Tune,
+                            selected = selectedMode == OnboardingMode.PERSONALIZE,
+                            onClick = { 
+                                viewModel.selectMode(OnboardingMode.PERSONALIZE) {}
+                            },
+                            isDark = isDark
+                        )
+                        
+                        ModeOption(
+                            title = "Auto Mode",
+                            description = "Start fresh with algorithm-selected wallpapers from curated collections. The app learns your taste as you provide feedback.",
+                            icon = Icons.Default.AutoAwesome,
+                            selected = selectedMode == OnboardingMode.AUTO,
+                            onClick = { 
+                                viewModel.selectMode(OnboardingMode.AUTO) {}
+                            },
+                            isDark = isDark
+                        )
+                    }
                 }
+                
+                // Bottom Button
+                GlassSheet(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Button(
+                        onClick = { selectedMode?.let { onModeSelected(it) } },
+                        enabled = selectedMode != null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else me.avinas.vanderwaals.ui.theme.LightPrimary,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text(
+                            text = "Continue",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Auto Mode Card with Glassmorphism
-                GlassCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .bounceOnAppear()
-                        .clickable { 
-                            viewModel.selectMode(OnboardingMode.AUTO)
-                            onAutoModeSelected()
-                        },
-                    shape = RoundedCornerShape(24.dp),
-                    contentPadding = PaddingValues(24.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                modifier = Modifier.size(36.dp),
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
-                        Text(
-                            text = "Auto Mode",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        Text(
-                            text = "Let the algorithm pick great wallpapers and learn your style",
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                
-                // Personalize Mode Card with Glassmorphism
-                GlassCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .bounceOnAppear()
-                        .clickable { 
-                            viewModel.selectMode(OnboardingMode.PERSONALIZE)
-                            onPersonalizeModeSelected()
-                        },
-                    shape = RoundedCornerShape(24.dp),
-                    contentPadding = PaddingValues(24.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Palette,
-                                contentDescription = null,
-                                modifier = Modifier.size(36.dp),
-                                tint = MaterialTheme.colorScheme.tertiary
-                            )
-                        }
-                        
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
-                        Text(
-                            text = "Personalize",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        Text(
-                            text = "Upload your favorite wallpaper to find similar matches instantly",
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+@Composable
+private fun ModeOption(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    isDark: Boolean
+) {
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) (if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else me.avinas.vanderwaals.ui.theme.LightPrimary) 
+                      else Color.Transparent,
+        label = "border"
+    )
+    
+    val backgroundColor = if (selected) {
+        if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark.copy(alpha = 0.15f) 
+        else me.avinas.vanderwaals.ui.theme.LightPrimary.copy(alpha = 0.1f)
+    } else {
+        Color.Transparent
+    }
+
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .border(2.dp, borderColor, RoundedCornerShape(24.dp))
+            .clickable { onClick() },
+        contentPadding = PaddingValues(0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(backgroundColor)
+                .padding(20.dp),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Icon Box
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (selected) (if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else me.avinas.vanderwaals.ui.theme.LightPrimary)
+                        else (if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (selected) Color.White else (if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF4B5563)),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isDark) Color.White else Color(0xFF111827)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF4B5563),
+                    lineHeight = 20.sp
+                )
+            }
+            
+            // Radio Indicator
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .border(
+                        2.dp, 
+                        if (selected) (if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else me.avinas.vanderwaals.ui.theme.LightPrimary)
+                        else (if (isDark) Color.White.copy(alpha = 0.3f) else Color(0xFFD1D5DB)),
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (selected) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .clip(CircleShape)
+                            .background(if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else me.avinas.vanderwaals.ui.theme.LightPrimary)
+                    )
                 }
             }
         }

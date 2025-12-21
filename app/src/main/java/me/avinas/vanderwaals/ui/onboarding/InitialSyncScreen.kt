@@ -2,14 +2,20 @@ package me.avinas.vanderwaals.ui.onboarding
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material3.*
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -80,150 +86,194 @@ fun InitialSyncScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .systemBarsPadding(),
-            contentAlignment = Alignment.Center
         ) {
-            Column(
+            // Premium Background
+            val isDark = isSystemInDarkTheme()
+            me.avinas.vanderwaals.ui.theme.components.PremiumBackground(
+                modifier = Modifier.fillMaxSize(),
+                isDark = isDark
+            )
+
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .systemBarsPadding()
+                    .padding(vertical = 32.dp),
+                contentAlignment = Alignment.Center
             ) {
-                when (val state = syncState) {
-                    is SyncState.Loading -> {
-                        // Animated cloud icon
-                        Icon(
-                            imageVector = Icons.Default.CloudDownload,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(120.dp)
-                                .offset(y = cloudOffset.dp),
-                            tint = MaterialTheme.colorScheme.onSurface // Changed from primary
-                        )
-                        
-                        Text(
-                            text = "Downloading Wallpaper Catalog",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
-                        )
-                        
-                        Text(
-                            text = state.message,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                        
-                        // Progress indicator
-                        if (state.progress != null) {
-                            LinearProgressIndicator(
-                                progress = { state.progress },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                            )
+                me.avinas.vanderwaals.ui.theme.components.GlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    contentPadding = PaddingValues(32.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(24.dp)
+                    ) {
+                        when (val state = syncState) {
+                            is SyncState.Loading -> {
+                                // Animated cloud icon
+                                Box(
+                                    modifier = Modifier
+                                        .size(120.dp)
+                                        .offset(y = cloudOffset.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CloudDownload,
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        tint = if (isDark) Color.White else MaterialTheme.colorScheme.primary 
+                                    )
+                                }
+                                
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Setting Up Library",
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center,
+                                        color = if (isDark) Color.White else Color(0xFF111827)
+                                    )
+                                    
+                                    Text(
+                                        text = state.message,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF4B5563),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                                
+                                // Progress indicator
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    if (state.progress != null) {
+                                        LinearProgressIndicator(
+                                            progress = { state.progress },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(6.dp)
+                                                .clip(RoundedCornerShape(3.dp)),
+                                            color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary,
+                                            trackColor = if (isDark) Color.White.copy(alpha=0.1f) else MaterialTheme.colorScheme.surfaceVariant,
+                                        )
+                                        
+                                        Text(
+                                            text = "${(state.progress * 100).toInt()}%",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isDark) Color.White.copy(alpha = 0.9f) else Color(0xFF111827)
+                                        )
+                                    } else {
+                                        CircularProgressIndicator(
+                                            color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                                
+                                if (wallpaperCount > 0) {
+                                    Text(
+                                        text = "$wallpaperCount wallpapers found",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier
+                                            .background(
+                                                color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark.copy(alpha = 0.1f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                                shape = RoundedCornerShape(12.dp)
+                                            )
+                                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
                             
-                            Text(
-                                text = "${(state.progress * 100).toInt()}%",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else {
-                            CircularProgressIndicator()
+                            is SyncState.Error -> {
+                                Icon(
+                                    imageVector = Icons.Default.Error,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(80.dp),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                                
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Sync Failed",
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                    
+                                    Text(
+                                        text = state.message,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        textAlign = TextAlign.Center,
+                                        color = if (isDark) Color.White.copy(alpha = 0.7f) else Color.Unspecified
+                                    )
+                                }
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                me.avinas.vanderwaals.ui.theme.components.GradientButton(
+                                    text = "Try Again",
+                                    onClick = { viewModel.startSync() },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                
+                                Text(
+                                    text = "Please check your internet connection",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isDark) Color.White.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                            
+                            is SyncState.Success -> {
+                                // Brief success state before auto-navigation
+                                Icon(
+                                    imageVector = Icons.Default.CloudDownload,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(80.dp),
+                                    tint = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
+                                )
+                                
+                                Text(
+                                    text = "Library Ready!",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center,
+                                    color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary
+                                )
+                                
+                                Text(
+                                    text = "${state.count} wallpapers downloaded",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    textAlign = TextAlign.Center,
+                                    color = if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF4B5563)
+                                )
+                                
+                                CircularProgressIndicator(
+                                    color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                            
+                            is SyncState.Idle -> {
+                                CircularProgressIndicator()
+                            }
                         }
-                        
-                        if (wallpaperCount > 0) {
-                            Text(
-                                text = "$wallpaperCount wallpapers downloaded",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                    
-                    is SyncState.Error -> {
-                        Icon(
-                            imageVector = Icons.Default.Error,
-                            contentDescription = null,
-                            modifier = Modifier.size(80.dp),
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                        
-                        Text(
-                            text = "Sync Failed",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                        
-                        Text(
-                            text = state.message,
-                            style = MaterialTheme.typography.bodyLarge,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                        
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
-                        Button(
-                            onClick = { viewModel.startSync() },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
-                        ) {
-                            Text(
-                                text = "Retry",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        Text(
-                            text = "Make sure you have a stable internet connection",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                    
-                    is SyncState.Success -> {
-                        // Brief success state before auto-navigation
-                        Icon(
-                            imageVector = Icons.Default.CloudDownload,
-                            contentDescription = null,
-                            modifier = Modifier.size(80.dp),
-                            tint = MaterialTheme.colorScheme.onSurface // Changed from primary
-                        )
-                        
-                        Text(
-                            text = "Catalog Downloaded!",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        
-                        Text(
-                            text = "${state.count} wallpapers ready",
-                            style = MaterialTheme.typography.bodyLarge,
-                            textAlign = TextAlign.Center
-                        )
-                        
-                        CircularProgressIndicator()
-                    }
-                    
-                    is SyncState.Idle -> {
-                        // Should never be shown - sync starts automatically
-                        CircularProgressIndicator()
                     }
                 }
             }

@@ -426,7 +426,7 @@ class WallpaperProcessor:
 def generate_manifest(wallpapers: List[Dict], output_path: Path, manifest_type: str):
     """Generate manifest file."""
     manifest = {
-        'version': '1.0.0',
+        'version': 2,
         'last_updated': datetime.utcnow().isoformat() + 'Z',
         'model_version': 'mobilenet_v3_small',
         'embedding_dim': 576,

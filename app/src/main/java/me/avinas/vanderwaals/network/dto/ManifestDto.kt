@@ -42,7 +42,7 @@ import me.avinas.vanderwaals.data.entity.WallpaperMetadata
  * @see toWallpaperEntities
  */
 data class ManifestDto(
-    val version: Int,
+    val version: String,
     @SerializedName("last_updated")
     val lastUpdated: String,
     @SerializedName("model_version")
@@ -93,7 +93,14 @@ fun ManifestDto.getEstimatedSize(): Long {
  * @return true if manifest is valid, false otherwise
  */
 fun ManifestDto.isValid(): Boolean {
-    if (version < 1 || lastUpdated.isBlank() || modelVersion.isBlank()) {
+    // Parse version string (handle "1.0.0", "2", etc.)
+    val v = try {
+        version.substringBefore('.').toInt()
+    } catch (e: NumberFormatException) {
+        0
+    }
+
+    if (v < 1 || lastUpdated.isBlank() || modelVersion.isBlank()) {
         return false
     }
     
@@ -102,7 +109,7 @@ fun ManifestDto.isValid(): Boolean {
     }
     
     // For v2 (quantized), check that quantized format fields are present
-    if (version >= 2 && quantized) {
+    if (v >= 2 && quantized) {
         val sample = wallpapers.firstOrNull() ?: return false
         if (sample.e.isNullOrBlank()) {
             return false  // Quantized format requires 'e' field

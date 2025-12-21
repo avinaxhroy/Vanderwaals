@@ -9,7 +9,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -27,7 +30,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.dp
 import me.avinas.vanderwaals.ui.theme.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +45,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
 
 /**
  * Modern UI Components for Vanderwaals
@@ -139,17 +143,6 @@ fun GradientButton(
 
 // ===== GLASS CARD =====
 
-// ===== GLASS CARD =====
-
-/**
- * Modern glassmorphism card with premium Apple-style aesthetic
- *
- * Features:
- * - High-quality translucent background
- * - Subtle white border with gradient
- * - Soft shadow
- * - Noise texture simulation (via gradient)
- */
 /**
  * Modern glassmorphism card with premium Apple-style aesthetic
  *
@@ -167,9 +160,8 @@ fun GlassCard(
     contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
+    val isDark = LocalThemeIsDark.current
     val containerColor = if (isDark) GlassBackground else GlassBackgroundLight
-    val borderColor = if (isDark) GlassBorder else GlassBorderLight
     
     Box(
         modifier = modifier
@@ -187,18 +179,44 @@ fun GlassCard(
                 shape = shape
             )
     ) {
-        // CSS: inset 0 -1px 0 rgba(255, 255, 255, 0.1) -> Bottom Inner Highlight
+        // Inner Highlight (Crisp 1px border inset)
+        // We simulate this with a box drawing a border inside
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .padding(1.dp) // Inset by 1px
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            if (isDark) Color.White.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.6f), // Top brighter
+                            if (isDark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.2f)  // Bottom subtle
+                        )
+                    ),
+                    shape = shape
+                )
+        )
+        
+        // Bottom Inner Highlight (stronger)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(1.dp)
                 .align(Alignment.BottomCenter)
-                .offset(y = (-1).dp) // Inset by 1px
-                .background(if (isDark) GlassInsetBottom else Color.White.copy(alpha = 0.2f))
+                .offset(y = (-1).dp)
+                .padding(horizontal = 24.dp) // Don't span full width for "button" feel
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                             Color.Transparent,
+                             if (isDark) GlassInsetBottom else Color.White.copy(alpha = 0.3f),
+                             Color.Transparent
+                        )
+                    )
+                )
         )
         
-        // CSS: inset 0 0 34px 17px rgba(255, 255, 255, 1.7) -> Strong Inner Glow
-        // Simulated with a radial gradient
+        // Soft Inner Glow (Radial)
         Box(
             modifier = Modifier
                 .matchParentSize()
@@ -209,7 +227,7 @@ fun GlassCard(
                             Color.Transparent
                         ),
                         center = Offset.Zero,
-                        radius = 1000f // Large radius for soft glow
+                        radius = 800f
                     )
                 )
         )
@@ -232,7 +250,7 @@ fun TintedGlassCard(
     contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
+    val isDark = LocalThemeIsDark.current
     val containerColor = if (isDark) GlassBackground else GlassBackgroundLight
     
     Box(
@@ -272,6 +290,23 @@ fun TintedGlassCard(
                 )
         )
 
+        // Inner Highlight (Crisp 1px border inset) - Matching GlassCard with Top Light Source
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .padding(1.dp) // Inset by 1px
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            if (isDark) Color.White.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.6f), // Top brighter
+                            if (isDark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.2f)  // Bottom subtle
+                        )
+                    ),
+                    shape = shape
+                )
+        )
+
         // CSS: inset 0 -1px 0 rgba(255, 255, 255, 0.1) -> Bottom Inner Highlight
         Box(
             modifier = Modifier
@@ -309,17 +344,13 @@ fun TintedGlassCard(
 /**
  * Glassmorphism Sheet for Bottom Sheets / Overlays
  */
-/**
- * Glassmorphism Sheet for Bottom Sheets / Overlays
- */
 @Composable
 fun GlassSheet(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
+    val isDark = LocalThemeIsDark.current
     val containerColor = if (isDark) GlassBackground else GlassBackgroundLight
-    val borderColor = if (isDark) GlassBorder else GlassBorderLight
     val topGradient = if (isDark) GlassGradientTop else GlassGradientTopLight
     val shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
     
@@ -333,48 +364,51 @@ fun GlassSheet(
             )
             .clip(shape)
             .background(containerColor)
+            // Initial Border (Outer)
             .border(
                 width = 1.dp,
                 brush = topGradient,
                 shape = shape
             )
     ) {
-        // Top Gradient Border (simulated with Box)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(topGradient)
-                .align(Alignment.TopCenter)
-        )
-
-        // CSS: inset 0 1px 0 rgba(255, 255, 255, 0.5) -> Top Inner Highlight
+        // Inner Highlight (Crisp 1px border inset) - Top only
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(1.dp)
                 .align(Alignment.TopCenter)
-                .offset(y = 1.dp) // Inset by 1px
-                .background(if (isDark) GlassInsetTop else Color.White.copy(alpha = 0.5f))
+                .offset(y = 1.dp) // Inset
+                .background(
+                   brush = Brush.horizontalGradient(
+                       colors = listOf(
+                           Color.Transparent, 
+                           if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.5f),
+                           Color.Transparent
+                       )
+                   )
+                )
         )
 
-        // Inner Glow Simulation (Stronger)
+        // Inner Glow Simulation (Stronger for Sheet)
         Box(
             modifier = Modifier
                 .matchParentSize()
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            if (isDark) GlassInnerGlow else Color.White.copy(alpha = 0.4f),
+                            if (isDark) GlassInnerGlow else Color.White.copy(alpha = 0.5f),
                             Color.Transparent
                         ),
-                        endY = 500f
+                        endY = 600f
                     )
                 )
         )
         
         Column(
-            modifier = Modifier.padding(24.dp),
+            modifier = Modifier
+                .padding(24.dp)
+                .windowInsetsPadding(WindowInsets.navigationBars) // Respect nav bar
+                .padding(bottom = 24.dp), // Extra safety buffer
             content = content
         )
     }
@@ -608,9 +642,9 @@ fun ModernDivider(
     if (gradient) {
         Box(
             modifier = modifier
-                .fillMaxWidth()
-                .height(thickness)
-                .background(GradientPrimary)
+            .fillMaxWidth()
+            .height(thickness)
+            .background(GradientPrimary)
         )
     } else {
         HorizontalDivider(
@@ -633,20 +667,18 @@ fun PremiumBackground(
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "blobs")
 
-    // Animate positions
-    val offset1 by infiniteTransition.animateFloat(
+    // Very slow, "breathing" animations for controlled chaos
+    val t1 by infiniteTransition.animateFloat(
         initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(12000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ), label = "offset1"
+        animationSpec = infiniteRepeatable(tween(35000, easing = LinearEasing), RepeatMode.Reverse), label = "t1"
     )
-    val offset2 by infiniteTransition.animateFloat(
+    val t2 by infiniteTransition.animateFloat(
         initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(18000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ), label = "offset2"
+        animationSpec = infiniteRepeatable(tween(28000, easing = LinearEasing), RepeatMode.Reverse), label = "t2"
+    )
+    val t3 by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(42000, easing = LinearEasing), RepeatMode.Reverse), label = "t3"
     )
     
     Box(
@@ -654,60 +686,127 @@ fun PremiumBackground(
             .fillMaxSize()
             .background(if (isDark) DarkBackground else LightBackground)
     ) {
-        Canvas(modifier = Modifier.fillMaxSize().blur(100.dp)) {
+        Canvas(modifier = Modifier.fillMaxSize().blur(80.dp)) {
             val w = size.width
             val h = size.height
+            
+            // Helper to draw varied organic blobs
+            fun drawOrganicBlob(center: Offset, radius: Float, color: Color, distortion: Float) {
+                drawCircle(
+                    color = color.copy(alpha = if (isDark) 0.4f else 0.6f),
+                    center = center,
+                    radius = radius * (0.8f + distortion * 0.4f)
+                )
+            }
 
             if (isDark) {
-                // Dark Mode Blobs - Deep Ocean Theme
-                drawCircle(
-                    color = Color(0xFF1E3A8A).copy(alpha = 0.2f), // Deep Royal Blue
-                    center = Offset(w * 0.2f + (offset1 * 100f), h * 0.3f),
-                    radius = 500.dp.toPx()
+                // Layer 0: Shadow Pocket (Bottom Right) - Adds contrast
+                drawOrganicBlob(
+                    center = Offset(w * 0.9f, h * 0.9f),
+                    radius = w * 0.4f,
+                    color = Color.Black.copy(alpha = 0.3f),
+                    distortion = t2
                 )
-                drawCircle(
-                    color = Color(0xFF0F766E).copy(alpha = 0.15f), // Deep Teal
-                    center = Offset(w * 0.8f - (offset2 * 100f), h * 0.6f),
-                    radius = 450.dp.toPx()
+
+                // Layer 1: Deep Base (Cinematic Blue) - Top Left (Source side)
+                drawOrganicBlob(
+                    center = Offset(w * 0.2f, h * 0.3f),
+                    radius = w * 0.6f,
+                    color = CinematicBlue,
+                    distortion = t1
                 )
-                drawCircle(
-                    color = Color(0xFF0E7490).copy(alpha = 0.15f), // Cyan/Slate
-                    center = Offset(w * 0.5f, h * 0.9f - (offset1 * 50f)),
-                    radius = 500.dp.toPx()
+                
+                // Layer 2: Rich Accent (Cinematic Purple) - Moving opposite
+                drawOrganicBlob(
+                    center = Offset(w * 0.8f, h * 0.6f),
+                    radius = w * 0.5f,
+                    color = CinematicPurple,
+                    distortion = 1f - t2
                 )
+                
+                // Layer 3: Pop Color (Cinematic Teal) - Floating top right
+                drawOrganicBlob(
+                    center = Offset(w * (0.6f + t1 * 0.2f), h * 0.2f),
+                    radius = w * 0.4f,
+                    color = CinematicTeal,
+                    distortion = t3
+                )
+                
+                // Layer 4: Deep Rose Muted (Desaturated) - Bottom Left
+                // Less attention stealing, more grounding
+                drawOrganicBlob(
+                    center = Offset(w * 0.2f, h * (0.85f - t2 * 0.1f)),
+                    radius = w * 0.45f,
+                    color = CinematicRoseMuted, 
+                    distortion = t2
+                )
+
+                // Layer 5: Hero Light Glint - Top Left
+                // Simulates light source hitting the background liquid
+                drawOrganicBlob(
+                    center = Offset(0f, 0f),
+                    radius = w * 0.4f,
+                    color = Color.White.copy(alpha = 0.03f),
+                    distortion = t1
+                )
+                
             } else {
-                // Light Mode Blobs - Softer, pastel but vibrant
-                drawCircle(
-                    color = Color(0xFFE9D5FF).copy(alpha = 0.8f), // Purple 200
-                    center = Offset(w * 0.2f + (offset1 * 100f), h * 0.3f),
-                    radius = 600.dp.toPx()
+                // Light Mode - Airy and separated with Hero Light
+                
+                // Layer 0: Hero Light Source - Top Left (Stronger)
+                drawOrganicBlob(
+                    center = Offset(0f, 0f),
+                    radius = w * 0.6f,
+                    color = Color.White.copy(alpha = 0.6f), // Bright wash
+                    distortion = 0f
                 )
-                drawCircle(
-                    color = Color(0xFFFECDD3).copy(alpha = 0.7f), // Rose 200
-                    center = Offset(w * 0.8f - (offset2 * 100f), h * 0.6f),
-                    radius = 500.dp.toPx()
+
+                // Layer 1: Airy Blue - Floating mid
+                drawOrganicBlob(
+                    center = Offset(w * 0.3f, h * 0.4f),
+                    radius = w * 0.5f,
+                    color = AiryBlue,
+                    distortion = t1
                 )
-                drawCircle(
-                    color = Color(0xFF99F6E4).copy(alpha = 0.6f), // Teal 200
-                    center = Offset(w * 0.5f, h * 0.9f - (offset1 * 50f)),
-                    radius = 550.dp.toPx()
+                
+                // Layer 2: Airy Purple - Bottom Right
+                drawOrganicBlob(
+                    center = Offset(w * 0.8f, h * 0.7f),
+                    radius = w * 0.5f,
+                    color = AiryPurple,
+                    distortion = 1f - t2
+                )
+                
+                // Layer 3: Airy Amber (Warmth) - Top Rightish
+                drawOrganicBlob(
+                    center = Offset(w * 0.7f, h * 0.2f),
+                    radius = w * 0.4f,
+                    color = AiryAmber,
+                    distortion = t3
+                )
+                
+                // Layer 4: Airy Rose - Bottom Left
+                drawOrganicBlob(
+                    center = Offset(w * 0.2f, h * 0.9f),
+                    radius = w * 0.4f,
+                    color = AiryRose,
+                    distortion = t2
                 )
             }
         }
         
-        // Noise overlay for texture (optional, can simulate with a very subtle gradient)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            if (isDark) Color.Black.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.2f)
-                        )
+        // Noise Overlay for texture - reduces banding and adds "material" feel
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.02f),
+                        Color.Transparent,
+                        Color.Black.copy(alpha = 0.02f)
                     )
                 )
-        )
+            )
+        }
     }
 }
 // ===== BACKGROUND BLOBS =====
@@ -720,44 +819,39 @@ fun BackgroundBlobs(
     modifier: Modifier = Modifier,
     isDark: Boolean = LocalThemeIsDark.current
 ) {
-    Canvas(modifier = modifier.fillMaxSize()) {
+    // Re-use logic for MainScreen blobs but without the full PremiumBackground container
+    // We just draw the blobs here
+    val infiniteTransition = rememberInfiniteTransition(label = "blobs_main")
+
+    val t1 by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(35000, easing = LinearEasing), RepeatMode.Reverse), label = "t1"
+    )
+    val t2 by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(28000, easing = LinearEasing), RepeatMode.Reverse), label = "t2"
+    )
+    
+    Canvas(modifier = modifier.fillMaxSize().blur(80.dp)) {
         val w = size.width
         val h = size.height
+        
+        fun drawOrganicBlob(center: Offset, radius: Float, color: Color) {
+            drawCircle(
+                color = color.copy(alpha = if (isDark) 0.3f else 0.5f),
+                center = center,
+                radius = radius
+            )
+        }
 
         if (isDark) {
-            // Dark Mode Blobs
-            drawCircle(
-                color = DarkIndigo400.copy(alpha = 0.2f),
-                center = Offset(w * 0.2f, h * 0.5f),
-                radius = 400.dp.toPx()
-            )
-            drawCircle(
-                color = DarkRose400.copy(alpha = 0.15f),
-                center = Offset(w * 0.8f, h * 0.2f),
-                radius = 400.dp.toPx()
-            )
-            drawCircle(
-                color = DarkSky400.copy(alpha = 0.15f),
-                center = Offset(w * 0.5f, h * 0.8f),
-                radius = 320.dp.toPx()
-            )
+            drawOrganicBlob(Offset(w * 0.2f, h * 0.3f), w * 0.5f, CinematicBlue)
+            drawOrganicBlob(Offset(w * 0.8f, h * 0.7f), w * 0.45f, CinematicPurple)
+            drawOrganicBlob(Offset(w * (0.5f + t1 * 0.2f), h * 0.5f), w * 0.4f, CinematicTeal)
         } else {
-            // Light Mode Blobs
-            drawCircle(
-                color = LightPurple400.copy(alpha = 0.3f),
-                center = Offset(w * 0.2f, h * 0.5f),
-                radius = 500.dp.toPx()
-            )
-            drawCircle(
-                color = LightOrange400.copy(alpha = 0.25f),
-                center = Offset(w * 0.8f, h * 0.2f),
-                radius = 500.dp.toPx()
-            )
-            drawCircle(
-                color = LightTeal400.copy(alpha = 0.25f),
-                center = Offset(w * 0.5f, h * 0.8f),
-                radius = 400.dp.toPx()
-            )
+            drawOrganicBlob(Offset(w * 0.2f, h * 0.3f), w * 0.6f, AiryBlue)
+            drawOrganicBlob(Offset(w * 0.8f, h * 0.7f), w * 0.5f, AiryRose)
+            drawOrganicBlob(Offset(w * 0.5f, h * 0.8f), w * 0.55f, AiryTeal)
         }
     }
 }
@@ -777,7 +871,7 @@ fun BackgroundBlobs(
 fun GlassTopAppBarBackground(
     modifier: Modifier = Modifier
 ) {
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
+    val isDark = LocalThemeIsDark.current
     val containerColor = if (isDark) GlassBackground else GlassBackgroundLight
     val borderColor = if (isDark) GlassBorder else GlassBorderLight
     
@@ -791,6 +885,24 @@ fun GlassTopAppBarBackground(
             )
             .background(containerColor)
     ) {
+        // Inner Highlight (Crisp 1px border inset) - Bottom only for top bar
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .align(Alignment.BottomCenter)
+                .offset(y = (-1).dp) // Inset by 1px from bottom
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            if (isDark) Color.White.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.8f), // Enhanced opacity
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+        
         // Bottom Border
         Box(
             modifier = Modifier
@@ -827,6 +939,136 @@ fun GlassTopAppBarBackground(
     }
 }
 
+// ===== NEW SHARED COMPONENTS =====
+
+@Composable
+fun LabelSectionHeader(title: String) {
+    val isDark = LocalThemeIsDark.current
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        // Reduced opacity for "label" feel
+        color = if (isDark) Color.White.copy(alpha = 0.4f) else Color.Black.copy(alpha = 0.4f),
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        letterSpacing = 2.0.sp // Increased spacing
+    )
+}
+
+@Composable
+fun SettingsRow(
+    title: String,
+    subtitle: String? = null,
+    onClick: (() -> Unit)? = null,
+    textColor: Color = Color.Unspecified,
+    trailing: @Composable (() -> Unit)? = null
+) {
+    val isDark = LocalThemeIsDark.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = textColor
+            )
+            subtitle?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF6B7280)
+                )
+            }
+        }
+        trailing?.invoke()
+    }
+}
+
+@Composable
+fun SegmentedControl(
+    items: List<String>,
+    selectedIndex: Int,
+    onItemSelected: (Int) -> Unit,
+    isDark: Boolean = LocalThemeIsDark.current
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (isDark) Color.Black.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.05f),
+                RoundedCornerShape(8.dp)
+            )
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        items.forEachIndexed { index, item ->
+            val isSelected = index == selectedIndex
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(
+                        if (isSelected) {
+                            if (isDark) InfoColorDark else LightPrimary
+                        } else {
+                            Color.Transparent
+                        }
+                    )
+                    .clickable { onItemSelected(index) }
+                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = item,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    color = if (isSelected) Color.White else (if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF4B5563)),
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OnboardingTopAppBar(
+    onBack: () -> Unit,
+    showBack: Boolean = true,
+    title: @Composable () -> Unit = {},
+    actions: @Composable RowScope.() -> Unit = {}
+) {
+    TopAppBar(
+        title = title,
+        actions = actions,
+        navigationIcon = {
+            if (showBack) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back"
+                    )
+                }
+            }
+        },
+        windowInsets = WindowInsets(0, 0, 0, 0),
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.Transparent
+        ),
+        modifier = Modifier
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .padding(top = 16.dp) // Explicit extra padding for safety
+    )
+}
+
 /**
  * Helper to observe pressed state from InteractionSource
  */
@@ -843,4 +1085,15 @@ fun InteractionSource.collectIsPressedAsState(): State<Boolean> {
         }
     }
     return isPressed
+}
+
+@Composable
+fun ModernDivider(
+    modifier: Modifier = Modifier,
+    isDark: Boolean = LocalThemeIsDark.current
+) {
+    HorizontalDivider(
+        modifier = modifier,
+        color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f)
+    )
 }

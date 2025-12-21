@@ -229,10 +229,14 @@ class WallpaperChangeService : Service() {
      * Changes both home and lock screen with different wallpapers.
      */
     private suspend fun changeBothDifferentWallpapers() {
+        // Track home wallpaper ID for excluding in lock screen selection
+        var homeWallpaperId: String? = null
+        
         // Home wallpaper
         val homeResult = selectNextWallpaperUseCase()
         if (homeResult.isSuccess) {
             var actualHomeWallpaper = homeResult.getOrNull()!!
+            homeWallpaperId = actualHomeWallpaper.id  // Store for lock screen exclusion
             var homeFile: File?
             
             val homeDownload = wallpaperRepository.downloadWallpaper(actualHomeWallpaper)
@@ -246,6 +250,7 @@ class WallpaperChangeService : Service() {
                     val (cachedWallpaper, cachedFile) = cachedHomeResult
                     Log.d(TAG, "Offline fallback for home - using cached: ${cachedWallpaper.id}")
                     actualHomeWallpaper = cachedWallpaper
+                    homeWallpaperId = cachedWallpaper.id  // Update to cached ID
                     homeFile = cachedFile
                 } else {
                     Log.e(TAG, "No cached wallpapers for home screen")
@@ -258,8 +263,8 @@ class WallpaperChangeService : Service() {
             }
         }
         
-        // Lock wallpaper
-        val lockResult = selectNextWallpaperUseCase() // Should get different one
+        // Lock wallpaper - CRITICAL: exclude home wallpaper ID to ensure different wallpapers
+        val lockResult = selectNextWallpaperUseCase(excludeWallpaperId = homeWallpaperId)
         if (lockResult.isSuccess) {
             var actualLockWallpaper = lockResult.getOrNull()!!
             var lockFile: File?

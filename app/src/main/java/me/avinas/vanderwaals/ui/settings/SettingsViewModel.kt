@@ -223,6 +223,9 @@ class SettingsViewModel @Inject constructor(
                     "unlock" -> ChangeInterval.EVERY_UNLOCK
                     "15min" -> ChangeInterval.FIFTEEN_MINUTES
                     "hourly" -> ChangeInterval.HOURLY
+                    "3hours" -> ChangeInterval.THREE_HOURS
+                    "6hours" -> ChangeInterval.SIX_HOURS
+                    "12hours" -> ChangeInterval.TWELVE_HOURS
                     "daily" -> ChangeInterval.DAILY
                     "never" -> ChangeInterval.NEVER
                     else -> ChangeInterval.DAILY
@@ -422,6 +425,9 @@ class SettingsViewModel @Inject constructor(
                 ChangeInterval.EVERY_UNLOCK -> "unlock"
                 ChangeInterval.FIFTEEN_MINUTES -> "15min"
                 ChangeInterval.HOURLY -> "hourly"
+                ChangeInterval.THREE_HOURS -> "3hours"
+                ChangeInterval.SIX_HOURS -> "6hours"
+                ChangeInterval.TWELVE_HOURS -> "12hours"
                 ChangeInterval.DAILY -> "daily"
                 ChangeInterval.NEVER -> "never"
             }
@@ -748,6 +754,9 @@ class SettingsViewModel @Inject constructor(
                 ChangeInterval.EVERY_UNLOCK -> me.avinas.vanderwaals.worker.ChangeInterval.EVERY_UNLOCK
                 ChangeInterval.FIFTEEN_MINUTES -> me.avinas.vanderwaals.worker.ChangeInterval.FIFTEEN_MINUTES
                 ChangeInterval.HOURLY -> me.avinas.vanderwaals.worker.ChangeInterval.HOURLY
+                ChangeInterval.THREE_HOURS -> me.avinas.vanderwaals.worker.ChangeInterval.THREE_HOURS
+                ChangeInterval.SIX_HOURS -> me.avinas.vanderwaals.worker.ChangeInterval.SIX_HOURS
+                ChangeInterval.TWELVE_HOURS -> me.avinas.vanderwaals.worker.ChangeInterval.TWELVE_HOURS
                 ChangeInterval.DAILY -> me.avinas.vanderwaals.worker.ChangeInterval.DAILY
                 ChangeInterval.NEVER -> me.avinas.vanderwaals.worker.ChangeInterval.NEVER
             }
@@ -767,7 +776,10 @@ class SettingsViewModel @Inject constructor(
                         targetScreen = targetScreen
                     )
                 }
-                ChangeInterval.HOURLY -> {
+                ChangeInterval.HOURLY,
+                ChangeInterval.THREE_HOURS,
+                ChangeInterval.SIX_HOURS,
+                ChangeInterval.TWELVE_HOURS -> {
                     workScheduler.scheduleWallpaperChange(
                         interval = workerInterval,
                         targetScreen = targetScreen
@@ -844,6 +856,9 @@ enum class ChangeInterval(val displayName: String) {
     EVERY_UNLOCK("Every Unlock"),
     FIFTEEN_MINUTES("15 Minutes"),
     HOURLY("Hourly"),
+    THREE_HOURS("3 Hours"),
+    SIX_HOURS("6 Hours"),
+    TWELVE_HOURS("12 Hours"),
     DAILY("Daily"),
     NEVER("Never")
 }

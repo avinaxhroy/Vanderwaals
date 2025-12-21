@@ -4,7 +4,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,7 +16,6 @@ import kotlinx.coroutines.launch
 import me.avinas.vanderwaals.data.datastore.SettingsDataStore
 import me.avinas.vanderwaals.worker.WorkScheduler
 import me.avinas.vanderwaals.worker.ChangeInterval
-import javax.inject.Inject
 
 /**
  * Broadcast receiver that responds to device boot completion.
@@ -33,6 +35,15 @@ import javax.inject.Inject
  * 2. If auto-change is enabled, reschedule wallpaper change worker
  * 3. Reschedule periodic sync and cleanup workers
  * 4. Log diagnostic information
+ * 
+ * **CRITICAL: Uses EntryPointAccessors instead of @AndroidEntryPoint**
+ * Manifest-declared broadcast receivers are instantiated by the Android system,
+ * not by Hilt. Using @AndroidEntryPoint can fail when:
+ * - App process was killed before reboot
+ * - System boots early and Hilt hasn't initialized
+ * 
+ * The EntryPointAccessors pattern manually retrieves dependencies from the
+ * Hilt component, which is more reliable for system-instantiated receivers.
  * 
  * **Manifest Registration:**
  * ```xml
@@ -62,14 +73,19 @@ import javax.inject.Inject
  * 
  * @see WorkScheduler
  */
-@AndroidEntryPoint
 class BootCompletedReceiver : BroadcastReceiver() {
     
-    @Inject
-    lateinit var workScheduler: WorkScheduler
-    
-    @Inject
-    lateinit var settingsDataStore: SettingsDataStore
+    /**
+     * Entry point interface for Hilt dependency injection.
+     * This allows us to manually retrieve dependencies from the Hilt component
+     * in manifest-declared receivers where @AndroidEntryPoint is unreliable.
+     */
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface BootReceiverEntryPoint {
+        fun workScheduler(): WorkScheduler
+        fun settingsDataStore(): SettingsDataStore
+    }
     
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
@@ -81,11 +97,11 @@ class BootCompletedReceiver : BroadcastReceiver() {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED -> {
                 Log.d(TAG, "Device boot completed - rescheduling workers")
-                handleBootCompleted()
+                handleBootCompleted(context)
             }
             Intent.ACTION_MY_PACKAGE_REPLACED -> {
                 Log.d(TAG, "App updated - rescheduling workers")
-                handleBootCompleted()
+                handleBootCompleted(context)
             }
             else -> {
                 Log.w(TAG, "Received unexpected action: ${intent.action}")
@@ -98,14 +114,26 @@ class BootCompletedReceiver : BroadcastReceiver() {
      * 
      * Uses goAsync() to perform work in background coroutine since
      * BroadcastReceiver.onReceive() must return quickly.
+     * 
+     * Dependencies are retrieved via EntryPointAccessors for reliable injection.
      */
-    private fun handleBootCompleted() {
+    private fun handleBootCompleted(context: Context) {
         // Use goAsync() to extend receiver lifetime for background work
         val pendingResult = goAsync()
         
         scope.launch {
             try {
                 Log.d(TAG, "Starting worker rescheduling...")
+                
+                // Get dependencies via EntryPointAccessors (more reliable than @AndroidEntryPoint)
+                val entryPoint = EntryPointAccessors.fromApplication(
+                    context.applicationContext,
+                    BootReceiverEntryPoint::class.java
+                )
+                val workScheduler = entryPoint.workScheduler()
+                val settingsDataStore = entryPoint.settingsDataStore()
+                
+                Log.d(TAG, "✓ Dependencies retrieved via EntryPointAccessors")
                 
                 // Step 1: Initialize periodic workers (sync, cleanup)
                 workScheduler.initializePeriodicWorkers()
@@ -120,10 +148,10 @@ class BootCompletedReceiver : BroadcastReceiver() {
                     // Parse interval and reschedule
                     when (settings.changeInterval) {
                         "unlock" -> {
-                            workScheduler.scheduleWallpaperChange(
-                                interval = ChangeInterval.EVERY_UNLOCK,
-                                targetScreen = settings.applyTo
-                            )
+                            // ANDROID 15+ FIX: Use fromBootReceiver flag to enable deferred start
+                            // This prevents ForegroundServiceStartNotAllowedException on API 35+
+                            Log.d(TAG, "Unlock interval - starting monitor service with boot flag")
+                            workScheduler.startWallpaperMonitorService(fromBootReceiver = true)
                         }
                         "15min" -> {
                             workScheduler.scheduleWallpaperChange(
@@ -134,6 +162,24 @@ class BootCompletedReceiver : BroadcastReceiver() {
                         "hourly" -> {
                             workScheduler.scheduleWallpaperChange(
                                 interval = ChangeInterval.HOURLY,
+                                targetScreen = settings.applyTo
+                            )
+                        }
+                        "3hours" -> {
+                            workScheduler.scheduleWallpaperChange(
+                                interval = ChangeInterval.THREE_HOURS,
+                                targetScreen = settings.applyTo
+                            )
+                        }
+                        "6hours" -> {
+                            workScheduler.scheduleWallpaperChange(
+                                interval = ChangeInterval.SIX_HOURS,
+                                targetScreen = settings.applyTo
+                            )
+                        }
+                        "12hours" -> {
+                            workScheduler.scheduleWallpaperChange(
+                                interval = ChangeInterval.TWELVE_HOURS,
                                 targetScreen = settings.applyTo
                             )
                         }

@@ -89,28 +89,13 @@ class WallpaperRepositoryImpl @Inject constructor(
     }
     
     override fun getDownloadedWallpapers(): Flow<List<WallpaperMetadata>> {
-        // Combine wallpaper metadata with download queue status
-        return combine(
-            wallpaperMetadataDao.getAll(),
-            downloadQueueDao.getQueue()
-        ) { allWallpapers, queue ->
-            // If queue is empty, return all available wallpapers
-            // This handles the fresh app case where no queue has been initialized yet
-            if (queue.isEmpty()) {
-                return@combine allWallpapers
-            }
-            
-            // Get IDs of downloaded wallpapers
-            val downloadedIds = queue
-                .filter { it.downloaded }
-                .map { it.wallpaperId }
-                .toSet()
-            
-            // Filter wallpapers that are downloaded
+        // Return wallpapers that have actual files on disk
+        // CRITICAL FIX: Don't trust queue status - check actual file existence
+        return wallpaperMetadataDao.getAll().map { allWallpapers ->
             allWallpapers.filter { wallpaper ->
-                wallpaper.id in downloadedIds && getWallpaperFile(wallpaper).exists()
+                getWallpaperFile(wallpaper).exists()
             }
-        }.flowOn(Dispatchers.IO) // CRITICAL: Perform file existence checks on IO thread
+        }.flowOn(Dispatchers.IO) // Perform file existence checks on IO thread
     }
     
     override fun getWallpapersByCategory(category: String): Flow<List<WallpaperMetadata>> {
@@ -386,6 +371,30 @@ class WallpaperRepositoryImpl @Inject constructor(
 
     override fun getCroppedWallpaperFile(wallpaper: WallpaperMetadata): File {
         return File(wallpaperCacheDir, "${wallpaper.id}_cropped.png")
+    }
+    
+    override suspend fun getWallpaperById(id: String): WallpaperMetadata? {
+        return withContext(Dispatchers.IO) {
+            wallpaperMetadataDao.getById(id)
+        }
+    }
+    
+    override suspend fun getWallpaperCount(): Int {
+        return withContext(Dispatchers.IO) {
+            wallpaperMetadataDao.getCount()
+        }
+    }
+    
+    override suspend fun getDownloadedWallpaperCount(): Int {
+        return withContext(Dispatchers.IO) {
+            // Count files in wallpaper cache directory
+            val cacheDir = wallpaperCacheDir
+            if (cacheDir.exists()) {
+                cacheDir.listFiles()?.count { it.isFile && !it.name.endsWith("_cropped.png") } ?: 0
+            } else {
+                0
+            }
+        }
     }
     
     companion object {

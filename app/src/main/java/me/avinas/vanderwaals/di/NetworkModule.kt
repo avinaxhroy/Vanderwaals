@@ -265,12 +265,33 @@ object NetworkModule {
      * @param downloadProgressInterceptor Progress tracking interceptor
      * @return Configured OkHttp client
      */
+    /**
+     * User-Agent interceptor to bypass Cloudflare bot detection.
+     * 
+     * Cloudflare blocks requests without a valid User-Agent, returning empty responses.
+     * This mimics a modern Chrome browser to ensure wallpaper downloads from
+     * Cloudflare-protected servers (like bing.npanuhin.me) succeed.
+     */
+    @Provides
+    @Singleton
+    fun provideUserAgentInterceptor(): okhttp3.Interceptor {
+        return okhttp3.Interceptor { chain ->
+            val request = chain.request().newBuilder()
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                .header("Accept", "image/webp,image/apng,image/*,*/*;q=0.8")
+                .header("Accept-Language", "en-US,en;q=0.9")
+                .build()
+            chain.proceed(request)
+        }
+    }
+    
     @Provides
     @Singleton
     fun provideOkHttpClient(
         cache: Cache,
         loggingInterceptor: HttpLoggingInterceptor,
-        downloadProgressInterceptor: me.avinas.vanderwaals.network.DownloadProgressInterceptor
+        downloadProgressInterceptor: me.avinas.vanderwaals.network.DownloadProgressInterceptor,
+        userAgentInterceptor: okhttp3.Interceptor
     ): OkHttpClient {
         // Configure Dispatcher for higher concurrency
         val dispatcher = okhttp3.Dispatcher().apply {
@@ -288,6 +309,7 @@ object NetworkModule {
             .readTimeout(READ_TIMEOUT, TimeUnit.SECONDS)
             .writeTimeout(WRITE_TIMEOUT, TimeUnit.SECONDS)
             .cache(cache)
+            .addInterceptor(userAgentInterceptor) // CRITICAL: Must come first to set headers before other interceptors
             .addNetworkInterceptor(downloadProgressInterceptor) // Track download progress
             .addInterceptor(loggingInterceptor)
             .build()

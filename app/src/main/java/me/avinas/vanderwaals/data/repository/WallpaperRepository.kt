@@ -269,4 +269,31 @@ interface WallpaperRepository {
      * @return File object pointing to the cropped wallpaper
      */
     fun getCroppedWallpaperFile(wallpaper: WallpaperMetadata): File
+    
+    /**
+     * Retrieves a single wallpaper by ID with full embedding data.
+     * 
+     * More efficient than loading all wallpapers when you only need one.
+     * Useful for feedback processing where full embedding is needed.
+     * 
+     * @param id Wallpaper ID to look up
+     * @return Wallpaper metadata with embedding, or null if not found
+     */
+    suspend fun getWallpaperById(id: String): WallpaperMetadata?
+    
+    /**
+     * Gets the total count of wallpapers in catalog.
+     * Fast query that doesn't load all wallpaper data.
+     * 
+     * @return Number of wallpapers in catalog
+     */
+    suspend fun getWallpaperCount(): Int
+    
+    /**
+     * Gets the count of downloaded wallpapers.
+     * Fast query that doesn't load all wallpaper data.
+     * 
+     * @return Number of downloaded wallpapers
+     */
+    suspend fun getDownloadedWallpaperCount(): Int
 }

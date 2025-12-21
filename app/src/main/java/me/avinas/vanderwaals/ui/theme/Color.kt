@@ -171,20 +171,21 @@ val GradientVerticalLight = Brush.verticalGradient(
 
 // === GLASSMORPHISM COLORS - CSS MATCHED ===
 // Dark Mode - CSS Matched
-val GlassBackground = Color(0x8C1F2937) // rgba(31, 41, 55, 0.55)
+// Dark Mode - CSS Matched
+val GlassBackground = Color(0x541F2937) // Reduced opacity ~33% (was 38%) for "tempered glass" feel
 val GlassBorder = Color(0x1AFFFFFF) // rgba(255, 255, 255, 0.1)
 val GlassShadow = Color(0x1A000000) // rgba(0, 0, 0, 0.1)
-val GlassHighlight = Color(0x50FFFFFF) // rgba(255, 255, 255, 0.3) - Dimmed from 0.8
-val GlassHighlightSubtle = Color(0x4DFFFFFF) // rgba(255, 255, 255, 0.3)
-val GlassInsetTop = Color(0x20FFFFFF) // rgba(255, 255, 255, 0.12) - Dimmed from 0.5
-val GlassInsetBottom = Color(0x1AFFFFFF) // rgba(255, 255, 255, 0.1)
-val GlassInnerGlow = Color(0x26FFFFFF) // Approximating the strong inner glow safely
+val GlassHighlight = Color(0x40FFFFFF) // More subtle highlight
+val GlassHighlightSubtle = Color(0x33FFFFFF)
+val GlassInsetTop = Color(0x1AFFFFFF)
+val GlassInsetBottom = Color(0x14FFFFFF)
+val GlassInnerGlow = Color(0x1FFFFFFF)
 
 // Light Mode - Adjusted for visibility on light backgrounds
-val GlassBackgroundLight = Color(0x80FFFFFF) // rgba(255, 255, 255, 0.5)
-val GlassBorderLight = Color(0x2EFFFFFF) // rgba(255, 255, 255, 0.18)
-val GlassShadowLight = Color(0x1A000000) // Same shadow
-val GlassHighlightLight = Color(0xFFFFFFFF) // Pure white highlight
+val GlassBackgroundLight = Color(0x4DFFFFFF) // Reduced opacity ~30% (was 35%)
+val GlassBorderLight = Color(0x33FFFFFF) // Slightly stronger border for separation
+val GlassShadowLight = Color(0x14000000)
+val GlassHighlightLight = Color(0xCCFFFFFF) // Strong white highlight for airy feel
 
 // Gradients
 val GlassGradientTop = Brush.horizontalGradient(
@@ -206,13 +207,20 @@ val GlassGradientLeftLight = Brush.verticalGradient(
 
 
 // === MOCKUP COLORS - For Blobs ===
-val DarkIndigo400 = Color(0xFF818CF8)
-val DarkRose400 = Color(0xFFFB7185)
-val DarkSky400 = Color(0xFF38BDF8)
-val DarkBackground = Color(0xFF111827)
+// === MOCKUP COLORS - For Cinematic Blobs ===
+// Dark Mode: Cinematic, Deep, Rich
+val CinematicBlue = Color(0xFF1E3A8A)
+val CinematicTeal = Color(0xFF115E59)
+val CinematicPurple = Color(0xFF581C87)
+val CinematicRose = Color(0xFF881337)
+val CinematicRoseMuted = Color(0xFF602133) // Further Desaturated Rose (-10%)
+val DarkBackground = Color(0xFF0F172A) // Richer dark blue-grey
 
-val LightPurple400 = Color(0xFFC084FC)
-val LightOrange400 = Color(0xFFFB923C)
-val LightTeal400 = Color(0xFF2DD4BF)
-val LightBackground = Color(0xFFF6F8F7)
-val LightPrimary = Color(0xFF13EC6D)
+// Light Mode: Airy, Vibrant, Separated
+val AiryBlue = Color(0xFFBFDBFE)
+val AiryPurple = Color(0xFFE9D5FF)
+val AiryTeal = Color(0xFF99F6E4)
+val AiryRose = Color(0xFFFECDD3)
+val AiryAmber = Color(0xFFFDE68A)
+val LightBackground = Color(0xFFF8FAFC) // Cool white
+val LightPrimary = Color(0xFF10B981)

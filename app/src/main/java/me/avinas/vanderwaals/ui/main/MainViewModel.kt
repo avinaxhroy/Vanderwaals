@@ -54,7 +54,8 @@ class MainViewModel @Inject constructor(
     private val updatePreferencesUseCase: UpdatePreferencesUseCase,
     private val workManager: WorkManager,
     private val mediaSaver: MediaSaver,
-    private val application: android.app.Application
+    private val application: android.app.Application,
+    private val nextWallpaperCacheManager: me.avinas.vanderwaals.domain.NextWallpaperCacheManager
 ) : ViewModel() {
 
     /**
@@ -66,8 +67,22 @@ class MainViewModel @Inject constructor(
     }
 
     /**
+     * Granular loading state for wallpaper changes.
+     */
+    enum class KoalaLoadingState {
+        IDLE,
+        THINKING, // Initial state when button is pressed
+        FINDING,  // Algorithm is searching/calculating
+        APPLYING  // Downloading and setting bitmap
+    }
+
+    /**
      * Current wallpaper state.
      * Emits Loading initially, then Success with wallpaper or null.
+     * 
+     * CRITICAL FIX: Uses SharingStarted.Lazily instead of WhileSubscribed(5000)
+     * to prevent the flow from stopping/restarting when navigating between screens.
+     * This ensures stable wallpaper state when returning to MainScreen.
      */
     val currentWallpaper: StateFlow<MainUiState> = historyDao.getActiveWallpaperFlow()
         // Load wallpapers (summaries only for UI performance)
@@ -91,7 +106,11 @@ class MainViewModel @Inject constructor(
         }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            // CRITICAL FIX: Use Lazily instead of WhileSubscribed(5000)
+            // WhileSubscribed stops the flow after 5 seconds of no subscribers,
+            // causing re-emission of Loading when returning to MainScreen from navigation.
+            // Lazily keeps the last value cached and never restarts.
+            started = SharingStarted.Lazily,
             initialValue = MainUiState.Loading
         )
 
@@ -104,10 +123,10 @@ class MainViewModel @Inject constructor(
 
     /**
      * Loading state for wallpaper change operations.
-     * True while WallpaperChangeWorker is executing.
+     * Exposes granular state (Thinking -> Finding -> Applying).
      */
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    private val _loadingState = MutableStateFlow(KoalaLoadingState.IDLE)
+    val loadingState: StateFlow<KoalaLoadingState> = _loadingState.asStateFlow()
 
     /**
      * Error message state for displaying errors via Snackbar.
@@ -236,7 +255,8 @@ class MainViewModel @Inject constructor(
     fun changeNow() {
         viewModelScope.launch {
             try {
-                _isLoading.value = true
+                // Initial state: Koala is thinking...
+                _loadingState.value = KoalaLoadingState.THINKING
 
                 // Create and enqueue wallpaper change work
                 // Worker will load current Apply To setting from DataStore dynamically
@@ -253,12 +273,23 @@ class MainViewModel @Inject constructor(
 
                 android.util.Log.d("MainViewModel", "Manual wallpaper change triggered - worker will load Apply To setting")
 
-                // Observe work completion
+                // Observe work completion and progress
                 workManager.getWorkInfoByIdFlow(workRequest.id)
                     .collect { workInfo ->
+                        if (workInfo == null) return@collect
+                        
+                        // Update state based on progress
+                        val progressState = workInfo.progress.getString(WallpaperChangeWorker.KEY_PROGRESS_STATE)
+                        if (progressState != null) {
+                            when (progressState) {
+                                WallpaperChangeWorker.PROGRESS_FINDING -> _loadingState.value = KoalaLoadingState.FINDING
+                                WallpaperChangeWorker.PROGRESS_APPLYING -> _loadingState.value = KoalaLoadingState.APPLYING
+                            }
+                        }
+
                         when {
-                            workInfo?.state?.isFinished == true -> {
-                                _isLoading.value = false
+                            workInfo.state.isFinished -> {
+                                _loadingState.value = KoalaLoadingState.IDLE
                                 
                                 // Check if wallpaper change failed due to live wallpaper
                                 if (workInfo.state == androidx.work.WorkInfo.State.FAILED) {
@@ -275,7 +306,7 @@ class MainViewModel @Inject constructor(
                         }
                     }
             } catch (e: Exception) {
-                _isLoading.value = false
+                _loadingState.value = KoalaLoadingState.IDLE
                 _errorMessage.value = "Error changing wallpaper: ${e.localizedMessage ?: "Unknown error"}"
             }
         }
@@ -297,11 +328,9 @@ class MainViewModel @Inject constructor(
                     return@launch
                 }
 
-                // CRITICAL FIX: Load full wallpaper with embedding
-                // currentWallpaper uses summaries without embeddings for performance
-                // We need the full embedding (576 dimensions) for preference learning
-                val fullWallpaper = wallpaperRepository.getAllWallpapers().first()
-                    .find { it.id == wallpaper.id }
+                // PERFORMANCE FIX: Use indexed lookup instead of loading entire catalog
+                // This avoids O(n) scan of 5000+ wallpapers for a single ID lookup
+                val fullWallpaper = wallpaperRepository.getWallpaperById(wallpaper.id)
                 
                 if (fullWallpaper == null) {
                     onError("Wallpaper not found in catalog")
@@ -328,6 +357,10 @@ class MainViewModel @Inject constructor(
                                 context
                             )
                         }
+                        
+                        // Invalidate pre-computed cache since preferences changed
+                        nextWallpaperCacheManager.invalidateCache("like_feedback")
+                        
                         android.util.Log.d("MainViewModel", "Liked wallpaper: ${wallpaper.id}, category: ${wallpaper.category}")
                         onSuccess()
                     },
@@ -359,11 +392,9 @@ class MainViewModel @Inject constructor(
                     return@launch
                 }
 
-                // CRITICAL FIX: Load full wallpaper with embedding
-                // currentWallpaper uses summaries without embeddings for performance
-                // We need the full embedding (576 dimensions) for preference learning
-                val fullWallpaper = wallpaperRepository.getAllWallpapers().first()
-                    .find { it.id == wallpaper.id }
+                // PERFORMANCE FIX: Use indexed lookup instead of loading entire catalog
+                // This avoids O(n) scan of 5000+ wallpapers for a single ID lookup
+                val fullWallpaper = wallpaperRepository.getWallpaperById(wallpaper.id)
                 
                 if (fullWallpaper == null) {
                     onError("Wallpaper not found in catalog")
@@ -391,6 +422,16 @@ class MainViewModel @Inject constructor(
                             )
                         }
                         android.util.Log.d("MainViewModel", "Disliked wallpaper: ${wallpaper.id}")
+                        
+                        // IMPROVED: Use diversity-focused selection after dislike
+                        // This ensures the next wallpaper is from a different category
+                        // and visually distinct from the one the user disliked
+                        changeAfterDislike(
+                            dislikedWallpaperId = fullWallpaper.id,
+                            dislikedCategory = fullWallpaper.category,
+                            dislikedEmbedding = fullWallpaper.embedding
+                        )
+                        
                         onSuccess()
                     },
                     onFailure = { error ->
@@ -401,6 +442,98 @@ class MainViewModel @Inject constructor(
             } catch (e: Exception) {
                 android.util.Log.e("MainViewModel", "Exception in dislikeCurrentWallpaper", e)
                 onError(e.message ?: "Error recording dislike")
+            }
+        }
+    }
+    
+    /**
+     * Changes wallpaper after a dislike using diversity-focused selection.
+     * 
+     * This method:
+     * 1. Uses specialized selectAfterDislike algorithm
+     * 2. Prioritizes wallpapers from DIFFERENT categories
+     * 3. Prefers wallpapers visually DISSIMILAR to the disliked one
+     * 4. Uses 70% exploration rate for noticeable change
+     * 
+     * @param dislikedWallpaperId ID of the disliked wallpaper
+     * @param dislikedCategory Category of the disliked wallpaper
+     * @param dislikedEmbedding Embedding vector of the disliked wallpaper
+     */
+    private fun changeAfterDislike(
+        dislikedWallpaperId: String,
+        dislikedCategory: String,
+        dislikedEmbedding: FloatArray
+    ) {
+        viewModelScope.launch {
+            try {
+                _loadingState.value = KoalaLoadingState.THINKING
+                android.util.Log.d("MainViewModel", "=== CHANGE AFTER DISLIKE ===")
+                android.util.Log.d("MainViewModel", "Disliked: $dislikedWallpaperId (category: $dislikedCategory)")
+                
+                // Use diversity-focused selection
+                val result = nextWallpaperCacheManager.getNextWallpaperAfterDislike(
+                    dislikedWallpaperId = dislikedWallpaperId,
+                    dislikedCategory = dislikedCategory,
+                    dislikedEmbedding = dislikedEmbedding
+                )
+                
+                result.fold(
+                    onSuccess = { selectedWallpaper ->
+                        android.util.Log.d("MainViewModel", 
+                            "Selected diverse wallpaper: ${selectedWallpaper.id} (category: ${selectedWallpaper.category})")
+                        
+                        // Create and enqueue wallpaper change work with selected wallpaper
+                        val workRequest = OneTimeWorkRequestBuilder<WallpaperChangeWorker>()
+                            .setInputData(androidx.work.workDataOf(
+                                WallpaperChangeWorker.KEY_MODE to WallpaperChangeWorker.MODE_VANDERWAALS,
+                                WallpaperChangeWorker.KEY_IS_MANUAL_CHANGE to true,
+                                WallpaperChangeWorker.KEY_SELECTED_WALLPAPER_ID to selectedWallpaper.id
+                            ))
+                            .addTag("dislike_change")
+                            .build()
+
+                        workManager.enqueue(workRequest)
+
+                        // Observe work completion
+                        workManager.getWorkInfoByIdFlow(workRequest.id)
+                            .collect { workInfo ->
+                                if (workInfo == null) return@collect
+                                
+                                // Update state based on progress
+                                val progressState = workInfo.progress.getString(WallpaperChangeWorker.KEY_PROGRESS_STATE)
+                                if (progressState != null) {
+                                    when (progressState) {
+                                        WallpaperChangeWorker.PROGRESS_FINDING -> _loadingState.value = KoalaLoadingState.FINDING
+                                        WallpaperChangeWorker.PROGRESS_APPLYING -> _loadingState.value = KoalaLoadingState.APPLYING
+                                    }
+                                }
+                                
+                                when {
+                                    workInfo.state.isFinished -> {
+                                        _loadingState.value = KoalaLoadingState.IDLE
+                                        
+                                        if (workInfo.state == androidx.work.WorkInfo.State.FAILED) {
+                                            checkForLiveWallpaper()
+                                        }
+                                        
+                                        if (workInfo.state == androidx.work.WorkInfo.State.SUCCEEDED) {
+                                            _showOverlay.value = false
+                                        }
+                                    }
+                                }
+                            }
+                    },
+                    onFailure = { error ->
+                        android.util.Log.e("MainViewModel", "Diversity selection failed, falling back to changeNow()", error)
+                        // Fallback to normal change (which sets state itself)
+                        changeNow()
+                    }
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("MainViewModel", "Exception in changeAfterDislike", e)
+                _loadingState.value = KoalaLoadingState.IDLE
+                // Fallback to normal change
+                changeNow()
             }
         }
     }
@@ -425,9 +558,8 @@ class MainViewModel @Inject constructor(
                     return@launch
                 }
 
-                // CRITICAL: Load full wallpaper with embedding for preference learning
-                val fullWallpaper = wallpaperRepository.getAllWallpapers().first()
-                    .find { it.id == wallpaper.id }
+                // PERFORMANCE FIX: Use indexed lookup instead of loading entire catalog
+                val fullWallpaper = wallpaperRepository.getWallpaperById(wallpaper.id)
                 
                 if (fullWallpaper == null) {
                     onError("Wallpaper not found in catalog")

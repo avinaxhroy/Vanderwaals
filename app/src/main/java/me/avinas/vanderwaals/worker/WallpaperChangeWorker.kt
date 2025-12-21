@@ -18,7 +18,11 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import me.avinas.vanderwaals.data.entity.UserPreferences
 import me.avinas.vanderwaals.data.repository.PreferenceRepository
 import me.avinas.vanderwaals.data.repository.WallpaperRepository
@@ -61,13 +65,13 @@ class WallpaperChangeWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted workerParams: WorkerParameters,
     private val selectNextWallpaperUseCase: SelectNextWallpaperUseCase,
-    private val queueNextWallpapersUseCase: me.avinas.vanderwaals.domain.usecase.QueueNextWallpapersUseCase,
     private val wallpaperRepository: WallpaperRepository,
     private val preferenceRepository: PreferenceRepository,
     private val engagementTracker: me.avinas.vanderwaals.domain.usecase.UserEngagementTracker,
     private val processImplicitFeedbackUseCase: me.avinas.vanderwaals.domain.usecase.ProcessImplicitFeedbackUseCase,
     private val findCachedWallpaperUseCase: me.avinas.vanderwaals.domain.usecase.FindCachedWallpaperUseCase,
-    private val networkStateTracker: NetworkStateTracker
+    private val networkStateTracker: NetworkStateTracker,
+    private val nextWallpaperCacheManager: me.avinas.vanderwaals.domain.NextWallpaperCacheManager
 ) : CoroutineWorker(appContext, workerParams) {
     
     companion object {
@@ -125,10 +129,31 @@ class WallpaperChangeWorker @AssistedInject constructor(
         const val RETRY_WORK_NAME = "wallpaper_retry_when_online"
         
         /**
+         * Key for pre-selecting a specific wallpaper ID.
+         * Used after dislike to apply a diversity-selected wallpaper.
+         */
+        const val KEY_SELECTED_WALLPAPER_ID = "selected_wallpaper_id"
+        
+        /**
          * Battery threshold below which background work should be skipped.
          * When battery is below 20%, we skip non-essential background work.
          */
         private const val BATTERY_THRESHOLD_PERCENT = 20
+        
+        /**
+         * Key for progress state report.
+         */
+        const val KEY_PROGRESS_STATE = "progress_state"
+        
+        /**
+         * Progress state: Finding best matches.
+         */
+        const val PROGRESS_FINDING = "finding"
+        
+        /**
+         * Progress state: Applying wallpaper (downloading/setting).
+         */
+        const val PROGRESS_APPLYING = "applying"
     }
     
     override suspend fun doWork(): Result {
@@ -217,6 +242,9 @@ class WallpaperChangeWorker @AssistedInject constructor(
      * Applies wallpaper using Vanderwaals algorithm.
      */
     private suspend fun applyVanderwaalsWallpaper(targetScreen: String): Result {
+        // REPORT PROGRESS: Finding matches
+        setProgress(workDataOf(KEY_PROGRESS_STATE to PROGRESS_FINDING))
+
         // Step 1: Get user preferences, or create defaults if not initialized
         var preferences = preferenceRepository.getUserPreferences().first()
         if (preferences == null) {
@@ -252,24 +280,87 @@ class WallpaperChangeWorker @AssistedInject constructor(
             return applyBothDifferentWallpapers()
         }
         
-        // Step 2: Select next wallpaper using algorithm
-        val wallpaperResult = selectNextWallpaperUseCase()
+        // Step 2: Check if a specific wallpaper was pre-selected (e.g., after dislike)
+        // This is used by the diversity-focused selection algorithm
+        val preSelectedWallpaperId = inputData.getString(KEY_SELECTED_WALLPAPER_ID)
         
-        if (wallpaperResult.isFailure) {
-            val error = wallpaperResult.exceptionOrNull()
-            Log.e(TAG, "Failed to select wallpaper: ${error?.message}")
+        val wallpaper = if (preSelectedWallpaperId != null) {
+            // Use pre-selected wallpaper from diversity algorithm
+            Log.d(TAG, "Using pre-selected wallpaper: $preSelectedWallpaperId")
+            val allWallpapers = wallpaperRepository.getAllWallpapers().first()
+            val preSelectedWallpaper = allWallpapers.find { it.id == preSelectedWallpaperId }
             
-            // Skip if no wallpapers available (don't retry)
-            return if (error?.message?.contains("No wallpapers available") == true) {
-                Result.success() // Skip this cycle
+            if (preSelectedWallpaper != null) {
+                Log.d(TAG, "Pre-selected wallpaper found: ${preSelectedWallpaper.id} (category: ${preSelectedWallpaper.category})")
+                preSelectedWallpaper
             } else {
-                Result.retry()
+                Log.w(TAG, "Pre-selected wallpaper $preSelectedWallpaperId not found, falling back to algorithm")
+                val result = nextWallpaperCacheManager.getNextWallpaper()
+                if (result.isFailure) {
+                    val error = result.exceptionOrNull()
+                    Log.e(TAG, "Failed to select wallpaper: ${error?.message}")
+                    return if (error?.message?.contains("No wallpapers available") == true) {
+                        Result.success()
+                    } else {
+                        Result.retry()
+                    }
+                }
+                result.getOrNull()!!
+            }
+        } else {
+            // Check if this is the FIRST wallpaper change (initial onboarding)
+            // If so, use the first liked wallpaper from confirmation gallery instead of algorithm
+            val likedIds = preferences.likedWallpaperIds
+            val existingHistory = wallpaperRepository.getHistory().first()
+            
+            if (existingHistory.isEmpty() && likedIds.isNotEmpty()) {
+                // First wallpaper change with liked wallpapers - use first liked wallpaper
+                val firstLikedId = likedIds.first()
+                val allWallpapers = wallpaperRepository.getAllWallpapers().first()
+                val firstLikedWallpaper = allWallpapers.find { it.id == firstLikedId }
+                
+                if (firstLikedWallpaper != null) {
+                    Log.d(TAG, "First wallpaper change - using first liked wallpaper: $firstLikedId")
+                    firstLikedWallpaper
+                } else {
+                    Log.w(TAG, "First liked wallpaper $firstLikedId not found, falling back to algorithm")
+                    val result = selectNextWallpaperUseCase()
+                    if (result.isFailure) {
+                        val error = result.exceptionOrNull()
+                        Log.e(TAG, "Failed to select wallpaper: ${error?.message}")
+                        return if (error?.message?.contains("No wallpapers available") == true) {
+                            Result.success()
+                        } else {
+                            Result.retry()
+                        }
+                    }
+                    result.getOrNull()!!
+                }
+            } else {
+                // Normal wallpaper selection using cache manager for faster response
+                // Falls back to fresh computation if no cache available
+                val wallpaperResult = nextWallpaperCacheManager.getNextWallpaper()
+                
+                if (wallpaperResult.isFailure) {
+                    val error = wallpaperResult.exceptionOrNull()
+                    Log.e(TAG, "Failed to select wallpaper: ${error?.message}")
+                    
+                    // Skip if no wallpapers available (don't retry)
+                    return if (error?.message?.contains("No wallpapers available") == true) {
+                        Result.success() // Skip this cycle
+                    } else {
+                        Result.retry()
+                    }
+                }
+                
+                wallpaperResult.getOrNull()!!
             }
         }
         
-        val wallpaper = wallpaperResult.getOrNull()!!
-        
         // Step 3: Download wallpaper if not cached (with offline fallback)
+        // REPORT PROGRESS: Applying (Downloading is part of applying process from user perspective)
+        setProgress(workDataOf(KEY_PROGRESS_STATE to PROGRESS_APPLYING))
+        
         var downloadResult = wallpaperRepository.downloadWallpaper(wallpaper)
         var wallpaperFile: File? = null
         var selectedWallpaper = wallpaper
@@ -375,24 +466,21 @@ class WallpaperChangeWorker @AssistedInject constructor(
         val historyId = wallpaperRepository.recordWallpaperApplied(selectedWallpaper)
         Log.d(TAG, "Applied wallpaper ${selectedWallpaper.id}, history ID: $historyId")
         
-        // Step 6: Smart pre-download next wallpapers
-        try {
-            val queueResult = queueNextWallpapersUseCase()
-            queueResult.fold(
-                onSuccess = { count ->
-                    Log.d(TAG, "Queued $count wallpapers for pre-download")
-                },
-                onFailure = { error ->
-                    Log.w(TAG, "Failed to queue next wallpapers: ${error.message}")
-                    // Don't fail the worker if queuing fails
-                }
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "Exception during pre-download queue: ${e.message}")
-            // Continue even if queuing fails
+        // Step 6: Pre-compute next wallpaper in BACKGROUND (fire-and-forget)
+        // CRITICAL FIX: Don't block worker completion waiting for pre-computation
+        // Pre-compute takes 10-20s and was blocking UI from returning to normal
+        val selectedId = selectedWallpaper.id
+        @OptIn(DelicateCoroutinesApi::class)
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                nextWallpaperCacheManager.preComputeNext(excludeWallpaperId = selectedId)
+                Log.d(TAG, "Pre-computed next wallpaper recommendation (async)")
+            } catch (e: Exception) {
+                Log.w(TAG, "Exception during pre-compute: ${e.message}")
+            }
         }
         
-        // Step 7: Return success with wallpaper ID
+        // Step 8: Return success with wallpaper ID
         return Result.success(
             workDataOf(KEY_WALLPAPER_ID to selectedWallpaper.id)
         )
@@ -408,6 +496,9 @@ class WallpaperChangeWorker @AssistedInject constructor(
      */
     private suspend fun applyBothDifferentWallpapers(): Result {
         Log.d(TAG, "Applying 'Both But Different' - selecting two different wallpapers")
+        
+        // REPORT PROGRESS: Finding matches
+        setProgress(workDataOf(KEY_PROGRESS_STATE to PROGRESS_FINDING))
         
         // Process implicit feedback for previous wallpapers (if manual change)
         val isManualChange = inputData.getBoolean(KEY_IS_MANUAL_CHANGE, false)
@@ -428,32 +519,48 @@ class WallpaperChangeWorker @AssistedInject constructor(
             }
         }
         
-        // Step 1: Select first wallpaper for home screen
-        val homeWallpaperResult = selectNextWallpaperUseCase()
-        if (homeWallpaperResult.isFailure) {
-            val error = homeWallpaperResult.exceptionOrNull()
-            Log.e(TAG, "Failed to select home wallpaper: ${error?.message}")
-            return if (error?.message?.contains("No wallpapers available") == true) {
-                Result.success()
-            } else {
-                Result.retry()
-            }
-        }
-        val homeWallpaper = homeWallpaperResult.getOrNull()!!
+        // Step 1-2: Try to get pre-computed pair from cache for instant change
+        val cachedPair = nextWallpaperCacheManager.getNextWallpaperPair()
         
-        // Step 2: Select second (different) wallpaper for lock screen
-        val lockWallpaperResult = selectNextWallpaperUseCase(excludeWallpaperId = homeWallpaper.id)
-        if (lockWallpaperResult.isFailure) {
-            val error = lockWallpaperResult.exceptionOrNull()
-            Log.e(TAG, "Failed to select lock wallpaper: ${error?.message}")
-            // Fall back to using the same wallpaper for both if only one available
-            Log.w(TAG, "Falling back to same wallpaper for both screens")
+        val homeWallpaper: me.avinas.vanderwaals.data.entity.WallpaperMetadata
+        val lockWallpaper: me.avinas.vanderwaals.data.entity.WallpaperMetadata
+        
+        if (cachedPair != null) {
+            Log.d(TAG, "Using CACHED wallpaper pair for instant change")
+            homeWallpaper = cachedPair.homeWallpaper
+            lockWallpaper = cachedPair.lockWallpaper
+        } else {
+            // Cache miss - compute fresh (slower)
+            Log.d(TAG, "No cached pair - computing fresh wallpaper selections")
+            
+            val homeWallpaperResult = selectNextWallpaperUseCase()
+            if (homeWallpaperResult.isFailure) {
+                val error = homeWallpaperResult.exceptionOrNull()
+                Log.e(TAG, "Failed to select home wallpaper: ${error?.message}")
+                return if (error?.message?.contains("No wallpapers available") == true) {
+                    Result.success()
+                } else {
+                    Result.retry()
+                }
+            }
+            homeWallpaper = homeWallpaperResult.getOrNull()!!
+            
+            // Select second (different) wallpaper for lock screen
+            val lockWallpaperResult = selectNextWallpaperUseCase(excludeWallpaperId = homeWallpaper.id)
+            if (lockWallpaperResult.isFailure) {
+                val error = lockWallpaperResult.exceptionOrNull()
+                Log.e(TAG, "Failed to select lock wallpaper: ${error?.message}")
+                Log.w(TAG, "Falling back to same wallpaper for both screens")
+            }
+            lockWallpaper = lockWallpaperResult.getOrNull() ?: homeWallpaper
         }
-        val lockWallpaper = lockWallpaperResult.getOrNull() ?: homeWallpaper
         
         Log.d(TAG, "Selected wallpapers - Home: ${homeWallpaper.id}, Lock: ${lockWallpaper.id}")
         
         // Step 3: Download home wallpaper (with offline fallback)
+        // REPORT PROGRESS: Applying
+        setProgress(workDataOf(KEY_PROGRESS_STATE to PROGRESS_APPLYING))
+        
         var actualHomeWallpaper = homeWallpaper
         var homeWallpaperFile: File
         var usedCachedFallback = false
@@ -551,19 +658,21 @@ class WallpaperChangeWorker @AssistedInject constructor(
             Log.d(TAG, "Applied lock wallpaper ${actualLockWallpaper.id}, history ID: $lockHistoryId")
         }
         
-        // Step 8: Smart pre-download next wallpapers
-        try {
-            val queueResult = queueNextWallpapersUseCase()
-            queueResult.fold(
-                onSuccess = { count ->
-                    Log.d(TAG, "Queued $count wallpapers for pre-download")
-                },
-                onFailure = { error ->
-                    Log.w(TAG, "Failed to queue next wallpapers: ${error.message}")
-                }
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "Exception during pre-download queue: ${e.message}")
+        // Step 8: Pre-compute next wallpaper pair in BACKGROUND (fire-and-forget)
+        // CRITICAL FIX: Don't block worker completion waiting for pair pre-computation
+        val homeId = actualHomeWallpaper.id
+        val lockId = actualLockWallpaper.id
+        @OptIn(DelicateCoroutinesApi::class)
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                nextWallpaperCacheManager.preComputeNextPair(
+                    excludeHomeId = homeId,
+                    excludeLockId = lockId
+                )
+                Log.d(TAG, "Pre-computed next wallpaper pair for cache (async)")
+            } catch (e: Exception) {
+                Log.w(TAG, "Exception during pair pre-computation: ${e.message}")
+            }
         }
         
         // Return success with home wallpaper ID
