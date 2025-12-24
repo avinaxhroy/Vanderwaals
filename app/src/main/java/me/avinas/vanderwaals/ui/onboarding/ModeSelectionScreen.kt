@@ -91,12 +91,11 @@ fun ModeSelectionScreen(
                                 .height(80.dp)
                         ) {
                             // Tinted Glass Logo Container
-                            me.avinas.vanderwaals.ui.theme.components.TintedGlassCard(
+                            me.avinas.vanderwaals.ui.theme.components.GradientGlassCard(
                                 modifier = Modifier.matchParentSize(),
                                 shape = RoundedCornerShape(44.dp),
                                 contentPadding = PaddingValues(0.dp),
-                                tintColor = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark.copy(alpha = 0.3f) 
-                                          else me.avinas.vanderwaals.ui.theme.LightPrimary.copy(alpha = 0.3f)
+                                brush = if (isDark) me.avinas.vanderwaals.ui.theme.GradientFusion else me.avinas.vanderwaals.ui.theme.GradientFusionLight
                             ) {
                                 Box(
                                     modifier = Modifier.fillMaxSize(),

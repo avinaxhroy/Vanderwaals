@@ -1,7 +1,7 @@
 package me.avinas.vanderwaals.core
 
-import android.util.Patterns
 import java.net.URL
+import java.net.URLEncoder
 
 /**
  * Centralized input validation utility for the Vanderwaals application.
@@ -71,6 +71,10 @@ object InputValidator {
      * - Valid HTTP or HTTPS URL format
      * - Has valid host component
      * 
+     * Handles URLs with unencoded characters (like spaces) by encoding them
+     * before validation. This is necessary for wallpaper sources that have
+     * folder/file names with spaces (e.g., "Rain Dark/06. Rain Dark.jpg").
+     * 
      * @param url URL string to validate
      * @return ValidationResult.Valid if valid, ValidationResult.Invalid otherwise
      */
@@ -79,24 +83,73 @@ object InputValidator {
             return ValidationResult.Invalid("URL cannot be null or empty")
         }
         
-        if (!Patterns.WEB_URL.matcher(url).matches()) {
-            return ValidationResult.Invalid("URL is not a valid web URL: $url")
-        }
-        
         try {
+            // Parse the URL to separate components
             val parsedUrl = URL(url)
+            
+            // Validate protocol
             if (parsedUrl.protocol !in listOf("http", "https")) {
                 return ValidationResult.Invalid("URL must use HTTP or HTTPS protocol: $url")
             }
             
+            // Validate host
             if (parsedUrl.host.isNullOrBlank()) {
                 return ValidationResult.Invalid("URL must have a valid host: $url")
             }
+            
+            // URL is structurally valid - return the ENCODED version for safe use
+            val encodedUrl = encodeUrlPath(url)
+            return ValidationResult.Valid(encodedUrl)
+            
         } catch (e: Exception) {
-            return ValidationResult.Invalid("Failed to parse URL: $url - ${e.message}")
+            // Try to encode and re-parse for URLs with unencoded special characters
+            try {
+                val encodedUrl = encodeUrlPath(url)
+                val reParsedUrl = URL(encodedUrl)
+                
+                if (reParsedUrl.protocol !in listOf("http", "https")) {
+                    return ValidationResult.Invalid("URL must use HTTP or HTTPS protocol: $url")
+                }
+                
+                if (reParsedUrl.host.isNullOrBlank()) {
+                    return ValidationResult.Invalid("URL must have a valid host: $url")
+                }
+                
+                return ValidationResult.Valid(encodedUrl)
+            } catch (e2: Exception) {
+                return ValidationResult.Invalid("Failed to parse URL: $url - ${e.message}")
+            }
         }
-        
-        return ValidationResult.Valid(url)
+    }
+    
+    /**
+     * Encodes the path segment of a URL to handle special characters like spaces.
+     * Preserves the scheme, host, and query parameters while encoding the path.
+     * 
+     * Example: 
+     * Input:  https://cdn.jsdelivr.net/gh/repo@main/Rain Dark/06. Rain Dark.jpg
+     * Output: https://cdn.jsdelivr.net/gh/repo@main/Rain%20Dark/06.%20Rain%20Dark.jpg
+     */
+    fun encodeUrlPath(url: String): String {
+        return try {
+            val parsed = URL(url)
+            val encodedPath = parsed.path
+                .split("/")
+                .joinToString("/") { segment ->
+                    URLEncoder.encode(segment, "UTF-8")
+                        .replace("+", "%20") // URLEncoder encodes spaces as +, but we want %20
+                }
+            
+            // Reconstruct the URL with encoded path
+            val port = if (parsed.port == -1 || parsed.port == parsed.defaultPort) "" else ":${parsed.port}"
+            val query = if (parsed.query != null) "?${parsed.query}" else ""
+            val ref = if (parsed.ref != null) "#${parsed.ref}" else ""
+            
+            "${parsed.protocol}://${parsed.host}$port$encodedPath$query$ref"
+        } catch (e: Exception) {
+            // Fallback: just encode spaces
+            url.replace(" ", "%20")
+        }
     }
     
     /**

@@ -342,6 +342,98 @@ fun TintedGlassCard(
 }
 
 /**
+ * Gradient Glassmorphism card for a premium fusion look
+ */
+@Composable
+fun GradientGlassCard(
+    modifier: Modifier = Modifier,
+    brush: Brush,
+    shape: Shape = RoundedCornerShape(24.dp),
+    contentPadding: PaddingValues = PaddingValues(16.dp),
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val isDark = LocalThemeIsDark.current
+    val containerColor = if (isDark) GlassBackground else GlassBackgroundLight
+    
+    Box(
+        modifier = modifier
+            .shadow(
+                elevation = 16.dp,
+                shape = shape,
+                ambientColor = if (isDark) Color.Black.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f),
+                spotColor = if (isDark) Color.Black.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.1f)
+            )
+            .clip(shape)
+            .background(containerColor)
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.4f),
+                        if (isDark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.1f)
+                    )
+                ),
+                shape = shape
+            )
+    ) {
+        // Gradient Tint Overlay (Fusion Effect)
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(brush)
+        )
+
+        // Inner Highlight (Crisp 1px border inset)
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .padding(1.dp)
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            if (isDark) Color.White.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.6f),
+                            if (isDark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.2f)
+                        )
+                    ),
+                    shape = shape
+                )
+        )
+
+        // Bottom Inner Highlight
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .align(Alignment.BottomCenter)
+                .offset(y = (-1).dp)
+                .background(if (isDark) GlassInsetBottom else Color.White.copy(alpha = 0.2f))
+        )
+        
+        // Soft Inner Glow
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            if (isDark) GlassInnerGlow else Color.White.copy(alpha = 0.4f),
+                            Color.Transparent
+                        ),
+                        center = Offset.Zero,
+                        radius = 1000f
+                    )
+                )
+        )
+        
+        Column(
+            modifier = Modifier.padding(contentPadding),
+            content = content
+        )
+    }
+}
+
+/**
  * Glassmorphism Sheet for Bottom Sheets / Overlays
  */
 @Composable

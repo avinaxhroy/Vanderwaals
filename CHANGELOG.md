@@ -10,7 +10,6 @@
 
 ### Architecture Cleanup
 - **Removed Redundant Pre-download System**: Eliminated `QueueNextWallpapersUseCase` which was duplicating work already handled by the Daily Playlist system for "Every Unlock" mode and the pre-cache system for other modes.
-- **Fixed Downloaded Wallpapers Detection**: `getDownloadedWallpapers()` now correctly checks actual files on disk instead of returning all metadata when queue is empty.
 
 ### Technical Details
 - Pre-cache system with generation counter ensures stale results are safely discarded

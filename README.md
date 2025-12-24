@@ -19,10 +19,11 @@
 ### 🎯 Key Highlights
 
 - **🤖 ML-Powered Personalization**: MobileNetV3 neural network extracts aesthetic features from images
-- **📚 Curated Collections**: 6,000+ wallpapers from GitHub + 10,000+ from Bing's photography archive
+- **📚 Curated Collections**: 3,500+ wallpapers from GitHub + 5,000+ from Bing's photography archive
 - **🔒 Privacy-First**: 100% offline ML processing, zero analytics, no data collection
 - **⚡ Smart Learning**: Adaptive algorithm that improves with every like/dislike
-- **🎨 Material 3 Design**: Beautiful, modern UI with dynamic color theming
+- **⚡ Blazing Fast**: 9x faster wallpaper changes (~5s) with smart pre-caching and chunked processing
+- **🎨 Material 3 Design**: Premium Glassmorphic UI with dynamic color theming
 
 ---
 
@@ -100,7 +101,7 @@ Upload one favorite wallpaper and instantly get 100+ similar matches. The algori
 
 - **Auto-Change Modes**:
   - Every device unlock
-  - Hourly intervals
+  - Fixed intervals (1h, 3h, 6h, 12h, 24h)
   - Daily at custom time
   - Manual only
 
@@ -171,7 +172,6 @@ Vanderwaals follows **Clean Architecture** principles with **MVVM** pattern for 
 │       ├── UpdatePreferencesUseCase       # EMA preference updates
 │       ├── GetRankedWallpapersUseCase     # Similarity ranking
 │       ├── SyncWallpaperCatalogUseCase    # Manifest sync
-│       ├── QueueNextWallpapersUseCase     # Download queue management
 │       └── InitializePreferencesUseCase   # Cold start handling
 │
 ├── 📁 network/                # Network Layer

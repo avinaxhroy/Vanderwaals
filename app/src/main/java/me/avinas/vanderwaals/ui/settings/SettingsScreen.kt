@@ -652,6 +652,65 @@ fun SettingsScreen(
                                 }
                             }
                             
+                            // Bing Sync Progress Section
+                            val isBingSyncing by viewModel.isBingSyncing.collectAsState()
+                            val bingSyncProgress by viewModel.bingSyncProgress.collectAsState()
+                            val bingSyncMessage by viewModel.bingSyncMessage.collectAsState()
+                            val bingWallpaperCount by viewModel.bingWallpaperCount.collectAsState()
+                            
+                            if (isBingSyncing) {
+                                HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
+                                
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(16.dp),
+                                                strokeWidth = 2.dp,
+                                                color = if (isDark) InfoColorDark else LightPrimary
+                                            )
+                                            Text(
+                                                text = bingSyncMessage,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Medium,
+                                                color = if (isDark) Color.White else Color(0xFF111827)
+                                            )
+                                        }
+                                        
+                                        if (bingWallpaperCount > 0) {
+                                            Text(
+                                                text = "$bingWallpaperCount wallpapers",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (isDark) InfoColorDark else LightPrimary,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                    }
+                                    
+                                    LinearProgressIndicator(
+                                        progress = { bingSyncProgress },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(4.dp)
+                                            .clip(RoundedCornerShape(2.dp)),
+                                        color = if (isDark) InfoColorDark else LightPrimary,
+                                        trackColor = if (isDark) Color.Gray.copy(alpha = 0.3f) else Color(0xFFE5E7EB)
+                                    )
+                                }
+                            }
+                            
                             HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
                             
                             val isSyncing by viewModel.isSyncing.collectAsState()
@@ -1042,6 +1101,182 @@ fun SettingsScreen(
                 }
             }
         )
+    }
+    
+    // Bing Manifest Type Selection Dialog
+    val showBingTypeDialog by viewModel.showBingTypeDialog.collectAsState()
+    var selectedBingType by remember { mutableStateOf("lite") }
+    
+    if (showBingTypeDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissBingTypeDialog() },
+            containerColor = if (isDark) Color(0xFF1F2937) else Color.White,
+            title = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Choose Bing Collection",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDark) Color.White else Color(0xFF111827)
+                    )
+                    Text(
+                        text = "Select how much wallpaper history to download",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isDark) Color.Gray else Color(0xFF6B7280),
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // Recent Hits (Lite) Option
+                    BingTypeRadioCard(
+                        title = "Recent Hits",
+                        subtitle = "Last 3 years • ~1000 wallpapers",
+                        description = "Faster download, newer wallpapers",
+                        isSelected = selectedBingType == "lite",
+                        onClick = { selectedBingType = "lite" },
+                        isDark = isDark
+                    )
+                    
+                    // Global Archive (Full) Option
+                    BingTypeRadioCard(
+                        title = "Global Archive",
+                        subtitle = "2009-present • ~5400 wallpapers",
+                        description = "Complete collection, larger download",
+                        isSelected = selectedBingType == "full",
+                        onClick = { selectedBingType = "full" },
+                        isDark = isDark
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.onBingTypeSelected(selectedBingType) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isDark) InfoColorDark else LightPrimary
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Download", fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissBingTypeDialog() }) {
+                    Text("Cancel", color = if (isDark) Color.Gray else Color(0xFF6B7280))
+                }
+            }
+        )
+    }
+}
+
+/**
+ * Radio card for Bing manifest type selection dialog.
+ */
+@Composable
+private fun BingTypeRadioCard(
+    title: String,
+    subtitle: String,
+    description: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    isDark: Boolean
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (isSelected) {
+                    if (isDark) InfoColorDark.copy(alpha = 0.15f) else LightPrimary.copy(alpha = 0.1f)
+                } else {
+                    if (isDark) Color(0xFF111827).copy(alpha = 0.5f) else Color(0xFFF3F4F6)
+                }
+            )
+            .border(
+                width = 2.dp,
+                color = if (isSelected) {
+                    if (isDark) InfoColorDark else LightPrimary
+                } else {
+                    Color.Transparent
+                },
+                shape = RoundedCornerShape(12.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(16.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Radio indicator
+            Box(
+                modifier = Modifier
+                    .size(20.dp)
+                    .padding(top = 2.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isSelected) {
+                            if (isDark) InfoColorDark else LightPrimary
+                        } else {
+                            Color.Transparent
+                        }
+                    )
+                    .border(
+                        width = 2.dp,
+                        color = if (isSelected) {
+                            if (isDark) InfoColorDark else LightPrimary
+                        } else {
+                            if (isDark) Color.Gray else Color(0xFFD1D5DB)
+                        },
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isSelected) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                    )
+                }
+            }
+            
+            // Text content
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isDark) Color.White else Color(0xFF111827)
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isDark) InfoColorDark else LightPrimary,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isDark) Color.Gray else Color(0xFF6B7280),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
     }
 }
 

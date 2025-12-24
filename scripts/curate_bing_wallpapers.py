@@ -79,6 +79,12 @@ CHECKPOINT_PATH = OUTPUT_DIR / "bing_checkpoint.json"
 TARGET_SIZE = (224, 224)  # MobileNetV3 input size
 MIN_RESOLUTION = (800, 600)  # Minimum wallpaper resolution
 
+# Quality filtering configuration
+# Older wallpapers in the Bing archive are heavily JPEG compressed
+# (e.g., 300KB for a 4K image vs 3MB for recent high-quality ones)
+# This filter rejects compressed images that appear blurry
+MIN_FILE_SIZE_BYTES = 1_000_000  # 1 MB minimum file size
+
 # Deduplication configuration
 PHASH_THRESHOLD = 5  # Hamming distance for perceptual hash
 
@@ -321,12 +327,19 @@ class BingApiClient:
         
         return all_wallpapers
     
-    def download_image(self, url: str) -> Optional[Image.Image]:
-        """Download image from URL."""
+    def download_image(self, url: str) -> Optional[Tuple[Image.Image, int]]:
+        """Download image from URL.
+        
+        Returns:
+            Tuple of (PIL Image, file size in bytes) or None if download failed.
+        """
         try:
             response = self.scraper.get(url, timeout=60)
             response.raise_for_status()
-            return Image.open(BytesIO(response.content))
+            content = response.content
+            file_size = len(content)
+            image = Image.open(BytesIO(content))
+            return (image, file_size)
         except Exception as e:
             logger.warning(f"Failed to download {url}: {e}")
             return None
@@ -350,8 +363,17 @@ class WallpaperProcessor:
             return None
         
         # Download image
-        image = self.client.download_image(url)
-        if image is None:
+        result = self.client.download_image(url)
+        if result is None:
+            return None
+        
+        image, file_size = result
+        
+        # Check file size (filter out heavily compressed older images)
+        # Older Bing archive images are aggressive JPEG compressed (300KB for 4K)
+        # while recent high-quality ones are 2-4MB
+        if file_size < MIN_FILE_SIZE_BYTES:
+            logger.debug(f"Skipping low-quality compressed image: {file_size/1024:.0f}KB < {MIN_FILE_SIZE_BYTES/1024:.0f}KB - {url}")
             return None
         
         # Check minimum resolution

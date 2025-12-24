@@ -305,11 +305,11 @@ fun MainScreen(
                     .height(80.dp)
             ) {
                 // Vibrant Glass Logo Container for contrast
-                me.avinas.vanderwaals.ui.theme.components.TintedGlassCard(
+                me.avinas.vanderwaals.ui.theme.components.GradientGlassCard(
                     modifier = Modifier.matchParentSize(),
                     shape = RoundedCornerShape(44.dp),
                     contentPadding = PaddingValues(0.dp),
-                    tintColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) // Add subtle primary tint for vibrancy
+                    brush = if (isDark) me.avinas.vanderwaals.ui.theme.GradientFusion else me.avinas.vanderwaals.ui.theme.GradientFusionLight
                 ) {
                     Box(
                         modifier = Modifier.fillMaxSize(),

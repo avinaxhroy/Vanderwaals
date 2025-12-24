@@ -214,36 +214,37 @@ class SelectNextWallpaperUseCase @Inject constructor(
                 }
                 
                 if (nextId != null) {
-                    // Get the wallpaper metadata for this ID
-                    // We need a way to get a single wallpaper. 
-                    // Since we don't have getWallpaperById, we can find it in downloaded list or all list.
-                    // Ideally we should have getWallpaperById in repository.
-                    // For now, let's try to find it in downloaded wallpapers first.
-                    val downloaded = wallpaperRepository.getDownloadedWallpapers().first()
-                    val match = downloaded.find { it.id == nextId }
+                    // Get the wallpaper metadata for this ID from database
+                    val allWallpapersForPlaylist = wallpaperRepository.getAllWallpapers().first()
+                    val match = allWallpapersForPlaylist.find { it.id == nextId }
                     
                     if (match != null) {
                         android.util.Log.d("SelectNextWallpaper", "Selected from Daily Playlist: ${match.id}")
                         return Result.success(match)
                     } else {
-                         android.util.Log.w("SelectNextWallpaper", "Playlist item $nextId not found in downloaded wallpapers")
-                         // Fallback to normal selection if file missing
+                         android.util.Log.w("SelectNextWallpaper", "Playlist item $nextId not found in database")
+                         // Fallback to normal selection if not found
                     }
                 } else {
                     android.util.Log.d("SelectNextWallpaper", "Daily Playlist empty or not initialized")
                 }
             }
             
-            // Step 3: Get downloaded wallpapers (only those ready for display)
-            val allDownloadedWallpapers = wallpaperRepository.getDownloadedWallpapers().first()
+            // Step 3: Get ALL wallpapers from database (not just downloaded ones)
+            // NEW ARCHITECTURE: Select best wallpaper from entire catalog, download on-demand
+            // This eliminates the "no downloaded wallpapers" issue completely
+            val allWallpapers = wallpaperRepository.getAllWallpapers().first()
             
-            if (allDownloadedWallpapers.isEmpty()) {
+            android.util.Log.d("SelectNextWallpaper", "Total wallpapers in catalog: ${allWallpapers.size}")
+            
+            if (allWallpapers.isEmpty()) {
+                android.util.Log.e("SelectNextWallpaper", "Database is empty! Please sync wallpaper catalog.")
                 return Result.failure(
-                    IllegalStateException("No wallpapers available. Please download wallpapers first.")
+                    IllegalStateException("No wallpapers in catalog. Please sync the wallpaper catalog first.")
                 )
             }
             
-            // CRITICAL FIX: Filter by enabled sources from settings
+            // Filter by enabled sources from settings
             val enabledSources = mutableSetOf<String>()
             if (settings.githubEnabled) enabledSources.add("github")
             if (settings.bingEnabled) enabledSources.add("bing")
@@ -253,15 +254,26 @@ class SelectNextWallpaperUseCase @Inject constructor(
                 enabledSources.add("github")
             }
             
-            val downloadedWallpapers = allDownloadedWallpapers.filter { wallpaper ->
-                wallpaper.source in enabledSources && wallpaper.id != effectiveExcludeId
+            android.util.Log.d("SelectNextWallpaper", "Enabled sources: $enabledSources")
+            
+            // Filter wallpapers by source and exclude current wallpaper
+            val filteredWallpapers = allWallpapers.filter { wallpaper ->
+                wallpaper.source.lowercase() in enabledSources && wallpaper.id != effectiveExcludeId
             }
             
-            if (downloadedWallpapers.isEmpty()) {
+            android.util.Log.d("SelectNextWallpaper", "Filtered wallpapers (by source, excluding current): ${filteredWallpapers.size}")
+            
+            if (filteredWallpapers.isEmpty()) {
+                // Edge case: Only 1 wallpaper in DB and it's excluded, or source mismatch
+                val sourcesInDb = allWallpapers.map { it.source.lowercase() }.distinct()
+                android.util.Log.e("SelectNextWallpaper", "No wallpapers after filtering. Sources in DB: $sourcesInDb, enabled: $enabledSources")
                 return Result.failure(
                     IllegalStateException("No wallpapers available for selected sources (${enabledSources.joinToString()})")
                 )
             }
+            
+            // Use filtered wallpapers as candidates
+            val downloadedWallpapers = filteredWallpapers
             
             // Step 3: Get recent wallpaper history to avoid repeats
             // CRITICAL FIX (Dec 2025): Use dynamic history size based on change frequency
@@ -1280,11 +1292,11 @@ class SelectNextWallpaperUseCase @Inject constructor(
             val settings = settingsDataStore.settings.first()
             val preferences = preferenceRepository.getUserPreferencesOnce()
             
-            // Step 2: Get downloaded wallpapers
-            val allDownloadedWallpapers = wallpaperRepository.getDownloadedWallpapers().first()
+            // Step 2: Get ALL wallpapers from database (download on-demand)
+            val allWallpapers = wallpaperRepository.getAllWallpapers().first()
             
-            if (allDownloadedWallpapers.isEmpty()) {
-                return Result.failure(IllegalStateException("No wallpapers available"))
+            if (allWallpapers.isEmpty()) {
+                return Result.failure(IllegalStateException("No wallpapers in catalog"))
             }
             
             // Step 3: Filter by enabled sources
@@ -1293,8 +1305,8 @@ class SelectNextWallpaperUseCase @Inject constructor(
             if (settings.bingEnabled) enabledSources.add("bing")
             if (enabledSources.isEmpty()) enabledSources.add("github")
             
-            val downloadedWallpapers = allDownloadedWallpapers.filter { wallpaper ->
-                wallpaper.source in enabledSources && wallpaper.id != dislikedWallpaperId
+            val downloadedWallpapers = allWallpapers.filter { wallpaper ->
+                wallpaper.source.lowercase() in enabledSources && wallpaper.id != dislikedWallpaperId
             }
             
             if (downloadedWallpapers.isEmpty()) {

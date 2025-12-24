@@ -224,3 +224,20 @@ val AiryRose = Color(0xFFFECDD3)
 val AiryAmber = Color(0xFFFDE68A)
 val LightBackground = Color(0xFFF8FAFC) // Cool white
 val LightPrimary = Color(0xFF10B981)
+
+// === FUSION GRADIENTS - For Logo Card ===
+val GradientFusion = Brush.horizontalGradient(
+    colors = listOf(
+        CinematicBlue.copy(alpha = 0.9f),   // Almost opaque for deep richness
+        CinematicPurple.copy(alpha = 0.8f),
+        CinematicTeal.copy(alpha = 0.7f)
+    )
+)
+
+val GradientFusionLight = Brush.horizontalGradient(
+    colors = listOf(
+        Color(0xFF4F46E5), // Indigo-600: Deep rich blue
+        Color(0xFF9333EA), // Purple-600: Vibrant purple
+        Color(0xFFDB2777)  // Pink-600: Deep pink pop
+    )
+)

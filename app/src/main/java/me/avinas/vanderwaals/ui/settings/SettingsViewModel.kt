@@ -99,6 +99,7 @@ class SettingsViewModel @Inject constructor(
     private val _bingSyncMessage = MutableStateFlow("")
     private val _bingWallpaperCount = MutableStateFlow(0)
     private val _bingManifestType = MutableStateFlow("lite")  // "lite" or "full"
+    private val _showBingTypeDialog = MutableStateFlow(false)  // For manifest type selection when enabling Bing
     
     // Public toast message flow
     val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
@@ -108,13 +109,13 @@ class SettingsViewModel @Inject constructor(
     
     // Public alarm permission needed flow
     val needsAlarmPermission: StateFlow<Boolean> = _needsAlarmPermission.asStateFlow()
-    
     // Public Bing sync state flows
     val isBingSyncing: StateFlow<Boolean> = _isBingSyncing.asStateFlow()
     val bingSyncProgress: StateFlow<Float> = _bingSyncProgress.asStateFlow()
     val bingSyncMessage: StateFlow<String> = _bingSyncMessage.asStateFlow()
     val bingWallpaperCount: StateFlow<Int> = _bingWallpaperCount.asStateFlow()
     val bingManifestType: StateFlow<String> = _bingManifestType.asStateFlow()
+    val showBingTypeDialog: StateFlow<Boolean> = _showBingTypeDialog.asStateFlow()
     
     /**
      * Clears the toast message after it's been shown.
@@ -479,14 +480,58 @@ class SettingsViewModel @Inject constructor(
 
     /**
      * Toggles a wallpaper source on or off.
+     * When enabling Bing, shows manifest type selection dialog first.
      */
     fun toggleSource(source: String, enabled: Boolean) {
         viewModelScope.launch {
+            val sourceKey = if (source.contains("GitHub")) "github" else "bing"
+            
+            // If enabling Bing, check if we need to show type selection dialog
+            if (sourceKey == "bing" && enabled) {
+                // Check if Bing has never been synced (no wallpapers)
+                val bingCount = bingManifestRepository.getBingWallpaperCount()
+                if (bingCount == 0) {
+                    // Show type selection dialog - don't enable yet
+                    _showBingTypeDialog.value = true
+                    return@launch
+                }
+            }
+            
+            // For GitHub or disabling Bing, proceed normally
             val updated = _sourcesEnabled.value.toMutableMap()
             updated[source] = enabled
             _sourcesEnabled.value = updated
-            val sourceKey = if (source.contains("GitHub")) "github" else "bing"
             settingsDataStore.toggleSource(sourceKey, enabled)
+        }
+    }
+    
+    /**
+     * Dismisses the Bing manifest type selection dialog.
+     */
+    fun dismissBingTypeDialog() {
+        _showBingTypeDialog.value = false
+    }
+    
+    /**
+     * Called when user selects a Bing manifest type from the dialog.
+     * Enables Bing source, saves the type, and starts download.
+     */
+    fun onBingTypeSelected(type: String) {
+        viewModelScope.launch {
+            _showBingTypeDialog.value = false
+            
+            // Enable Bing source
+            val updated = _sourcesEnabled.value.toMutableMap()
+            updated["Bing Wallpapers"] = true
+            _sourcesEnabled.value = updated
+            settingsDataStore.toggleSource("bing", true)
+            
+            // Save manifest type
+            _bingManifestType.value = type
+            settingsDataStore.updateBingManifestType(type)
+            
+            // Start download
+            syncBingWallpapers(forceUpdate = true)
         }
     }
     

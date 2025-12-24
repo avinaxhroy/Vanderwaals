@@ -90,7 +90,7 @@ class WallpaperRepositoryImpl @Inject constructor(
     
     override fun getDownloadedWallpapers(): Flow<List<WallpaperMetadata>> {
         // Return wallpapers that have actual files on disk
-        // CRITICAL FIX: Don't trust queue status - check actual file existence
+        // Used for offline fallback and cache checks (main selection uses getAllWallpapers)
         return wallpaperMetadataDao.getAll().map { allWallpapers ->
             allWallpapers.filter { wallpaper ->
                 getWallpaperFile(wallpaper).exists()
