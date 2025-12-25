@@ -90,3 +90,5 @@ app/src/main/assets/bing_manifest_lite.json.gz
 app/src/main/assets/bing_manifest_full.json
 app/src/main/assets/bing_manifest_full.json.gz
 
+index.html
+landing_page_template.html
