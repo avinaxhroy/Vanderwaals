@@ -26,11 +26,11 @@ import retrofit2.http.Header
  * - Use [checkManifestHeaders] to check if manifest was updated without downloading
  * - Use [getManifestConditional] with If-Modified-Since header to skip unchanged manifests
  * 
- * **Manifest file:** `manifest_v2.json`
- * - Size: ~6MB compressed (with v2 quantized embeddings)
+ * **Manifest file:** `manifest_v3.json`
+ * - Size: ~10-15MB compressed (with MobileNetV4 1280D embeddings)
  * - Format: JSON with wallpaper metadata array
  * - Updated: Weekly via GitHub Actions
- * - Note: v3.8.x uses manifest.json (legacy), v4.0.0+ uses manifest_v2.json
+ * - Note: v3.8.x uses manifest.json, v4.0.0 uses manifest_v2.json, v5.0.0+ uses manifest_v3.json
  * 
  * @see ManifestDto
  * @see ManifestRepository
@@ -59,7 +59,7 @@ interface ManifestService {
      * 
      * @return Response wrapper containing ManifestDto on success
      */
-    @GET("app/src/main/assets/manifest_v2.json")
+    @GET("app/src/main/assets/manifest_v3.json")
     suspend fun getManifest(): Response<ManifestDto>
     
     /**
@@ -75,7 +75,7 @@ interface ManifestService {
      * 
      * @return Response with headers only, no body
      */
-    @HEAD("app/src/main/assets/manifest_v2.json")
+    @HEAD("app/src/main/assets/manifest_v3.json")
     suspend fun checkManifestHeaders(): Response<Void>
     
     /**
@@ -106,7 +106,7 @@ interface ManifestService {
      * @param ifModifiedSince Last-Modified header from previous successful download
      * @return Response with manifest (200) or empty body (304)
      */
-    @GET("app/src/main/assets/manifest_v2.json")
+    @GET("app/src/main/assets/manifest_v3.json")
     suspend fun getManifestConditional(
         @Header("If-Modified-Since") ifModifiedSince: String?
     ): Response<ManifestDto>
@@ -118,19 +118,19 @@ interface ManifestService {
     /**
      * Downloads the Bing wallpaper manifest (lite version - last 2 years).
      * 
-     * Contains ~700 curated Bing wallpapers with MobileNetV3 embeddings.
+     * Contains ~700 curated Bing wallpapers with MobileNetV4-Conv-Small 1280D embeddings.
      * Recommended for most users due to smaller size (~2MB).
      * 
      * @return Response containing ManifestDto on success
      */
-    @GET("app/src/main/assets/bing_manifest_lite.json")
+    @GET("app/src/main/assets/bing_manifest_lite_v2.json")
     suspend fun getBingManifestLite(): Response<ManifestDto>
     
     /**
      * Downloads the Bing manifest (lite) only if modified since the given date.
      * Returns 304 Not Modified if unchanged.
      */
-    @GET("app/src/main/assets/bing_manifest_lite.json")
+    @GET("app/src/main/assets/bing_manifest_lite_v2.json")
     suspend fun getBingManifestLiteConditional(
         @Header("If-Modified-Since") ifModifiedSince: String?
     ): Response<ManifestDto>
@@ -138,19 +138,19 @@ interface ManifestService {
     /**
      * Downloads the full Bing wallpaper manifest (2009-present).
      * 
-     * Contains ~5400+ curated Bing wallpapers with MobileNetV3 embeddings.
+     * Contains ~5400+ curated Bing wallpapers with MobileNetV4-Conv-Small 1280D embeddings.
      * Larger download (~15MB) but includes complete archive.
      * 
      * @return Response containing ManifestDto on success
      */
-    @GET("app/src/main/assets/bing_manifest_full.json")
+    @GET("app/src/main/assets/bing_manifest_full_v2.json")
     suspend fun getBingManifestFull(): Response<ManifestDto>
     
     /**
      * Downloads the Bing manifest (full) only if modified since the given date.
      * Returns 304 Not Modified if unchanged.
      */
-    @GET("app/src/main/assets/bing_manifest_full.json")
+    @GET("app/src/main/assets/bing_manifest_full_v2.json")
     suspend fun getBingManifestFullConditional(
         @Header("If-Modified-Since") ifModifiedSince: String?
     ): Response<ManifestDto>
@@ -159,12 +159,12 @@ interface ManifestService {
      * Checks Bing lite manifest headers without downloading.
      * Useful for checking Last-Modified date before sync.
      */
-    @HEAD("app/src/main/assets/bing_manifest_lite.json")
+    @HEAD("app/src/main/assets/bing_manifest_lite_v2.json")
     suspend fun checkBingManifestLiteHeaders(): Response<Void>
     
     /**
      * Checks Bing full manifest headers without downloading.
      */
-    @HEAD("app/src/main/assets/bing_manifest_full.json")
+    @HEAD("app/src/main/assets/bing_manifest_full_v2.json")
     suspend fun checkBingManifestFullHeaders(): Response<Void>
 }

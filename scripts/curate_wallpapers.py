@@ -4,14 +4,14 @@ Vanderwaals Wallpaper Curation Pipeline
 ==========================================
 
 Production-ready script optimized for GitHub Actions to process 6000+ wallpapers
-from 8 GitHub repositories. Extracts MobileNetV3 embeddings, colors, and metadata
-to generate manifest_v2.json.
+from 8 GitHub repositories. Extracts MobileNetV4-Conv-Small embeddings, colors, and metadata
+to generate manifest_v3.json.
 
 Features:
 - SMART INCREMENTAL UPDATES: Only process repos with new commits (via GitHub API)
 - AUTO-ADAPTIVE REPO DETECTION: Automatically finds wallpaper directories
 - OPTIMIZED MANIFEST: Quantized embeddings for 80%+ size reduction
-- MobileNetV3-Small for 576-dim embeddings
+- MobileNetV4-Conv-Small for 1280-dim embeddings (via timm)
 - 5 dominant colors per wallpaper (Pillow)
 - Brightness and contrast calculation
 - Category detection from folder structure
@@ -46,18 +46,16 @@ from datetime import datetime
 from collections import defaultdict
 import subprocess
 
-# Suppress TensorFlow verbosity
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
 import imagehash
 
-# Import TensorFlow after setting env vars
-import tensorflow as tf
-tf.get_logger().setLevel('ERROR')
+# PyTorch and timm for MobileNetV4-Conv-Small embeddings
+import torch
+import timm
+from timm.data import resolve_data_config
+from timm.data.transforms_factory import create_transform
 
 # ============================================================================
 # CONFIGURATION
@@ -118,10 +116,10 @@ REPOSITORIES = [
 
 # Output configuration
 OUTPUT_DIR = Path("curation_output")
-MANIFEST_PATH = OUTPUT_DIR / "manifest_v2.json"  # v2 format for v4.0.0+ (quantized embeddings)
+MANIFEST_PATH = OUTPUT_DIR / "manifest_v3.json"  # v3 format with MobileNetV4 1280D embeddings
 CHECKPOINT_PATH = OUTPUT_DIR / "checkpoint.json"
 UPDATE_TRACKER_PATH = OUTPUT_DIR / "update_tracker.json"  # For incremental updates
-PREVIOUS_MANIFEST_PATH = OUTPUT_DIR / "manifest_v2_previous.json"  # Cache for incremental merge
+PREVIOUS_MANIFEST_PATH = OUTPUT_DIR / "manifest_v3_previous.json"  # Cache for incremental merge
 
 # Image processing configuration
 SUPPORTED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp'}
@@ -188,11 +186,12 @@ class ResourceManager:
         
         # Clear TensorFlow session
         try:
-            import tensorflow as tf
-            tf.keras.backend.clear_session()
-            logger.debug("Cleared TensorFlow session")
+            # Clear any GPU memory if using CUDA
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            logger.debug("Cleared PyTorch resources")
         except Exception as e:
-            logger.debug(f"TensorFlow cleanup: {e}")
+            logger.debug(f"PyTorch cleanup: {e}")
         
         self._cleaned = True
 
@@ -284,8 +283,8 @@ def validate_manifest(manifest: Dict) -> List[str]:
             if 'embedding' in sample:
                 if not isinstance(sample['embedding'], list):
                     errors.append("Embedding must be a list")
-                elif len(sample['embedding']) != 576:
-                    errors.append(f"Embedding has wrong dimension: {len(sample['embedding'])} (expected 576)")
+                elif len(sample['embedding']) != 1280:
+                    errors.append(f"Embedding has wrong dimension: {len(sample['embedding'])} (expected 1280)")
     
     # Validate count matches
     if 'total_wallpapers' in manifest and 'wallpapers' in manifest:
@@ -300,25 +299,32 @@ def validate_manifest(manifest: Dict) -> List[str]:
 # ============================================================================
 
 class EmbeddingExtractor:
-    """Extract 576-dimensional embeddings using MobileNetV3-Small."""
+    """Extract 1280-dimensional embeddings using MobileNetV4-Conv-Small via timm."""
     
     def __init__(self):
-        """Initialize MobileNetV3-Small model."""
-        logger.info("Loading MobileNetV3-Small model...")
+        """Initialize MobileNetV4-Conv-Small model."""
+        logger.info("Loading MobileNetV4-Conv-Small model...")
         
-        # Load pre-trained MobileNetV3-Small (Google's weights)
-        self.model = tf.keras.applications.MobileNetV3Small(
-            input_shape=(224, 224, 3),
-            include_top=False,  # Remove classification head
-            weights='imagenet',  # Pre-trained on ImageNet
-            pooling='avg'  # Global average pooling → 576-dim output
+        self.device = torch.device('cpu')  # Use CPU for GitHub Actions compatibility
+        
+        # Load pre-trained MobileNetV4-Conv-Small from timm
+        # num_classes=0 removes classifier head and returns 1280D embedding
+        # The model architecture: 960 channels → 1x1 projection → 1280D
+        self.model = timm.create_model(
+            'mobilenetv4_conv_small.e2400_r224_in1k',
+            pretrained=True,
+            num_classes=0  # Remove classifier, get 1280D embedding
         )
+        self.model.eval()
+        self.model.to(self.device)
         
-        # Set to inference mode
-        self.model.trainable = False
+        # Get preprocessing transform from timm (handles normalization correctly)
+        self.config = resolve_data_config({}, model=self.model)
+        self.transform = create_transform(**self.config)
         
-        logger.info(f"Model loaded: {self.model.output_shape[1]} dimensions")
+        logger.info("Model loaded: 1280 dimensions")
     
+    @torch.no_grad()
     def extract(self, image_path: Path) -> Optional[np.ndarray]:
         """
         Extract embedding from image.
@@ -327,29 +333,22 @@ class EmbeddingExtractor:
             image_path: Path to image file
             
         Returns:
-            576-dim numpy array, or None if extraction fails
+            1280-dim numpy array, or None if extraction fails
         """
         try:
-            # Load and preprocess image
-            img = tf.keras.preprocessing.image.load_img(
-                image_path,
-                target_size=TARGET_SIZE
-            )
+            # Load image and convert to RGB
+            img = Image.open(image_path).convert('RGB')
             
-            # Convert to array
-            x = tf.keras.preprocessing.image.img_to_array(img)
-            
-            # Preprocess for MobileNetV3
-            x = tf.keras.applications.mobilenet_v3.preprocess_input(x)
-            
-            # Add batch dimension
-            x = np.expand_dims(x, axis=0)
+            # Apply timm preprocessing transform
+            input_tensor = self.transform(img).unsqueeze(0).to(self.device)
             
             # Extract embedding
-            embedding = self.model.predict(x, verbose=0)[0]
+            embedding = self.model(input_tensor).squeeze().cpu().numpy()
             
             # Normalize to unit length
-            embedding = embedding / np.linalg.norm(embedding)
+            norm = np.linalg.norm(embedding)
+            if norm > 0:
+                embedding = embedding / norm
             
             return embedding
             
@@ -1165,10 +1164,10 @@ def generate_manifest(wallpapers: List[Dict], use_quantization: bool = True) -> 
             processed_wallpapers = wallpapers
     
     manifest = {
-        'version': 2 if use_quantization else 1,  # Version 2 = quantized format
+        'version': 3,  # Version 3 = MobileNetV4 with 1280D embeddings
         'last_updated': datetime.utcnow().isoformat() + 'Z',
-        'model_version': 'mobilenet_v3_small',
-        'embedding_dim': 576,
+        'model_version': 'mobilenet_v4_conv_small',
+        'embedding_dim': 1280,
         'total_wallpapers': len(processed_wallpapers),
         'quantized': use_quantization,  # Flag for app-side
         'wallpapers': processed_wallpapers

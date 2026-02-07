@@ -188,7 +188,7 @@ fun BingArchiveWallpaperDto.toWallpaperMetadata(): me.avinas.vanderwaals.data.en
         colors = extractColorsFromMetadata(title, description, caption),  // Extract from all metadata
         brightness = 50,  // Default medium brightness (compute later from image)
         contrast = 50,  // Default medium contrast (compute later from image)
-        embedding = FloatArray(576) { 0f },  // Zero embedding (compute later with MobileNetV3)
+        embedding = FloatArray(1280) { 0f },  // Zero embedding (compute later with MobileNetV4)
         resolution = "3840x2160",  // UHD resolution
         attribution = copyright ?: "Bing Wallpaper Archive"  // Use copyright or fallback
     )

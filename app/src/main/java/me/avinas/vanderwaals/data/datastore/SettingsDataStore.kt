@@ -50,8 +50,18 @@ class SettingsDataStore @Inject constructor(
         private val MANIFEST_MIGRATION_PENDING = booleanPreferencesKey("manifest_migration_pending")
         private val MANIFEST_MIGRATION_DISMISSED = booleanPreferencesKey("manifest_migration_dismissed")
         
+        // Embedding dimension migration (MobileNetV3 576D → MobileNetV4 1280D)
+        private val EMBEDDING_DIMENSION = androidx.datastore.preferences.core.intPreferencesKey("embedding_dimension")
+        private val EMBEDDING_MIGRATION_PENDING = booleanPreferencesKey("embedding_migration_pending")
+        private val EMBEDDING_MIGRATION_DISMISSED = booleanPreferencesKey("embedding_migration_dismissed")
+        
         // Version code thresholds for migrations
         const val MANIFEST_V2_MIN_VERSION_CODE = 400  // v4.0.0 requires manifest v2
+        const val MANIFEST_V3_MIN_VERSION_CODE = 450  // v4.5.0 requires manifest v3 (MobileNetV4)
+        
+        // Embedding dimensions
+        const val EMBEDDING_DIM_LEGACY = 576   // MobileNetV3
+        const val EMBEDDING_DIM_CURRENT = 1280 // MobileNetV4-Conv-Small
     }
     
     val settings: Flow<Settings> = context.dataStore.data
@@ -74,6 +84,9 @@ class SettingsDataStore @Inject constructor(
                 manifestVersion = prefs[MANIFEST_VERSION] ?: 1,
                 manifestMigrationPending = prefs[MANIFEST_MIGRATION_PENDING] ?: false,
                 manifestMigrationDismissed = prefs[MANIFEST_MIGRATION_DISMISSED] ?: false,
+                embeddingDimension = prefs[EMBEDDING_DIMENSION] ?: 0,  // 0 = unknown/fresh install
+                embeddingMigrationPending = prefs[EMBEDDING_MIGRATION_PENDING] ?: false,
+                embeddingMigrationDismissed = prefs[EMBEDDING_MIGRATION_DISMISSED] ?: false,
                 onboardingCompleted = prefs[ONBOARDING_COMPLETED] ?: false,
                 lastSyncTimestamp = prefs[LAST_SYNC_TIMESTAMP] ?: 0L,
                 themeMode = prefs[THEME_MODE] ?: "system",
@@ -204,6 +217,87 @@ class SettingsDataStore @Inject constructor(
         }
     }
     
+    // =========================================================================
+    // EMBEDDING DIMENSION MIGRATION METHODS (MobileNetV3 576D → MobileNetV4 1280D)
+    // =========================================================================
+    
+    /**
+     * Updates the stored embedding dimension.
+     * Called after successful onboarding or migration.
+     */
+    suspend fun updateEmbeddingDimension(dimension: Int) {
+        context.dataStore.edit { it[EMBEDDING_DIMENSION] = dimension }
+    }
+    
+    /**
+     * Sets whether an embedding migration is pending.
+     * Set to true when app detects user has legacy 576D preferences.
+     */
+    suspend fun setEmbeddingMigrationPending(pending: Boolean) {
+        context.dataStore.edit { it[EMBEDDING_MIGRATION_PENDING] = pending }
+    }
+    
+    /**
+     * Sets whether user has dismissed the embedding migration dialog.
+     * If dismissed, user continues with legacy preferences until they choose to migrate.
+     */
+    suspend fun setEmbeddingMigrationDismissed(dismissed: Boolean) {
+        context.dataStore.edit { it[EMBEDDING_MIGRATION_DISMISSED] = dismissed }
+    }
+    
+    /**
+     * Clears embedding migration flags after successful migration.
+     * Also updates embedding dimension to current (1280D).
+     */
+    suspend fun clearEmbeddingMigrationFlags() {
+        context.dataStore.edit {
+            it[EMBEDDING_MIGRATION_PENDING] = false
+            it[EMBEDDING_MIGRATION_DISMISSED] = false
+            it[EMBEDDING_DIMENSION] = EMBEDDING_DIM_CURRENT
+        }
+    }
+    
+    /**
+     * Checks if embedding migration is needed based on stored dimension.
+     * 
+     * @param hasPreferences Whether user has existing preferences in database
+     * @return true if embedding migration dialog should be shown
+     */
+    suspend fun checkEmbeddingMigrationNeeded(hasPreferences: Boolean): Boolean {
+        val prefs = context.dataStore.data.first()
+        val embeddingDim = prefs[EMBEDDING_DIMENSION] ?: 0
+        val migrationDismissed = prefs[EMBEDDING_MIGRATION_DISMISSED] ?: false
+        val onboardingCompleted = prefs[ONBOARDING_COMPLETED] ?: false
+        
+        // If user already dismissed, don't show again
+        if (migrationDismissed) {
+            return false
+        }
+        
+        // Fresh install (no dimension set, no preferences) - set to current and skip
+        if (embeddingDim == 0 && !hasPreferences) {
+            context.dataStore.edit { it[EMBEDDING_DIMENSION] = EMBEDDING_DIM_CURRENT }
+            return false
+        }
+        
+        // Existing user with legacy dimension needs migration
+        if (embeddingDim == EMBEDDING_DIM_LEGACY && hasPreferences && onboardingCompleted) {
+            context.dataStore.edit { it[EMBEDDING_MIGRATION_PENDING] = true }
+            return true
+        }
+        
+        // Unknown dimension but has preferences - assume legacy and prompt migration
+        if (embeddingDim == 0 && hasPreferences && onboardingCompleted) {
+            context.dataStore.edit { 
+                it[EMBEDDING_DIMENSION] = EMBEDDING_DIM_LEGACY  // Mark as legacy
+                it[EMBEDDING_MIGRATION_PENDING] = true
+            }
+            return true
+        }
+        
+        return false
+    }
+    
     /**
      * Checks if a manifest migration is needed based on version upgrade.
      * 
@@ -230,23 +324,24 @@ class SettingsDataStore @Inject constructor(
         val isTrueFreshInstall = lastKnownVersion == 0 && !databaseHasWallpapers
         
         if (isTrueFreshInstall) {
-            // Fresh install - no migration needed, set to v2 manifest
+            // Fresh install - no migration needed, set to v3 manifest (MobileNetV4)
             context.dataStore.edit { 
                 it[LAST_KNOWN_VERSION_CODE] = currentVersionCode
-                it[MANIFEST_VERSION] = 2  // Fresh installs use v2
+                it[MANIFEST_VERSION] = 3  // Fresh installs use v3 (MobileNetV4 1280D)
+                it[EMBEDDING_DIMENSION] = EMBEDDING_DIM_CURRENT  // Set to 1280D
             }
             return false
         }
         
-        // Existing user check
-        val isUpgradingToV4 = currentVersionCode >= MANIFEST_V2_MIN_VERSION_CODE
-        val hasOldManifest = manifestVersion < 2
+        // Existing user check for v5.0.0+ (MobileNetV4 with 1280D embeddings)
+        val isUpgradingToV5 = currentVersionCode >= MANIFEST_V3_MIN_VERSION_CODE
+        val hasOldManifest = manifestVersion < 3  // v1 or v2 manifests need update to v3
         
         // Show migration if:
-        // 1. Upgrading to v4.0.0+ AND
-        // 2. Has old manifest (v1) AND
+        // 1. Upgrading to v5.0.0+ AND
+        // 2. Has old manifest (v1 or v2) AND
         // 3. Has wallpapers in database (existing user)
-        if (isUpgradingToV4 && hasOldManifest && databaseHasWallpapers) {
+        if (isUpgradingToV5 && hasOldManifest && databaseHasWallpapers) {
             context.dataStore.edit { 
                 it[MANIFEST_MIGRATION_PENDING] = true
                 it[LAST_KNOWN_VERSION_CODE] = currentVersionCode
@@ -272,6 +367,10 @@ data class Settings(
     val manifestVersion: Int = 1,
     val manifestMigrationPending: Boolean = false,
     val manifestMigrationDismissed: Boolean = false,
+    // Embedding dimension migration (MobileNetV3 576D → MobileNetV4 1280D)
+    val embeddingDimension: Int = 0,  // 0 = unknown, 576 = legacy, 1280 = current
+    val embeddingMigrationPending: Boolean = false,
+    val embeddingMigrationDismissed: Boolean = false,
     val onboardingCompleted: Boolean,
     val lastSyncTimestamp: Long,
     val themeMode: String,
@@ -280,4 +379,12 @@ data class Settings(
     val bingLastSyncTimestamp: Long = 0L,
     val bingManifestLastModified: String? = null,
     val bingManifestType: String = "lite"  // "lite" or "full"
-)
+) {
+    /**
+     * Returns true if user needs embedding migration (has legacy 576D preferences).
+     */
+    val needsEmbeddingMigration: Boolean
+        get() = embeddingDimension == SettingsDataStore.EMBEDDING_DIM_LEGACY && 
+                !embeddingMigrationDismissed && 
+                onboardingCompleted
+}

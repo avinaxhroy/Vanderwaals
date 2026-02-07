@@ -168,53 +168,43 @@ app/build/outputs/apk/release/vanderwaals-v2.7.0.apk
 
 ## TensorFlow Lite Model
 
-### Download MobileNetV3-Small Model
+### Download MobileNetV4-Conv-Small Model
 
-The app requires a TensorFlow Lite model for image embeddings.
+The app requires a TensorFlow Lite model for image embeddings (1280D MobileNetV4-Conv-Small).
 
-#### Option 1: Manual Download (Recommended)
+#### Option 1: Convert Using Colab (Recommended)
 
-1. Visit [TensorFlow Hub](https://tfhub.dev/google/lite-model/imagenet/mobilenet_v3_small_100_224/feature_vector/5)
-2. Download `.tflite` file
-3. Place at: `app/src/main/assets/models/mobilenet_v3_small.tflite`
+1. Open [Google Colab](https://colab.research.google.com/)
+2. Copy contents of `scripts/colab_one_cell.py` into a cell
+3. Run the cell — it installs dependencies, converts, and verifies
+4. Download the generated `mobilenet_v4_conv_small.tflite`
+5. Place at: `app/src/main/assets/models/mobilenet_v4_conv_small.tflite`
 
-#### Option 2: Using Python Script
+#### Option 2: Convert Locally
 
 ```bash
-cd Vanderwaals
-python3 download_and_convert_model.py
+pip install torch timm onnx onnx2tf tensorflow
+python3 scripts/convert_mobilenetv4_to_tflite.py
 ```
 
 This script:
-- Downloads MobileNetV3-Small from TensorFlow Hub
-- Converts to TFLite format
-- Places in correct directory
-- Verifies model integrity
-
-#### Option 3: Using wget
-
-```bash
-mkdir -p app/src/main/assets/models
-cd app/src/main/assets/models
-
-# Download from TensorFlow Hub (placeholder - use actual URL)
-wget -O mobilenet_v3_small.tflite \
-  "https://storage.googleapis.com/tfhub-lite-models/google/imagenet/mobilenet_v3_small_100_224/feature_vector/5.tflite"
-```
+- Downloads MobileNetV4-Conv-Small from timm (PyTorch)
+- Exports to ONNX, then converts to TFLite via onnx2tf
+- Places in `app/src/main/assets/models/`
+- Verifies 1280D output dimension
 
 ### Verify Model
 
 ```bash
-python3 verify_model.py
+python3 scripts/test_tflite.py
 ```
 
 **Expected Output**:
 ```
-✅ Model exists: app/src/main/assets/models/mobilenet_v3_small.tflite
-✅ File size: 2.9 MB
+✅ Model exists: app/src/main/assets/models/mobilenet_v4_conv_small.tflite
 ✅ Model loaded successfully
 ✅ Input shape: [1, 224, 224, 3]
-✅ Output shape: [1, 576]
+✅ Output shape: [1, 1280]
 ```
 
 ---
@@ -388,7 +378,7 @@ sdk.dir=/path/to/Android/Sdk
 
 **Solution**: Verify model exists at correct location:
 ```bash
-ls -lh app/src/main/assets/models/mobilenet_v3_small.tflite
+ls -lh app/src/main/assets/models/mobilenet_v4_conv_small.tflite
 ```
 
 ### Runtime Errors

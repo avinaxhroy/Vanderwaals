@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import me.avinas.vanderwaals.ui.theme.components.*
+import me.avinas.vanderwaals.ui.theme.LiquidGlassBackground
 
 @Composable
 fun ModeSelectionScreen(
@@ -39,23 +40,21 @@ fun ModeSelectionScreen(
     viewModel: ModeSelectionViewModel = hiltViewModel()
 ) {
     val selectedMode by viewModel.selectedMode.collectAsState()
+    val isDark = isSystemInDarkTheme()
     
     // Auto-navigate if mode is already selected and confirmed (optional logic, but here we just show selection)
     
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = Color.Transparent
+    LiquidGlassBackground {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            containerColor = Color.Transparent
     ) { paddingValues ->
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Premium Background
-            val isDark = isSystemInDarkTheme()
-            PremiumBackground(
-                modifier = Modifier.fillMaxSize(),
-                isDark = isDark
-            )
+            // Premium Background removed
+
 
             Column(
                 modifier = Modifier
@@ -189,6 +188,7 @@ fun ModeSelectionScreen(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -213,7 +213,7 @@ private fun ModeOption(
         Color.Transparent
     }
 
-    GlassCard(
+    LiquidGlassCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))

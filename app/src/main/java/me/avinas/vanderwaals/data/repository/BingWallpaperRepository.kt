@@ -120,7 +120,7 @@ class BingWallpaperRepository @Inject constructor(
                     colors = listOf("#3a506b", "#5bc0be", "#6fffe9", "#0b132b", "#1c2541"),  // Default palette
                     brightness = 50,  // Default (compute later)
                     contrast = 50,  // Default (compute later)
-                    embedding = FloatArray(576) { 0f },  // Zero embedding (compute later)
+                    embedding = FloatArray(1280) { 0f },  // Zero embedding (compute later)
                     resolution = "3840x2160",
                     attribution = bingImage.copyright
                 )

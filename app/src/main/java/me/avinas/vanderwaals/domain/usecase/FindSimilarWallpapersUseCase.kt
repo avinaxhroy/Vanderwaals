@@ -75,7 +75,7 @@ class FindSimilarWallpapersUseCase @Inject constructor(
      * **ENHANCED MATCHING:**
      * Pass userAnalysis for superior semantic matching that captures image essence.
      * 
-     * @param userEmbedding 576-dimensional embedding vector representing user preference
+     * @param userEmbedding 1280-dimensional embedding vector representing user preference
      * @param limit Maximum number of matches to return (default: 50)
      * @param userAnalysis Enhanced image analysis of uploaded image (optional, recommended)
      * @param userColors Optional user color palette for composite scoring
@@ -271,9 +271,9 @@ class FindSimilarWallpapersUseCase @Inject constructor(
     
     companion object {
         /**
-         * Expected embedding dimension for MobileNetV3-Small model.
+         * Expected embedding dimension for MobileNetV4-Conv-Small model.
          */
-        private const val EXPECTED_EMBEDDING_SIZE = 576
+        private const val EXPECTED_EMBEDDING_SIZE = 1280
         
         /**
          * Default number of similar wallpapers to return.

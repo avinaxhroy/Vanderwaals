@@ -78,14 +78,14 @@ jobs:
           python curate_wallpapers.py $ARGS
           
           # Set output variables
-          if [[ -f "curation_output/manifest_v2.json" ]]; then
-            WALLPAPER_COUNT=$(jq '.total_wallpapers' curation_output/manifest_v2.json)
+          if [[ -f "curation_output/manifest_v3.json" ]]; then
+            WALLPAPER_COUNT=$(jq '.total_wallpapers' curation_output/manifest_v3.json)
             echo "wallpaper_count=$WALLPAPER_COUNT" >> $GITHUB_OUTPUT
             
-            MANIFEST_SIZE=$(du -h curation_output/manifest_v2.json | cut -f1)
+            MANIFEST_SIZE=$(du -h curation_output/manifest_v3.json | cut -f1)
             echo "manifest_size=$MANIFEST_SIZE" >> $GITHUB_OUTPUT
             
-            COMPRESSED_SIZE=$(du -h curation_output/manifest_v2.json.gz | cut -f1)
+            COMPRESSED_SIZE=$(du -h curation_output/manifest_v3.json.gz | cut -f1)
             echo "compressed_size=$COMPRESSED_SIZE" >> $GITHUB_OUTPUT
           fi
       
@@ -99,28 +99,28 @@ jobs:
         run: |
           cd scripts/curation_output
           
-          echo "Validating manifest_v2.json..."
+          echo "Validating manifest_v3.json..."
           
           # Check JSON is valid
-          jq empty manifest_v2.json || exit 1
+          jq empty manifest_v3.json || exit 1
           
           # Check required fields
-          jq -e '.version' manifest_v2.json > /dev/null || { echo "Missing version"; exit 1; }
-          jq -e '.last_updated' manifest_v2.json > /dev/null || { echo "Missing last_updated"; exit 1; }
-          jq -e '.model_version' manifest_v2.json > /dev/null || { echo "Missing model_version"; exit 1; }
-          jq -e '.embedding_dim' manifest_v2.json > /dev/null || { echo "Missing embedding_dim"; exit 1; }
-          jq -e '.wallpapers' manifest_v2.json > /dev/null || { echo "Missing wallpapers array"; exit 1; }
+          jq -e '.version' manifest_v3.json > /dev/null || { echo "Missing version"; exit 1; }
+          jq -e '.last_updated' manifest_v3.json > /dev/null || { echo "Missing last_updated"; exit 1; }
+          jq -e '.model_version' manifest_v3.json > /dev/null || { echo "Missing model_version"; exit 1; }
+          jq -e '.embedding_dim' manifest_v3.json > /dev/null || { echo "Missing embedding_dim"; exit 1; }
+          jq -e '.wallpapers' manifest_v3.json > /dev/null || { echo "Missing wallpapers array"; exit 1; }
           
-          # Validate embedding dimensions
-          EMBEDDING_DIM=$(jq '.embedding_dim' manifest_v2.json)
-          if [[ "$EMBEDDING_DIM" != "576" ]]; then
-            echo "Invalid embedding dimension: $EMBEDDING_DIM (expected 576)"
+          # Validate embedding dimensions (MobileNetV4-Conv-Small = 1280D)
+          EMBEDDING_DIM=$(jq '.embedding_dim' manifest_v3.json)
+          if [[ "$EMBEDDING_DIM" != "1280" ]]; then
+            echo "Invalid embedding dimension: $EMBEDDING_DIM (expected 1280)"
             exit 1
           fi
           
           # Check first wallpaper has correct structure (either embedding or e)
-          HAS_EMBEDDING=$(jq 'if .wallpapers[0].embedding then "true" else "false" end' manifest_v2.json)
-          HAS_QUANTIZED=$(jq 'if .wallpapers[0].e then "true" else "false" end' manifest_v2.json)
+          HAS_EMBEDDING=$(jq 'if .wallpapers[0].embedding then "true" else "false" end' manifest_v3.json)
+          HAS_QUANTIZED=$(jq 'if .wallpapers[0].e then "true" else "false" end' manifest_v3.json)
           
           if [[ "$HAS_EMBEDDING" == "false" ]] && [[ "$HAS_QUANTIZED" == "false" ]]; then
             echo "First wallpaper missing both embedding and e field"
@@ -135,10 +135,10 @@ jobs:
           mkdir -p app/src/main/assets
           
           # Copy uncompressed manifest (for debug builds)
-          cp scripts/curation_output/manifest_v2.json app/src/main/assets/manifest_v2.json
+          cp scripts/curation_output/manifest_v3.json app/src/main/assets/manifest_v3.json
           
           # Copy compressed manifest (for reference)
-          cp scripts/curation_output/manifest_v2.json.gz app/src/main/assets/manifest_v2.json.gz
+          cp scripts/curation_output/manifest_v3.json.gz app/src/main/assets/manifest_v3.json.gz
           
           echo "✓ Copied manifest to app/src/main/assets/"
       
@@ -148,8 +148,8 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          git add -f app/src/main/assets/manifest_v2.json
-          git add -f app/src/main/assets/manifest_v2.json.gz
+          git add -f app/src/main/assets/manifest_v3.json
+          git add -f app/src/main/assets/manifest_v3.json.gz
           
           # Check if there are changes
           if git diff --staged --quiet; then
@@ -161,9 +161,9 @@ jobs:
             MANIFEST_SIZE="${{ steps.curate.outputs.manifest_size }}"
             
             if [[ "${{ github.event.inputs.test_mode }}" == "true" ]]; then
-              COMMIT_MSG="chore: update manifest (TEST RUN - $WALLPAPER_COUNT wallpapers) [skip ci]"
+              COMMIT_MSG="chore: update manifest_v3 (TEST RUN - $WALLPAPER_COUNT wallpapers) [skip ci]"
             else
-              COMMIT_MSG="chore: update manifest ($WALLPAPER_COUNT wallpapers, $MANIFEST_SIZE) [skip ci]"
+              COMMIT_MSG="chore: update manifest_v3 ($WALLPAPER_COUNT wallpapers, $MANIFEST_SIZE) [skip ci]"
             fi
             
             git commit -m "$COMMIT_MSG"
@@ -178,8 +178,8 @@ jobs:
         with:
           name: manifest-artifacts
           path: |
-            scripts/curation_output/manifest_v2.json
-            scripts/curation_output/manifest_v2.json.gz
+            scripts/curation_output/manifest_v3.json
+            scripts/curation_output/manifest_v3.json.gz
             scripts/curation_output/curation.log
           retention-days: 30
       

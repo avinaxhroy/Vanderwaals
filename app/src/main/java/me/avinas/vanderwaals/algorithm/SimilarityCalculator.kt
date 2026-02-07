@@ -8,7 +8,7 @@ import kotlin.math.sqrt
  * Calculates similarity scores between wallpaper embeddings using cosine similarity and color matching.
  * 
  * This class implements the ranking algorithm that combines:
- * - Embedding similarity (70% weight): Cosine similarity between 576-dimensional vectors
+ * - Embedding similarity (70% weight): Cosine similarity between 1280-dimensional vectors
  * - Color similarity (20% weight): Distance between color palettes in RGB space
  * - Category bonus (10% weight): Boost for matching categories and brightness
  * 
@@ -24,10 +24,10 @@ class SimilarityCalculator {
     
     companion object {
         // ENHANCED WEIGHTS: Focus more on deep semantic understanding
-        private const val EMBEDDING_WEIGHT = 0.75f       // Increased: MobileNetV3 captures aesthetic essence
-        private const val COLOR_WEIGHT = 0.10f           // Reduced: Now using perceptual LAB matching
-        private const val COMPOSITION_WEIGHT = 0.10f     // New: Visual composition similarity
-        private const val CATEGORY_WEIGHT = 0.05f        // Reduced: Less reliable across sources
+        private const val EMBEDDING_WEIGHT = 0.75f       // MobileNetV4 captures aesthetic essence
+        private const val COLOR_WEIGHT = 0.12f           // Perceptual LAB matching
+        private const val COMPOSITION_WEIGHT = 0.11f     // Visual composition similarity
+        private const val CATEGORY_WEIGHT = 0.02f        // Minimal: labels unreliable across sources
         
         // Brightness tolerance for matching (±20 on 0-100 scale)
         private const val BRIGHTNESS_TOLERANCE = 20
@@ -99,7 +99,7 @@ class SimilarityCalculator {
      * ENHANCED: Calculates semantic similarity using deep image analysis.
      * 
      * This method provides superior matching for uploaded wallpapers by analyzing:
-     * - Deep aesthetic features (MobileNetV3 embeddings)
+     * - Deep aesthetic features (MobileNetV4 embeddings)
      * - Perceptual color matching (LAB color space)
      * - Visual composition (rule of thirds, symmetry, balance)
      * - Mood and atmosphere (warmth, energy, contrast)

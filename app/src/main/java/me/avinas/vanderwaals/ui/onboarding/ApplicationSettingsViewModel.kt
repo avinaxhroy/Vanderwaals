@@ -217,6 +217,7 @@ class ApplicationSettingsViewModel @Inject constructor(
                 settingsDataStore.updateInterval(intervalString, _dailyTime.value)
                 settingsDataStore.updateDailyPlaylistSize(_dailyPlaylistSize.value)
                 settingsDataStore.markOnboardingComplete()
+                settingsDataStore.updateEmbeddingDimension(SettingsDataStore.EMBEDDING_DIM_CURRENT)
                 
                 // Add small delay to ensure database transaction completes
                 // This prevents race condition where worker runs before preferences are written

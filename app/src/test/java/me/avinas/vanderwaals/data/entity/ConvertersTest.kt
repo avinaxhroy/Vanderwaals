@@ -303,17 +303,17 @@ class ConvertersTest {
 
     @Test
     fun `float array conversion handles large embedding vectors`() {
-        // Given - MobileNetV3 embedding vector (576 dimensions)
-        val embedding = FloatArray(576) { it * 0.001f }
+        // Given - MobileNetV4 embedding vector (1280 dimensions)
+        val embedding = FloatArray(1280) { it * 0.001f }
 
         // When
         val json = converters.fromFloatArray(embedding)
         val restored = converters.toFloatArray(json)
 
         // Then
-        assertEquals(576, restored.size)
+        assertEquals(1280, restored.size)
         assertEquals(embedding[0], restored[0], 0.00001f)
-        assertEquals(embedding[575], restored[575], 0.00001f)
+        assertEquals(embedding[1279], restored[1279], 0.00001f)
     }
 
     @Test

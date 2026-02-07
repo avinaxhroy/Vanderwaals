@@ -12,7 +12,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Extracts 576-dimensional embedding vectors from wallpaper images using MobileNetV3-Small model.
+ * Extracts 1280-dimensional embedding vectors from wallpaper images using MobileNetV4-Conv-Small model.
  * 
  * This class handles loading the TensorFlow Lite model, preprocessing images, and extracting
  * feature embeddings that represent the aesthetic characteristics of wallpapers.
@@ -34,12 +34,16 @@ class EmbeddingExtractor @Inject constructor(
     
     companion object {
         private const val TAG = "EmbeddingExtractor"
-        private const val MODEL_PATH = "models/mobilenet_v3_small.tflite"
-        // MobileNetV3-Small standard input size
+        private const val MODEL_PATH = "models/mobilenet_v4_conv_small.tflite"
+        // MobileNetV4-Conv-Small standard input size
         private const val INPUT_SIZE = 224
-        // MobileNetV3-Small outputs 576 floats (2304 bytes)
-        // 2304 bytes ÷ 4 bytes per float = 576 floats
-        private const val EMBEDDING_SIZE = 576
+        // MobileNetV4-Conv-Small outputs 1280 floats (960 channels -> 1280 via projection layer)
+        private const val EMBEDDING_SIZE = 1280
+        
+        // ImageNet normalization constants (must match timm preprocessing used in Python curation scripts)
+        // Python: timm.data.create_transform() applies Normalize(mean, std) after ToTensor [0-1]
+        private val IMAGENET_MEAN = floatArrayOf(0.485f, 0.456f, 0.406f)
+        private val IMAGENET_STD = floatArrayOf(0.229f, 0.224f, 0.225f)
     }
     
     init {
@@ -92,12 +96,16 @@ class EmbeddingExtractor @Inject constructor(
      * 
      * Process:
      * 1. Resize image to 224x224 (model input size)
-     * 2. Convert to normalized float values (0-255 -> 0.0-1.0)
+     * 2. Convert pixels to [0-1] range and apply ImageNet normalization
      * 3. Run inference through TFLite model
-     * 4. Extract 576-dimensional output vector
+     * 4. Extract 1280-dimensional output vector
+     * 5. L2-normalize to unit length (matches Python curation pipeline)
+     * 
+     * **Preprocessing must match Python curation scripts** which use:
+     * `timm.data.create_transform()` → ToTensor [0-1] → Normalize(ImageNet mean/std)
      * 
      * @param bitmap Input image (any size, will be resized)
-     * @return FloatArray of size 576 representing the embedding, or null if model not loaded
+     * @return FloatArray of size 1280 representing the embedding, or null if model not loaded
      */
     fun extractEmbedding(bitmap: Bitmap): FloatArray? {
         if (!isModelLoaded) {
@@ -108,7 +116,7 @@ class EmbeddingExtractor @Inject constructor(
         return try {
             val startTime = System.currentTimeMillis()
             
-            // Resize bitmap to standard MobileNetV3-Small input size
+            // Resize bitmap to standard MobileNetV4-Conv-Small input size
             val resizedBitmap = Bitmap.createScaledBitmap(bitmap, INPUT_SIZE, INPUT_SIZE, true)
             
             // Create input buffer with float32 values
@@ -116,23 +124,23 @@ class EmbeddingExtractor @Inject constructor(
             val inputBuffer = ByteBuffer.allocateDirect(4 * INPUT_SIZE * INPUT_SIZE * 3)
             inputBuffer.order(java.nio.ByteOrder.nativeOrder())
             
-            // Convert bitmap pixels to float values [0-255]
             // CRITICAL: Must match Python curation script preprocessing!
-            // Python uses: tf.keras.preprocessing.image.img_to_array() which returns [0-255]
-            // Then: tf.keras.applications.mobilenet_v3.preprocess_input() which does nothing for this model
-            // Result: Model expects [0-255] range, NOT [0-1]
+            // Python curation uses timm's create_transform() which does:
+            //   1. ToTensor(): [0-255] -> [0.0-1.0]
+            //   2. Normalize(mean=[0.485,0.456,0.406], std=[0.229,0.224,0.225])
+            // The TFLite model (converted from timm PyTorch via ONNX) expects this same input.
             val pixels = IntArray(INPUT_SIZE * INPUT_SIZE)
             resizedBitmap.getPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
             
             for (pixel in pixels) {
-                // Extract RGB values - keep as [0-255], do NOT divide by 255!
-                val r = ((pixel shr 16) and 0xFF).toFloat()
-                val g = ((pixel shr 8) and 0xFF).toFloat()
-                val b = (pixel and 0xFF).toFloat()
+                // Extract RGB, scale to [0-1], then apply ImageNet normalization
+                val r = ((pixel shr 16) and 0xFF) / 255f
+                val g = ((pixel shr 8) and 0xFF) / 255f
+                val b = (pixel and 0xFF) / 255f
                 
-                inputBuffer.putFloat(r)
-                inputBuffer.putFloat(g)
-                inputBuffer.putFloat(b)
+                inputBuffer.putFloat((r - IMAGENET_MEAN[0]) / IMAGENET_STD[0])
+                inputBuffer.putFloat((g - IMAGENET_MEAN[1]) / IMAGENET_STD[1])
+                inputBuffer.putFloat((b - IMAGENET_MEAN[2]) / IMAGENET_STD[2])
             }
             
             inputBuffer.rewind()
@@ -192,8 +200,8 @@ class EmbeddingExtractor @Inject constructor(
      */
     fun getErrorMessage(): String {
         return if (!isModelLoaded) {
-            "TensorFlow Lite model not found. Please download mobilenet_v3_small.tflite " +
-            "from TensorFlow Hub and place it in app/src/main/assets/models/"
+            "TensorFlow Lite model not found. The mobilenet_v4_conv_small.tflite model " +
+            "is missing from app/src/main/assets/models/"
         } else {
             ""
         }

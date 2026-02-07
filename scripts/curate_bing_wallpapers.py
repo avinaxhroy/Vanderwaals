@@ -4,13 +4,13 @@ Vanderwaals Bing Wallpaper Curation Pipeline
 =============================================
 
 Curates wallpapers from the Bing Wallpaper Archive (npanuhin/Bing-Wallpaper-Archive).
-Generates TWO manifest files:
-  - bing_manifest_lite.json: Last 2 years (~700 wallpapers, ~2MB)
-  - bing_manifest_full.json: Full archive (~5400+ wallpapers, ~15MB)
+Generates TWO manifest files (v2 = MobileNetV4-Conv-Small 1280D embeddings):
+  - bing_manifest_lite_v2.json: Last 2 years (~700 wallpapers, ~2MB)
+  - bing_manifest_full_v2.json: Full archive (~5400+ wallpapers, ~15MB)
 
 Features:
 - Fetches from bing.npanuhin.me API (year-specific endpoints)
-- MobileNetV3-Small for 576-dim embeddings
+- MobileNetV4-Conv-Small for 1280-dim embeddings
 - 5 dominant colors per wallpaper (K-means)
 - Brightness and contrast calculation
 - Perceptual hash deduplication
@@ -42,18 +42,16 @@ from datetime import datetime
 from collections import defaultdict
 from io import BytesIO
 
-# Suppress TensorFlow verbosity
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
 import imagehash
 
-# Import TensorFlow after setting env vars
-import tensorflow as tf
-tf.get_logger().setLevel('ERROR')
+# PyTorch and timm for MobileNetV4-Conv-Small embeddings
+import torch
+import timm
+from timm.data import resolve_data_config
+from timm.data.transforms_factory import create_transform
 
 # ============================================================================
 # CONFIGURATION
@@ -71,12 +69,12 @@ FULL_START_YEAR = 2009  # Bing wallpapers started in 2009
 
 # Output configuration
 OUTPUT_DIR = Path("curation_output")
-MANIFEST_LITE_PATH = OUTPUT_DIR / "bing_manifest_lite.json"
-MANIFEST_FULL_PATH = OUTPUT_DIR / "bing_manifest_full.json"
+MANIFEST_LITE_PATH = OUTPUT_DIR / "bing_manifest_lite_v2.json"
+MANIFEST_FULL_PATH = OUTPUT_DIR / "bing_manifest_full_v2.json"
 CHECKPOINT_PATH = OUTPUT_DIR / "bing_checkpoint.json"
 
 # Image processing configuration
-TARGET_SIZE = (224, 224)  # MobileNetV3 input size
+TARGET_SIZE = (224, 224)  # MobileNetV4 input size
 MIN_RESOLUTION = (800, 600)  # Minimum wallpaper resolution
 
 # Quality filtering configuration
@@ -107,42 +105,47 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 class EmbeddingExtractor:
-    """Extract 576-dimensional embeddings using MobileNetV3-Small."""
+    """Extract 1280-dimensional embeddings using MobileNetV4-Conv-Small via timm."""
     
     def __init__(self):
-        """Initialize MobileNetV3-Small model."""
-        logger.info("Loading MobileNetV3-Small model...")
+        """Initialize MobileNetV4-Conv-Small model."""
+        logger.info("Loading MobileNetV4-Conv-Small model...")
         
-        self.model = tf.keras.applications.MobileNetV3Small(
-            input_shape=(224, 224, 3),
-            include_top=False,
-            weights='imagenet',
-            pooling='avg'
+        self.device = torch.device('cpu')  # Use CPU for GitHub Actions compatibility
+        
+        # Load pre-trained MobileNetV4-Conv-Small from timm
+        # num_classes=0 removes classifier head and returns 1280D embedding
+        self.model = timm.create_model(
+            'mobilenetv4_conv_small.e2400_r224_in1k',
+            pretrained=True,
+            num_classes=0  # Remove classifier, get 1280D embedding
         )
+        self.model.eval()
+        self.model.to(self.device)
         
-        self.model.trainable = False
-        logger.info(f"Model loaded: {self.model.output_shape[1]} dimensions")
+        # Get preprocessing transform from timm
+        self.config = resolve_data_config({}, model=self.model)
+        self.transform = create_transform(**self.config)
+        
+        logger.info("Model loaded: 1280 dimensions")
     
+    @torch.no_grad()
     def extract(self, image: Image.Image) -> Optional[np.ndarray]:
         """Extract embedding from PIL Image."""
         try:
-            # Resize and convert to RGB
-            img = image.convert('RGB').resize(TARGET_SIZE, Image.Resampling.LANCZOS)
+            # Ensure RGB mode
+            img = image.convert('RGB')
             
-            # Convert to array
-            x = np.array(img, dtype=np.float32)
-            
-            # Preprocess for MobileNetV3
-            x = tf.keras.applications.mobilenet_v3.preprocess_input(x)
-            
-            # Add batch dimension
-            x = np.expand_dims(x, axis=0)
+            # Apply timm preprocessing transform
+            input_tensor = self.transform(img).unsqueeze(0).to(self.device)
             
             # Extract embedding
-            embedding = self.model.predict(x, verbose=0)[0]
+            embedding = self.model(input_tensor).squeeze().cpu().numpy()
             
             # Normalize to unit length
-            embedding = embedding / np.linalg.norm(embedding)
+            norm = np.linalg.norm(embedding)
+            if norm > 0:
+                embedding = embedding / norm
             
             return embedding
             
@@ -448,10 +451,10 @@ class WallpaperProcessor:
 def generate_manifest(wallpapers: List[Dict], output_path: Path, manifest_type: str):
     """Generate manifest file."""
     manifest = {
-        'version': 2,
+        'version': 3,
         'last_updated': datetime.utcnow().isoformat() + 'Z',
-        'model_version': 'mobilenet_v3_small',
-        'embedding_dim': 576,
+        'model_version': 'mobilenet_v4_conv_small',
+        'embedding_dim': 1280,
         'embedding_quantized': True,
         'embedding_scale': 127,
         'total_wallpapers': len(wallpapers),

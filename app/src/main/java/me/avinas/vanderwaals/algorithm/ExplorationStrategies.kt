@@ -172,6 +172,7 @@ class ExplorationStrategies {
      * - Color palette: Try different color schemes
      * - Brightness: Vary between light and dark
      * - Source: Balance between GitHub and Bing
+     * - Embedding: Aesthetic diversity in 1280D space (MobileNetV4)
      * 
      * @param candidates List of wallpapers with scores
      * @param recentWallpapers Recently shown wallpapers (for diversity check)
@@ -194,6 +195,7 @@ class ExplorationStrategies {
             .map { it.brightness }
             .average()
             .toFloat()
+        val recentEmbeddings = recentWallpapers.map { it.embedding }
         
         // Score each candidate for diversity
         val diversityScored = candidates.map { (wallpaper, qualityScore) ->
@@ -201,7 +203,8 @@ class ExplorationStrategies {
                 wallpaper = wallpaper,
                 recentCategories = recentCategories,
                 recentSources = recentSources,
-                avgRecentBrightness = avgRecentBrightness
+                avgRecentBrightness = avgRecentBrightness,
+                recentEmbeddings = recentEmbeddings
             )
             
             // Combine quality and diversity
@@ -220,35 +223,112 @@ class ExplorationStrategies {
      * Calculates diversity score for a wallpaper.
      * Higher score = more different from recent selections.
      * 
+     * ENHANCED (MobileNetV4): Now includes embedding-space diversity
+     * to detect aesthetic differences beyond just category/brightness.
+     * 
      * @param wallpaper Candidate wallpaper
      * @param recentCategories Categories shown recently
      * @param recentSources Sources used recently
      * @param avgRecentBrightness Average brightness of recent wallpapers
+     * @param recentEmbeddings Embeddings of recent wallpapers (for aesthetic diversity)
      * @return Diversity score (0.0-1.0)
      */
     private fun calculateDiversityScore(
         wallpaper: WallpaperMetadata,
         recentCategories: Set<String>,
         recentSources: Set<String>,
-        avgRecentBrightness: Float
+        avgRecentBrightness: Float,
+        recentEmbeddings: List<FloatArray> = emptyList()
     ): Float {
         var score = 0f
         
-        // Category diversity (40% weight)
+        // Category diversity (30% weight) - reduced from 40%
         if (wallpaper.category !in recentCategories) {
-            score += 0.4f
+            score += 0.30f
         }
         
-        // Source diversity (20% weight)
+        // Source diversity (15% weight) - reduced from 20%
         if (wallpaper.source !in recentSources) {
-            score += 0.2f
+            score += 0.15f
         }
         
-        // Brightness diversity (40% weight)
+        // Brightness diversity (35% weight) - reduced from 40%
         val brightnessDiff = kotlin.math.abs(wallpaper.brightness - avgRecentBrightness)
         val brightnessDiversity = (brightnessDiff / 100f).coerceIn(0f, 1f)
-        score += 0.4f * brightnessDiversity
+        score += 0.35f * brightnessDiversity
+        
+        // Embedding diversity (20% weight) - NEW for MobileNetV4
+        // Higher when wallpaper is aesthetically different from recent ones
+        if (recentEmbeddings.isNotEmpty() && wallpaper.embedding.isNotEmpty()) {
+            val embeddingDiversity = calculateEmbeddingDiversity(
+                candidate = wallpaper.embedding,
+                recentEmbeddings = recentEmbeddings
+            )
+            score += 0.20f * embeddingDiversity
+        } else {
+            // If no embedding data, give neutral score for this component
+            score += 0.10f
+        }
         
         return score.coerceIn(0f, 1f)
+    }
+    
+    /**
+     * Calculates embedding-space diversity for MobileNetV4 1280D vectors.
+     * 
+     * Measures how aesthetically different the candidate is from recent wallpapers
+     * by computing average cosine distance in the embedding space.
+     * 
+     * @param candidate Candidate embedding vector (1280D)
+     * @param recentEmbeddings Recent wallpaper embeddings
+     * @return Diversity score (0.0-1.0), higher = more different
+     */
+    private fun calculateEmbeddingDiversity(
+        candidate: FloatArray,
+        recentEmbeddings: List<FloatArray>
+    ): Float {
+        if (recentEmbeddings.isEmpty() || candidate.isEmpty()) return 0.5f
+        
+        // Calculate average cosine distance from recent embeddings
+        // Distance = 1 - similarity, so higher distance = more diverse
+        var totalDistance = 0f
+        var validCount = 0
+        
+        for (recent in recentEmbeddings) {
+            if (recent.isEmpty()) continue
+            
+            val similarity = cosineSimilarity(candidate, recent)
+            val distance = 1f - similarity
+            totalDistance += distance
+            validCount++
+        }
+        
+        if (validCount == 0) return 0.5f
+        
+        // Average distance, normalized to 0-1
+        // Most embeddings have similarity 0.5-0.9, so distance 0.1-0.5
+        // Scale to make it more discriminative
+        val avgDistance = totalDistance / validCount
+        return (avgDistance * 2f).coerceIn(0f, 1f)
+    }
+    
+    /**
+     * Computes cosine similarity between two embedding vectors.
+     */
+    private fun cosineSimilarity(a: FloatArray, b: FloatArray): Float {
+        if (a.size != b.size || a.isEmpty()) return 0f
+        
+        var dotProduct = 0f
+        var normA = 0f
+        var normB = 0f
+        
+        for (i in a.indices) {
+            dotProduct += a[i] * b[i]
+            normA += a[i] * a[i]
+            normB += b[i] * b[i]
+        }
+        
+        val denominator = sqrt(normA) * sqrt(normB)
+        return if (denominator > 0f) dotProduct / denominator else 0f
     }
 }

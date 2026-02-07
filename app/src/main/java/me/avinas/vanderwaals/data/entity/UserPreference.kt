@@ -12,7 +12,7 @@ package me.avinas.vanderwaals.data.entity
  * (wallpaper duration).
  * 
  * @property userId User identifier (typically a single user per device)
- * @property preferenceVector 576-dimensional vector representing aesthetic preferences
+ * @property preferenceVector 1280-dimensional vector representing aesthetic preferences
  * @property feedbackCount Total number of explicit feedback events (likes + dislikes)
  * @property lastUpdated Timestamp of last preference update
  * @property mode Personalization mode ("personalized" or "auto")

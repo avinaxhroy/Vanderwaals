@@ -71,7 +71,8 @@ class WallpaperChangeWorker @AssistedInject constructor(
     private val processImplicitFeedbackUseCase: me.avinas.vanderwaals.domain.usecase.ProcessImplicitFeedbackUseCase,
     private val findCachedWallpaperUseCase: me.avinas.vanderwaals.domain.usecase.FindCachedWallpaperUseCase,
     private val networkStateTracker: NetworkStateTracker,
-    private val nextWallpaperCacheManager: me.avinas.vanderwaals.domain.NextWallpaperCacheManager
+    private val nextWallpaperCacheManager: me.avinas.vanderwaals.domain.NextWallpaperCacheManager,
+    private val wallpaperApplicator: WallpaperApplicator
 ) : CoroutineWorker(appContext, workerParams) {
     
     companion object {
@@ -683,141 +684,34 @@ class WallpaperChangeWorker @AssistedInject constructor(
     
     /**
      * Applies wallpaper file to the specified screen(s) with SmartCrop processing.
-     * 
-     * Uses a "try then verify" approach for live wallpaper detection:
-     * 1. Attempt to apply the wallpaper
-     * 2. Verify the change was successful
-     * 3. If failed, check if live wallpaper is blocking
+     * Delegates to WallpaperApplicator for actual application.
      * 
      * @param wallpaperFile File containing the wallpaper image
      * @param targetScreen Target screen: "home", "lock", or "both"
      * @return true if successfully applied, false otherwise
      */
     private suspend fun applyWallpaperToScreen(wallpaperFile: File, targetScreen: String): Boolean {
-        var originalBitmap: android.graphics.Bitmap? = null
-        var processedBitmap: android.graphics.Bitmap? = null
-        
-        return try {
-            val wallpaperManager = WallpaperManager.getInstance(applicationContext)
-            
-            // Use BitmapManager for safe bitmap loading with OOM protection
-            originalBitmap = me.avinas.vanderwaals.core.BitmapManager.loadBitmap(wallpaperFile)
-            
-            if (originalBitmap == null) {
-                Log.e(TAG, "Failed to decode wallpaper file")
-                return false
+        return when (val result = wallpaperApplicator.apply(wallpaperFile, targetScreen)) {
+            is WallpaperApplicator.ApplyResult.Success -> {
+                Log.d(TAG, "Successfully applied wallpaper with SmartCrop processing")
+                true
             }
-            
-            // CRITICAL: Use actual screen size for SmartCrop, not WallpaperManager's desired size
-            // WallpaperManager.desiredMinimumWidth/Height returns dimensions for SCROLLING wallpapers
-            // (e.g., 4800x2400 for a 1080x2400 screen). This causes preview/applied mismatch.
-            // Instead, we crop to actual screen size and let WallpaperManager handle scrolling.
-            val screenSize = me.avinas.vanderwaals.core.getDeviceScreenSize(applicationContext)
-            
-            // Apply SmartCrop to actual screen dimensions (matches preview)
-            processedBitmap = me.avinas.vanderwaals.core.SmartCrop.smartCropBitmap(
-                source = originalBitmap,
-                targetWidth = screenSize.width,
-                targetHeight = screenSize.height,
-                mode = me.avinas.vanderwaals.core.SmartCrop.CropMode.AUTO
-            )
-            
-            // CRITICAL FIX: Save the cropped bitmap to a file so preview can load the EXACT same image
-            // This guarantees preview and applied wallpaper are pixel-perfect identical
-            // Using PNG format for lossless quality preservation (no JPEG compression artifacts)
-            val croppedFile = File(wallpaperFile.parentFile, "${wallpaperFile.nameWithoutExtension}_cropped.png")
-            try {
-                croppedFile.outputStream().use { out ->
-                    processedBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
-                }
-                Log.d(TAG, "Saved cropped wallpaper to: ${croppedFile.absolutePath}")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to save cropped wallpaper", e)
-                // Continue anyway - we still have the bitmap in memory
+            is WallpaperApplicator.ApplyResult.DecodeFailed -> {
+                Log.e(TAG, "Failed to decode wallpaper: ${result.message}")
+                false
             }
-            
-            // Recycle original bitmap to save memory using BitmapManager
-            if (processedBitmap !== originalBitmap) {
-                me.avinas.vanderwaals.core.BitmapManager.recycleSafely(originalBitmap)
-                originalBitmap = null // Clear reference
+            is WallpaperApplicator.ApplyResult.BlockedByLiveWallpaper -> {
+                Log.e(TAG, "Wallpaper change blocked by live wallpaper: ${result.serviceName}")
+                false
             }
-            
-            when (targetScreen) {
-                TARGET_HOME -> {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                        wallpaperManager.setBitmap(
-                            processedBitmap,
-                            null,
-                            true,
-                            WallpaperManager.FLAG_SYSTEM
-                        )
-                    } else {
-                        wallpaperManager.setBitmap(processedBitmap)
-                    }
-                }
-                TARGET_LOCK -> {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                        wallpaperManager.setBitmap(
-                            processedBitmap,
-                            null,
-                            true,
-                            WallpaperManager.FLAG_LOCK
-                        )
-                    } else {
-                        // On older devices, just set system wallpaper
-                        wallpaperManager.setBitmap(processedBitmap)
-                    }
-                }
-                TARGET_BOTH -> {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                        // Set both home and lock screen
-                        wallpaperManager.setBitmap(
-                            processedBitmap,
-                            null,
-                            true,
-                            WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK
-                        )
-                    } else {
-                        wallpaperManager.setBitmap(processedBitmap)
-                    }
-                }
-                else -> {
-                    Log.e(TAG, "Invalid target screen: $targetScreen")
-                    processedBitmap.recycle()
-                    return false
-                }
+            is WallpaperApplicator.ApplyResult.InvalidTarget -> {
+                Log.e(TAG, "Invalid target screen: ${result.target}")
+                false
             }
-            
-            // Recycle processed bitmap after successful application
-            me.avinas.vanderwaals.core.BitmapManager.recycleSafely(processedBitmap)
-            processedBitmap = null // Clear reference
-            
-            // VERIFICATION: Check if wallpaper was actually applied
-            // Live wallpapers silently ignore setBitmap() calls, so we need to verify
-            // by checking if a live wallpaper is still active after our attempt
-            val wallpaperInfo = wallpaperManager.wallpaperInfo
-            if (wallpaperInfo != null) {
-                // A live wallpaper is still active - our setBitmap was ignored
-                val (isBlocking, serviceName) = me.avinas.vanderwaals.core.LiveWallpaperDetector.detectBlockingAfterFailure(applicationContext)
-                if (isBlocking) {
-                    Log.e(TAG, "Wallpaper change blocked by live wallpaper: $serviceName")
-                    return false
-                }
+            is WallpaperApplicator.ApplyResult.Error -> {
+                Log.e(TAG, "Error applying wallpaper", result.exception)
+                false
             }
-            
-            // Record wallpaper change for engagement tracking
-            engagementTracker.recordWallpaperChange()
-            
-            Log.d(TAG, "Successfully applied wallpaper with SmartCrop processing")
-            true
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Error applying wallpaper", e)
-            false
-        } finally {
-            // Ensure bitmaps are recycled even if exception occurs
-            me.avinas.vanderwaals.core.BitmapManager.recycleSafely(originalBitmap)
-            me.avinas.vanderwaals.core.BitmapManager.recycleSafely(processedBitmap)
         }
     }
     

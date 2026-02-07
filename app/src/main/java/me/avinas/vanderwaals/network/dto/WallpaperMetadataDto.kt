@@ -11,9 +11,10 @@ import me.avinas.vanderwaals.data.entity.WallpaperMetadata
  * The manifest is generated weekly by GitHub Actions curation pipeline
  * and includes pre-computed embeddings and metadata for all wallpapers.
  * 
- * **Supports Two Embedding Formats:**
- * 1. **Full embeddings (v1)**: Standard float array
- * 2. **Quantized embeddings (v2)**: Base64-encoded int8 with min/max for dequantization
+ * **Supports Three Embedding Formats:**
+ * 1. **Full embeddings (v1)**: Standard float array (576D MobileNetV3)
+ * 2. **Quantized embeddings (v2)**: Base64-encoded int8 576D with min/max for dequantization
+ * 3. **Quantized embeddings (v3)**: Base64-encoded int8 1280D (MobileNetV4-Conv-Small)
  * 
  * **JSON Structure (v2 - quantized):**
  * ```json
@@ -43,7 +44,7 @@ import me.avinas.vanderwaals.data.entity.WallpaperMetadata
  * @property colors Hex color palette extracted during curation (5 dominant colors)
  * @property brightness Brightness level (0-100) for contextual filtering
  * @property contrast Contrast level (0-100)
- * @property embedding Full 576-dimensional embedding (legacy v1 format, optional)
+ * @property embedding Full embedding array (576D legacy v1 or 1280D v3, optional)
  * @property e Base64-encoded quantized embedding (v2 format, optional)
  * @property eMin Minimum value for dequantization (v2 format)
  * @property eMax Maximum value for dequantization (v2 format)
@@ -78,21 +79,22 @@ data class WallpaperMetadataDto(
 )
 
 /**
- * Gets the embedding as a FloatArray, handling both v1 (full) and v2 (quantized) formats.
+ * Gets the embedding as a FloatArray, handling v1 (full), v2 (quantized 576D), and v3 (quantized 1280D) formats.
  * 
- * If quantized format is available (e, eMin, eMax), dequantizes it.
- * Otherwise falls back to the full embedding.
+ * Embedding dimension is determined dynamically from the data:
+ * - Quantized format: dimension equals Base64-decoded byte count
+ * - Full format: dimension equals embedding list size
  * 
- * @return 576-dimensional FloatArray, or empty array if no embedding available
+ * @return FloatArray with dimension matching the manifest version, or empty array if no embedding available
  */
 fun WallpaperMetadataDto.getEmbeddingArray(): FloatArray {
-    // Try quantized format first (v2)
+    // Try quantized format first (v2/v3) - dimension is determined by Base64 byte count
     if (e != null && eMin != null && eMax != null) {
         return dequantizeEmbedding(e, eMin, eMax)
     }
     
-    // Fall back to full embedding (v1)
-    return embedding?.toFloatArray() ?: FloatArray(576)
+    // Fall back to full embedding (v1) - dimension is determined by list size
+    return embedding?.toFloatArray() ?: floatArrayOf()  // Empty signals missing, not 576D assumed
 }
 
 /**
@@ -118,8 +120,8 @@ private fun dequantizeEmbedding(base64Data: String, min: Float, max: Float): Flo
             min + (byteValue / 255f) * (max - min)
         }
     } catch (e: Exception) {
-        // Fallback to empty embedding if dequantization fails
-        FloatArray(576)
+        // Return empty array to signal dequantization failure (don't assume dimension)
+        floatArrayOf()
     }
 }
 

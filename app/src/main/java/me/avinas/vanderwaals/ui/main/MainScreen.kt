@@ -97,6 +97,7 @@ import me.avinas.vanderwaals.ui.theme.*
 fun MainScreen(
     onNavigateToHistory: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onNavigateToOnboarding: () -> Unit = {},  // For embedding migration re-personalize
     viewModel: MainViewModel = hiltViewModel()
 ) {
     val currentWallpaper by viewModel.currentWallpaper.collectAsState()
@@ -145,11 +146,19 @@ fun MainScreen(
         val snackbarHostState = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
         val errorMessage by viewModel.errorMessage.collectAsState()
+        val successMessage by viewModel.successMessage.collectAsState()
 
         LaunchedEffect(errorMessage) {
             errorMessage?.let {
                 snackbarHostState.showSnackbar(it)
                 viewModel.clearErrorMessage()
+            }
+        }
+        
+        LaunchedEffect(successMessage) {
+            successMessage?.let {
+                snackbarHostState.showSnackbar(it)
+                viewModel.clearSuccessMessage()
             }
         }
         // Full-screen wallpaper background with crossfade animation
@@ -658,6 +667,31 @@ fun MainScreen(
                 onDismiss = {
                     viewModel.dismissInstructionsDialog()
                 }
+            )
+        }
+        
+        // Embedding Migration Dialog (legacy 576D -> 1280D MobileNetV4)
+        val showEmbeddingMigrationDialog by viewModel.showEmbeddingMigrationDialog.collectAsState()
+        val totalLikes by viewModel.totalLikes.collectAsState()
+        
+        if (showEmbeddingMigrationDialog) {
+            me.avinas.vanderwaals.ui.components.EmbeddingMigrationDialog(
+                onRePersonalize = { 
+                    viewModel.onRePersonalize(onNavigateToOnboarding)
+                },
+                onAutoMode = { 
+                    viewModel.onAutoMode() 
+                },
+                onRemindLater = { 
+                    viewModel.onRemindLater() 
+                },
+                onDontShowAgain = {
+                    viewModel.onDontShowAgain()
+                },
+                onDismiss = { 
+                    viewModel.onRemindLater() 
+                },
+                totalLikes = totalLikes
             )
         }
 

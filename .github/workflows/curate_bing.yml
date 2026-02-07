@@ -18,11 +18,6 @@ on:
         required: false
         type: boolean
         default: false
-      skip_release:
-        description: 'Skip creating GitHub release'
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   curate:
@@ -31,7 +26,7 @@ jobs:
     timeout-minutes: 360  # 6 hour timeout for full archive
     
     permissions:
-      contents: write  # Required for committing and creating releases
+      contents: write  # Required for committing
     
     steps:
       - name: Checkout repository
@@ -80,27 +75,27 @@ jobs:
           # Run curation
           python curate_bing_wallpapers.py $ARGS
           
-          # Set output variables for lite manifest
-          if [[ -f "curation_output/bing_manifest_lite.json" ]]; then
-            LITE_COUNT=$(jq '.total_wallpapers' curation_output/bing_manifest_lite.json)
+          # Set output variables for lite manifest (v2)
+          if [[ -f "curation_output/bing_manifest_lite_v2.json" ]]; then
+            LITE_COUNT=$(jq '.total_wallpapers' curation_output/bing_manifest_lite_v2.json)
             echo "lite_count=$LITE_COUNT" >> $GITHUB_OUTPUT
             
-            LITE_SIZE=$(du -h curation_output/bing_manifest_lite.json | cut -f1)
+            LITE_SIZE=$(du -h curation_output/bing_manifest_lite_v2.json | cut -f1)
             echo "lite_size=$LITE_SIZE" >> $GITHUB_OUTPUT
             
-            LITE_COMPRESSED=$(du -h curation_output/bing_manifest_lite.json.gz | cut -f1)
+            LITE_COMPRESSED=$(du -h curation_output/bing_manifest_lite_v2.json.gz | cut -f1)
             echo "lite_compressed=$LITE_COMPRESSED" >> $GITHUB_OUTPUT
           fi
           
-          # Set output variables for full manifest
-          if [[ -f "curation_output/bing_manifest_full.json" ]]; then
-            FULL_COUNT=$(jq '.total_wallpapers' curation_output/bing_manifest_full.json)
+          # Set output variables for full manifest (v2)
+          if [[ -f "curation_output/bing_manifest_full_v2.json" ]]; then
+            FULL_COUNT=$(jq '.total_wallpapers' curation_output/bing_manifest_full_v2.json)
             echo "full_count=$FULL_COUNT" >> $GITHUB_OUTPUT
             
-            FULL_SIZE=$(du -h curation_output/bing_manifest_full.json | cut -f1)
+            FULL_SIZE=$(du -h curation_output/bing_manifest_full_v2.json | cut -f1)
             echo "full_size=$FULL_SIZE" >> $GITHUB_OUTPUT
             
-            FULL_COMPRESSED=$(du -h curation_output/bing_manifest_full.json.gz | cut -f1)
+            FULL_COMPRESSED=$(du -h curation_output/bing_manifest_full_v2.json.gz | cut -f1)
             echo "full_compressed=$FULL_COMPRESSED" >> $GITHUB_OUTPUT
           fi
       
@@ -114,7 +109,7 @@ jobs:
         run: |
           cd scripts/curation_output
           
-          for manifest in bing_manifest_lite.json bing_manifest_full.json; do
+          for manifest in bing_manifest_lite_v2.json bing_manifest_full_v2.json; do
             if [[ -f "$manifest" ]]; then
               echo "Validating $manifest..."
               
@@ -128,16 +123,16 @@ jobs:
               jq -e '.embedding_dim' "$manifest" > /dev/null || { echo "Missing embedding_dim"; exit 1; }
               jq -e '.wallpapers' "$manifest" > /dev/null || { echo "Missing wallpapers array"; exit 1; }
               
-              # Validate embedding dimensions
+              # Validate embedding dimensions (MobileNetV4-Conv-Small = 1280D)
               EMBEDDING_DIM=$(jq '.embedding_dim' "$manifest")
-              if [[ "$EMBEDDING_DIM" != "576" ]]; then
-                echo "Invalid embedding dimension: $EMBEDDING_DIM (expected 576)"
+              if [[ "$EMBEDDING_DIM" != "1280" ]]; then
+                echo "Invalid embedding dimension: $EMBEDDING_DIM (expected 1280)"
                 exit 1
               fi
               
               # Check first wallpaper has correct structure
               FIRST_EMBEDDING_LEN=$(jq '.wallpapers[0].embedding | length' "$manifest")
-              if [[ "$FIRST_EMBEDDING_LEN" != "576" ]]; then
+              if [[ "$FIRST_EMBEDDING_LEN" != "1280" ]]; then
                 echo "First wallpaper has invalid embedding length: $FIRST_EMBEDDING_LEN"
                 exit 1
               fi
@@ -151,18 +146,18 @@ jobs:
           # Create assets directory if it doesn't exist
           mkdir -p app/src/main/assets
           
-          # Copy lite manifest
-          if [[ -f "scripts/curation_output/bing_manifest_lite.json" ]]; then
-            cp scripts/curation_output/bing_manifest_lite.json app/src/main/assets/
-            cp scripts/curation_output/bing_manifest_lite.json.gz app/src/main/assets/
-            echo "✓ Copied lite manifest"
+          # Copy lite manifest (v2)
+          if [[ -f "scripts/curation_output/bing_manifest_lite_v2.json" ]]; then
+            cp scripts/curation_output/bing_manifest_lite_v2.json app/src/main/assets/
+            cp scripts/curation_output/bing_manifest_lite_v2.json.gz app/src/main/assets/
+            echo "✓ Copied lite manifest v2"
           fi
           
-          # Copy full manifest
-          if [[ -f "scripts/curation_output/bing_manifest_full.json" ]]; then
-            cp scripts/curation_output/bing_manifest_full.json app/src/main/assets/
-            cp scripts/curation_output/bing_manifest_full.json.gz app/src/main/assets/
-            echo "✓ Copied full manifest"
+          # Copy full manifest (v2)
+          if [[ -f "scripts/curation_output/bing_manifest_full_v2.json" ]]; then
+            cp scripts/curation_output/bing_manifest_full_v2.json app/src/main/assets/
+            cp scripts/curation_output/bing_manifest_full_v2.json.gz app/src/main/assets/
+            echo "✓ Copied full manifest v2"
           fi
       
       - name: Commit updated manifests
@@ -171,7 +166,7 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          git add -f app/src/main/assets/bing_manifest*.json*
+          git add -f app/src/main/assets/bing_manifest*_v2.json*
           
           # Check if there are changes
           if git diff --staged --quiet; then
@@ -183,9 +178,9 @@ jobs:
             FULL_COUNT="${{ steps.curate.outputs.full_count }}"
             
             if [[ "${{ github.event.inputs.test_mode }}" == "true" ]]; then
-              COMMIT_MSG="chore: update Bing manifests (TEST RUN) [skip ci]"
+              COMMIT_MSG="chore: update Bing manifests v2 (TEST RUN) [skip ci]"
             else
-              COMMIT_MSG="chore: update Bing manifests (lite: ${LITE_COUNT}, full: ${FULL_COUNT}) [skip ci]"
+              COMMIT_MSG="chore: update Bing manifests v2 (lite: ${LITE_COUNT}, full: ${FULL_COUNT}) [skip ci]"
             fi
             
             git commit -m "$COMMIT_MSG"
@@ -200,55 +195,17 @@ jobs:
         with:
           name: bing-manifest-artifacts
           path: |
-            scripts/curation_output/bing_manifest_lite.json
-            scripts/curation_output/bing_manifest_lite.json.gz
-            scripts/curation_output/bing_manifest_full.json
-            scripts/curation_output/bing_manifest_full.json.gz
+            scripts/curation_output/bing_manifest_lite_v2.json
+            scripts/curation_output/bing_manifest_lite_v2.json.gz
+            scripts/curation_output/bing_manifest_full_v2.json
+            scripts/curation_output/bing_manifest_full_v2.json.gz
             scripts/curation_output/bing_curation.log
           retention-days: 30
-      
-      - name: Create GitHub Release
-        if: |
-          github.event_name == 'schedule' && 
-          steps.commit.outputs.has_changes == 'true' &&
-          github.event.inputs.skip_release != 'true'
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: bing-manifest-${{ github.run_number }}
-          name: Bing Wallpaper Manifest - ${{ github.run_number }}
-          body: |
-            ## Bing Wallpaper Curation
-            
-            **Lite Manifest (Last 2 Years):**
-            - Wallpapers: ${{ steps.curate.outputs.lite_count }}
-            - Size: ${{ steps.curate.outputs.lite_size }}
-            - Compressed: ${{ steps.curate.outputs.lite_compressed }}
-            
-            **Full Manifest (2009-Present):**
-            - Wallpapers: ${{ steps.curate.outputs.full_count }}
-            - Size: ${{ steps.curate.outputs.full_size }}
-            - Compressed: ${{ steps.curate.outputs.full_compressed }}
-            
-            ### CDN Access
-            Lite manifest (recommended):
-            ```
-            https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/app/src/main/assets/bing_manifest_lite.json.gz
-            ```
-            
-            Full manifest:
-            ```
-            https://cdn.jsdelivr.net/gh/${{ github.repository }}@main/app/src/main/assets/bing_manifest_full.json.gz
-            ```
-            
-            ---
-            *Generated by GitHub Actions*
-          draft: false
-          prerelease: false
 
       - name: Post summary
         if: always()
         run: |
-          echo "## Bing Curation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Bing Curation Summary (v2 - MobileNetV4)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           if [[ "${{ steps.curate.outcome }}" == "success" ]]; then
@@ -256,7 +213,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             
             if [[ -n "${{ steps.curate.outputs.lite_count }}" ]]; then
-              echo "### Lite Manifest (Last 2 Years)" >> $GITHUB_STEP_SUMMARY
+              echo "### Lite Manifest v2 (Last 2 Years)" >> $GITHUB_STEP_SUMMARY
               echo "- 📊 **Wallpapers:** ${{ steps.curate.outputs.lite_count }}" >> $GITHUB_STEP_SUMMARY
               echo "- 📦 **Size:** ${{ steps.curate.outputs.lite_size }}" >> $GITHUB_STEP_SUMMARY
               echo "- 🗜️ **Compressed:** ${{ steps.curate.outputs.lite_compressed }}" >> $GITHUB_STEP_SUMMARY
@@ -264,7 +221,7 @@ jobs:
             fi
             
             if [[ -n "${{ steps.curate.outputs.full_count }}" ]]; then
-              echo "### Full Manifest (2009-Present)" >> $GITHUB_STEP_SUMMARY
+              echo "### Full Manifest v2 (2009-Present)" >> $GITHUB_STEP_SUMMARY
               echo "- 📊 **Wallpapers:** ${{ steps.curate.outputs.full_count }}" >> $GITHUB_STEP_SUMMARY
               echo "- 📦 **Size:** ${{ steps.curate.outputs.full_size }}" >> $GITHUB_STEP_SUMMARY
               echo "- 🗜️ **Compressed:** ${{ steps.curate.outputs.full_compressed }}" >> $GITHUB_STEP_SUMMARY
@@ -273,6 +230,10 @@ jobs:
             echo "❌ **Status:** Failed" >> $GITHUB_STEP_SUMMARY
           fi
           
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Model Info" >> $GITHUB_STEP_SUMMARY
+          echo "- **Model:** MobileNetV4-Conv-Small" >> $GITHUB_STEP_SUMMARY
+          echo "- **Embeddings:** 1280D (quantized int8)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Test Mode" >> $GITHUB_STEP_SUMMARY
           if [[ "${{ github.event.inputs.test_mode }}" == "true" ]]; then

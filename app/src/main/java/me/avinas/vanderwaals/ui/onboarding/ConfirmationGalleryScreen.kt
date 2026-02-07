@@ -43,6 +43,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import me.avinas.vanderwaals.data.entity.WallpaperMetadata
 import me.avinas.vanderwaals.ui.theme.components.*
+import me.avinas.vanderwaals.ui.theme.LiquidGlassBackground
 
 @Composable
 fun ConfirmationGalleryScreen(
@@ -73,19 +74,18 @@ fun ConfirmationGalleryScreen(
         }
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = Color.Transparent
+    LiquidGlassBackground {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            containerColor = Color.Transparent
     ) { paddingValues ->
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
             // Premium Background
-            PremiumBackground(
-                modifier = Modifier.fillMaxSize(),
-                isDark = isDark
-            )
+            // Premium Background removed
+
 
             Column(
                 modifier = Modifier
@@ -220,6 +220,7 @@ fun ConfirmationGalleryScreen(
             }
         }
     }
+    }
 }
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -231,7 +232,7 @@ fun WallpaperRatingCard(
 ) {
     val isDark = isSystemInDarkTheme()
     
-    GlassCard(
+    LiquidGlassCard(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(0.65f),

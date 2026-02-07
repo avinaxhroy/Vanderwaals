@@ -23,7 +23,7 @@ import javax.inject.Singleton
  * 
  * Manifest contains pre-computed data from GitHub Actions curation pipeline:
  * - Download URLs (GitHub raw or jsDelivr CDN)
- * - MobileNetV3 embeddings (576 floats per wallpaper)
+ * - MobileNetV4 embeddings (1280 floats per wallpaper)
  * - Color palettes (5 colors per wallpaper)
  * - Categories and brightness levels
  * - Source attribution

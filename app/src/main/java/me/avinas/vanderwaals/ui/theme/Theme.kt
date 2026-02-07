@@ -12,6 +12,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.layout.ContentScale
 
 /**
  * Vanderwaals Modern Dark Color Scheme
@@ -236,3 +238,49 @@ fun VanderwaalsThemePreview(
         content = content
     )
 }
+
+/**
+ * A container that applies the "Liquid Glass" pre-rendered background.
+ * This should be used as the root container for secondary screens (Settings, Onboarding, etc.).
+ * 
+ * It automatically selects the correct asset (Light vs Dark) based on the current theme.
+ * When LiquidGlassProvider is present, uses dynamically generated backgrounds with
+ * blur, distortion, and chromatic aberration effects (Smart Launcher style).
+ * Falls back to static assets when dynamic backgrounds are not available.
+ */
+@Composable
+fun LiquidGlassBackground(
+    modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier,
+    content: @Composable () -> Unit
+) {
+    val glassState = me.avinas.vanderwaals.ui.theme.glass.LocalLiquidGlassState.current
+    val isDark = LocalThemeIsDark.current
+
+    androidx.compose.foundation.layout.Box(modifier = modifier.fillMaxSize()) {
+        // Use dynamic background if available and matches current theme
+        if (glassState != null && glassState.isReady && glassState.isDarkMode == isDark) {
+            // Use dynamically generated liquid glass background
+            androidx.compose.foundation.Image(
+                bitmap = glassState.background,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = androidx.compose.ui.Modifier.fillMaxSize()
+            )
+        } else {
+            // Fallback to static assets
+            val backgroundRes = if (isDark) {
+                me.avinas.vanderwaals.R.drawable.bg_liquid_glass_dark
+            } else {
+                me.avinas.vanderwaals.R.drawable.bg_liquid_glass_light
+            }
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(id = backgroundRes),
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = androidx.compose.ui.Modifier.fillMaxSize()
+            )
+        }
+        content()
+    }
+}
+

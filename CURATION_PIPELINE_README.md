@@ -133,10 +133,10 @@ Complete manifest with all wallpaper metadata:
 
 ```json
 {
-  "version": 1,
+  "version": 3,
   "last_updated": "2025-11-16T02:00:00Z",
-  "model_version": "mobilenet_v3_small",
-  "embedding_dim": 1024,
+  "model_version": "mobilenet_v4_conv_small",
+  "embedding_dim": 1280,
   "total_wallpapers": 6234,
   "wallpapers": [
     {

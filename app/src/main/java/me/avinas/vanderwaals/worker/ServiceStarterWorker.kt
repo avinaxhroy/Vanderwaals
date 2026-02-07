@@ -79,16 +79,19 @@ class ServiceStarterWorker(
             Log.d(TAG, "✅ WallpaperMonitorService started successfully via deferred worker")
             Result.success()
             
-        } catch (e: android.app.ForegroundServiceStartNotAllowedException) {
-            // This can still happen if the device is in a restricted state
-            // Retry with backoff - the service will eventually start when conditions allow
-            Log.w(TAG, "⚠️ ForegroundServiceStartNotAllowedException - will retry", e)
-            Result.retry()
-            
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to start WallpaperMonitorService", e)
-            // Don't retry on other exceptions - log and give up
-            Result.failure()
+            // Handle ForegroundServiceStartNotAllowedException on API 31+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && 
+                e::class.java.simpleName == "ForegroundServiceStartNotAllowedException") {
+                // This can still happen if the device is in a restricted state
+                // Retry with backoff - the service will eventually start when conditions allow
+                Log.w(TAG, "⚠️ ForegroundServiceStartNotAllowedException - will retry", e)
+                Result.retry()
+            } else {
+                Log.e(TAG, "❌ Failed to start WallpaperMonitorService", e)
+                // Don't retry on other exceptions - log and give up
+                Result.failure()
+            }
         }
     }
 }

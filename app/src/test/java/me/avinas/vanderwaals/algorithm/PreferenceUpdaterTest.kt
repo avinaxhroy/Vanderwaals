@@ -142,7 +142,7 @@ class PreferenceUpdaterTest {
 
     @Test
     fun testVerySmallVector() {
-        val smallVector = FloatArray(576) { 1e-10f }
+        val smallVector = FloatArray(1280) { 1e-10f }
         val normalized = normalize(smallVector)
         
         assertTrue(isNormalized(normalized))
@@ -182,22 +182,22 @@ class PreferenceUpdaterTest {
     }
 
     @Test
-    fun test576Dimensions() {
-        val preferenceVector = FloatArray(576) { i -> (i % 10).toFloat() / 10f }
+    fun test1280Dimensions() {
+        val preferenceVector = FloatArray(1280) { i -> (i % 10).toFloat() / 10f }
         val normalized = normalize(preferenceVector)
-        val targetEmbedding = FloatArray(576) { i -> ((i + 5) % 10).toFloat() / 10f }
+        val targetEmbedding = FloatArray(1280) { i -> ((i + 5) % 10).toFloat() / 10f }
         
         val updated = updateWithPositiveFeedback(normalized, targetEmbedding, 0.1f)
         
-        assertEquals(576, updated.size)
+        assertEquals(1280, updated.size)
         assertTrue(isNormalized(updated))
     }
 
     @Test
     fun testPerformance() {
-        val preferenceVector = FloatArray(576) { it.toFloat() / 576f }
+        val preferenceVector = FloatArray(1280) { it.toFloat() / 1280f }
         val normalized = normalize(preferenceVector)
-        val targetEmbedding = FloatArray(576) { (it + 100).toFloat() / 576f }
+        val targetEmbedding = FloatArray(1280) { (it + 100).toFloat() / 1280f }
         
         val startTime = System.nanoTime()
         

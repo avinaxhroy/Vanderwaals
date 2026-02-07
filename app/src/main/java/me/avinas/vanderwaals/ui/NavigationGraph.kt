@@ -194,6 +194,10 @@ fun VanderwaalsNavGraph(
                 },
                 onNavigateToSettings = {
                     navController.navigate(Screen.Settings.route)
+                },
+                onNavigateToOnboarding = {
+                    // Re-personalize flow for embedding migration
+                    navController.navigate(Screen.UploadWallpaper.route)
                 }
             )
         }

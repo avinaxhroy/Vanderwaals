@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import me.avinas.vanderwaals.ui.theme.LiquidGlassBackground
 
 /**
  * Initial Sync Screen - First screen shown to new users.
@@ -57,6 +58,7 @@ fun InitialSyncScreen(
 ) {
     val syncState by viewModel.syncState.collectAsState()
     val wallpaperCount by viewModel.wallpaperCount.collectAsState()
+    val isDark = isSystemInDarkTheme()
     
     // Auto-start sync on first composition
     LaunchedEffect(Unit) {
@@ -82,17 +84,17 @@ fun InitialSyncScreen(
         label = "cloud_offset"
     )
     
-    Scaffold { paddingValues ->
+    LiquidGlassBackground {
+        Scaffold(
+            containerColor = Color.Transparent,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
         ) {
-            // Premium Background
-            val isDark = isSystemInDarkTheme()
-            me.avinas.vanderwaals.ui.theme.components.PremiumBackground(
-                modifier = Modifier.fillMaxSize(),
-                isDark = isDark
-            )
+            // Premium Background removed
+
 
             Box(
                 modifier = Modifier
@@ -102,7 +104,7 @@ fun InitialSyncScreen(
                     .padding(vertical = 32.dp),
                 contentAlignment = Alignment.Center
             ) {
-                me.avinas.vanderwaals.ui.theme.components.GlassCard(
+                me.avinas.vanderwaals.ui.theme.components.LiquidGlassCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(24.dp),
@@ -278,5 +280,6 @@ fun InitialSyncScreen(
                 }
             }
         }
+    }
     }
 }

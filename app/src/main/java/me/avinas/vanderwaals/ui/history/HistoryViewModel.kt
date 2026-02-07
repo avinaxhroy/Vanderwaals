@@ -89,7 +89,7 @@ class HistoryViewModel @Inject constructor(
                     HistoryUiState.Loading
                 } else {
                     // PERFORMANCE OPTIMIZATION: Use summaries without embeddings for UI display
-                    // Embeddings (576 floats) are only needed for feedback, not UI rendering
+                    // Embeddings (1280 floats) are only needed for feedback, not UI rendering
                     // This reduces memory usage by ~87% (from ~2.3 KB to ~0.3 KB per wallpaper)
                     val wallpaperMap = wallpapers.associateBy { it.id }
                     
@@ -149,7 +149,7 @@ class HistoryViewModel @Inject constructor(
                     ?: return@launch
                 
                 // CRITICAL: Load full wallpaper with embedding for preference learning
-                // UI uses summaries, but feedback requires the 576-dimensional embedding
+                // UI uses summaries, but feedback requires the 1280-dimensional embedding
                 val wallpaper = wallpaperRepository.getAllWallpapers().first()
                     .find { it.id == history.wallpaperId }
                     ?: return@launch

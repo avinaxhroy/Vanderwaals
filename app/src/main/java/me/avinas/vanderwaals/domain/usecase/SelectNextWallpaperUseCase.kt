@@ -68,13 +68,12 @@ class SelectNextWallpaperUseCase @Inject constructor(
     private val colorPreferenceRepository: me.avinas.vanderwaals.data.repository.ColorPreferenceRepository,
     private val compositionPreferenceRepository: me.avinas.vanderwaals.data.repository.CompositionPreferenceRepository,
     private val similarityCalculator: SimilarityCalculator,
+    private val wallpaperScorer: me.avinas.vanderwaals.algorithm.WallpaperScorer,
     private val settingsDataStore: me.avinas.vanderwaals.data.datastore.SettingsDataStore,
     private val dailyPlaylistManager: me.avinas.vanderwaals.data.repository.DailyPlaylistManager,
     private val wallpaperHistoryDao: WallpaperHistoryDao,
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) {
-    private val colorAnalyzer = me.avinas.vanderwaals.algorithm.ColorAnalyzer
-    private val compositionAnalyzer = me.avinas.vanderwaals.algorithm.CompositionAnalyzer
     private val explorationStrategy = me.avinas.vanderwaals.algorithm.ExplorationStrategy()
     
     // YouTube-like recommender for more engaging, diverse recommendations
@@ -411,13 +410,13 @@ class SelectNextWallpaperUseCase @Inject constructor(
                         }
                         
                         // CONTENT BOOST: Category boost OR color boost as fallback
-                        val categoryScore = getContentBoost(wallpaper)
+                        val categoryScore = wallpaperScorer.getContentBoost(wallpaper)
                         
                         // COMPOSITION BOOST: Advanced layout/composition preference matching
-                        val compositionScore = getCompositionBoost(wallpaper.id)
+                        val compositionScore = wallpaperScorer.getCompositionBoost(wallpaper.id)
                         
                         // TEMPORAL DIVERSITY BOOST: Prevent repetition, explore new categories
-                        val diversityBoost = getTemporalDiversityBoost(
+                        val diversityBoost = wallpaperScorer.getTemporalDiversityBoost(
                             category = wallpaper.category,
                             recentCategories = recentCategoriesList
                         )
@@ -619,22 +618,31 @@ class SelectNextWallpaperUseCase @Inject constructor(
         return explorationPool.random(random).wallpaper
     }
     
+    // ========================================
+    // SCORING METHODS EXTRACTED TO WallpaperScorer
+    // ========================================
+    // The following methods have been moved to me.avinas.vanderwaals.algorithm.WallpaperScorer:
+    // - getContentBoost(), getCategoryBoost(), getColorBoost(), getCompositionBoost()
+    // - getTemporalDiversityBoost()
+    // - calculatePopularityScore(), calculateQualityScore()
+    // - colorDistance(), parseHexToColor(), calculateColorSimilarity()
+    //
+    // This improves:
+    // - Testability: Scoring logic can be unit tested independently
+    // - Reusability: Other components (search, similar wallpapers) can reuse scoring
+    // - Maintainability: ~500 lines removed from this already large file
+    // ========================================
+    
     /**
      * Selects wallpaper for exploitation phase (best match).
      * Checks category diversity to avoid repetition.
-     * 
-     * @param rankedWallpapers All candidates sorted by similarity
-     * @param recentCategories Recently shown categories
-     * @return Selected wallpaper
      */
     private fun selectForExploitation(
         rankedWallpapers: List<RankedWallpaper>,
         recentCategories: Set<String>,
         random: Random
     ): WallpaperMetadata {
-        // Try to find best match from different category
         if (recentCategories.isNotEmpty()) {
-            // Look through top 10 matches for different category
             val topCandidates = rankedWallpapers.take(10)
             val differentCategory = topCandidates
                 .firstOrNull { it.wallpaper.category !in recentCategories }
@@ -643,365 +651,11 @@ class SelectNextWallpaperUseCase @Inject constructor(
                 return differentCategory.wallpaper
             }
         }
-        
-        // Fallback: Just use best match (may repeat category)
         return rankedWallpapers.first().wallpaper
     }
     
     /**
-     * Calculates temporal diversity boost to prevent category repetition and explore new categories.
-     * 
-     * **Recency Penalty:**
-     * Penalizes categories that were recently shown to avoid monotony:
-     * - Each occurrence in recent history (last 3 wallpapers): -5% penalty
-     * - Example: Category shown 2 times recently = -10% penalty
-     * 
-     * **Exploration Boost:**
-     * Boosts categories that are underexplored to increase variety:
-     * - New categories (never seen): +5% boost
-     * - Rarely seen categories (< 3 views): +5% boost
-     * - Well-explored categories (≥ 3 views): No boost
-     * 
-     * **Result Range:**
-     * From -0.15 (shown 3 times recently) to +0.05 (new category)
-     * 
-     * **Benefits:**
-     * - Prevents showing same category back-to-back
-     * - Encourages variety in recommendations
-     * - Discovers user preferences for new categories
-     * - Balances exploitation (known preferences) with exploration (new content)
-     * 
-     * @param category Category name to evaluate
-     * @param recentCategories List of categories from last 3 wallpapers
-     * @return Boost value from -0.15 to +0.05
-     */
-    private suspend fun getTemporalDiversityBoost(
-        category: String,
-        recentCategories: List<String>
-    ): Float {
-        return try {
-            // RECENCY PENALTY: Penalize if category shown recently
-            // Count how many times this category appears in recent history
-            val recentCount = recentCategories.count { it == category }
-            val recencyPenalty = recentCount * -0.05f  // -5% per recent occurrence
-            
-            // EXPLORATION BOOST: Boost if category underexplored
-            val categoryPref = categoryPreferenceRepository.getByCategory(category)
-            val exploreBoost = if (categoryPref == null || categoryPref.views < 3) {
-                0.05f  // +5% for new/underexplored categories
-            } else {
-                0f  // No boost for well-explored categories
-            }
-            
-            val totalBoost = recencyPenalty + exploreBoost
-            
-            // NOTE: Logging removed - was causing log spam for every wallpaper
-            
-            return totalBoost
-        } catch (e: Exception) {
-            android.util.Log.e("SelectNextWallpaper", "Error calculating temporal diversity boost", e)
-            return 0f
-        }
-    }
-    
-    /**
-     * Calculates category-based boost for wallpaper ranking.
-     * 
-     * Uses user's feedback history for each category to boost/penalize wallpapers:
-     * - Liked categories get positive boost (up to +0.15)
-     * - Disliked categories get negative penalty (down to -0.15)
-     * - New/neutral categories get no adjustment (0.0)
-     * 
-     * Formula: categoryScore × 0.15
-     * Where categoryScore = (likes - 2×dislikes) / (likes + dislikes + 1)
-     * 
-     * This ensures the algorithm respects BOTH:
-     * - Visual similarity (85% weight via embeddings)
-     * - Category preferences (15% weight via explicit feedback)
-     * 
-     * @param category Category name (e.g., "nature", "minimal")
-     * @return Boost value from -0.15 (strongly disliked) to +0.15 (strongly liked)
-     */
-    private suspend fun getCategoryBoost(category: String): Float {
-        return try {
-            val categoryPref = categoryPreferenceRepository.getByCategory(category)
-            if (categoryPref == null) {
-                // No data yet - neutral score
-                return 0f
-            }
-            
-            // Calculate category score (-1.0 to +1.0)
-            val score = categoryPref.calculateScore()
-            
-            // Apply 15% weight to category preference
-            // This balances embedding similarity (85%) with category feedback (15%)
-            val boost = score * 0.15f
-            
-            // NOTE: Logging removed - was causing log spam for every wallpaper
-            
-            return boost
-        } catch (e: Exception) {
-            android.util.Log.e("SelectNextWallpaper", "Error calculating category boost", e)
-            return 0f
-        }
-    }
-
-    /**
-     * Calculates content-based boost with category fallback to color similarity.
-     * 
-     * **Strategy:**
-     * - If wallpaper has category: use category feedback boost (15% weight)
-     * - If wallpaper has no category: use color similarity boost (10% weight)
-     * 
-     * This ensures personalization works even for uncategorized wallpapers by
-     * using color palette matching as a fallback mechanism.
-     * 
-     * **Color Similarity:**
-     * - Extract top 3 colors from wallpaper palette
-     * - Compare with user's liked colors using RGB Euclidean distance
-     * - Apply 10% weight (lower than category to reflect lower confidence)
-     * 
-     * @param wallpaper Wallpaper to calculate boost for
-     * @return Boost value from -0.15 to +0.15 (category) or -0.10 to +0.10 (color)
-     */
-    private suspend fun getContentBoost(wallpaper: WallpaperMetadata): Float {
-        // STRATEGY 1: Use category boost if category exists
-        if (wallpaper.category.isNotBlank()) {
-            return getCategoryBoost(wallpaper.category)
-        }
-        
-        // STRATEGY 2: Fallback to color similarity boost
-        return getColorBoost(wallpaper.colors)
-    }
-    
-    /**
-     * Calculates advanced color preference boost using ColorAnalyzer.
-     * 
-     * ENHANCED STRATEGY (using ColorAnalyzer):
-     * - Analyzes wallpaper colors in HSV color space (perceptual matching)
-     * - Detects color harmony (monochromatic, analogous, complementary, triadic)
-     * - Classifies warm/cool tones and vibrant/muted characteristics
-     * - Compares with learned color preferences from liked wallpapers
-     * 
-     * Uses user's color preferences built from liked/disliked wallpapers:
-     * - Liked colors get positive boost (up to +0.12)
-     * - Disliked colors get negative penalty (down to -0.12)
-     * - New/neutral colors get no adjustment (0.0)
-     * 
-     * Formula: colorPreferenceScore × 0.12
-     * Where colorPreferenceScore comes from ColorAnalyzer's similarity calculation
-     * 
-     * This is weighted slightly higher (12%) than basic color matching (10%) to reflect
-     * the improved accuracy of perceptual color space analysis.
-     * 
-     * @param colors List of hex color codes from wallpaper palette
-     * @return Boost value from -0.12 (disliked colors) to +0.12 (liked colors)
-     */
-    private suspend fun getColorBoost(colors: List<String>): Float {
-        return try {
-            if (colors.isEmpty()) {
-                return 0f
-            }
-            
-            // Get user's liked colors for learning color preferences
-            val likedColors = colorPreferenceRepository.getLikedColors()
-            if (likedColors.isEmpty()) {
-                // No color preference data yet
-                return 0f
-            }
-            
-            // Analyze the liked palette
-            val likedPalette = colorAnalyzer.analyzePalette(likedColors)
-            
-            // Extract color preferences from liked wallpapers using advanced analysis
-            val colorPreferences = colorAnalyzer.extractColorPreferences(
-                likedPalettes = listOf(likedPalette),
-                dislikedPalettes = emptyList()
-            )
-            
-            // Analyze current wallpaper colors
-            val wallpaperPalette = colorAnalyzer.analyzePalette(colors)
-            
-            // Calculate preference score for this wallpaper's colors
-            val preferenceScore = colorAnalyzer.calculateColorPreferenceScore(
-                palette = wallpaperPalette,
-                preferences = colorPreferences
-            )
-            
-            // Apply 12% weight to advanced color analysis
-            // Higher weight than basic RGB matching (10%) due to better accuracy
-            val boost = preferenceScore * 0.12f
-            
-            // NOTE: Logging removed - was causing log spam for every wallpaper
-            
-            return boost
-        } catch (e: Exception) {
-            android.util.Log.e("SelectNextWallpaper", "Error calculating advanced color boost", e)
-            return 0f
-        }
-    }
-    
-    /**
-     * Calculates composition preference boost using CompositionAnalyzer.
-     * 
-     * ADVANCED COMPOSITION ANALYSIS:
-     * - Analyzes wallpaper layout using 3x3 grid (rule of thirds)
-     * - Calculates symmetry (horizontal, vertical)
-     * - Measures center weight vs edge density
-     * - Evaluates complexity (busy vs simple)
-     * - Compares with learned composition preferences
-     * 
-     * Uses user's composition preferences built from liked wallpapers:
-     * - Preferred compositions get positive boost (up to +0.08)
-     * - Disliked compositions get negative penalty (down to -0.08)
-     * - Neutral compositions get no adjustment (0.0)
-     * 
-     * Formula: compositionSimilarity × 0.08
-     * Where compositionSimilarity compares wallpaper with learned preferences
-     * 
-     * Weight is 8% to balance with color (12%) and category (15%) boosts.
-     * Total personalization signal: 35% (category/color + composition + embedding)
-     * 
-     * @param wallpaperId Wallpaper ID to analyze
-     * @return Boost value from -0.08 (disliked composition) to +0.08 (liked composition)
-     */
-    private suspend fun getCompositionBoost(wallpaperId: String): Float {
-        return try {
-            // Get user's composition preferences
-            val preferences = compositionPreferenceRepository.getCompositionPreferencesOnce()
-            if (preferences == null || preferences.sampleCount == 0) {
-                // No composition preference data yet
-                return 0f
-            }
-            
-            // Get wallpaper file path
-            val wallpaperFile = java.io.File(context.filesDir, "wallpapers/$wallpaperId.jpg")
-            if (!wallpaperFile.exists()) {
-                android.util.Log.w("SelectNextWallpaper", "Wallpaper file not found for composition analysis: $wallpaperId")
-                return 0f
-            }
-            
-            // Analyze composition
-            val composition = compositionAnalyzer.analyzeComposition(wallpaperFile)
-                ?: return 0f
-            
-            // Build a preference composition for comparison
-            val preferenceComposition = me.avinas.vanderwaals.algorithm.CompositionAnalysis(
-                symmetryScore = preferences.averageSymmetry,
-                ruleOfThirdsScore = preferences.averageRuleOfThirds,
-                centerWeight = preferences.averageCenterWeight,
-                edgeDensity = preferences.averageEdgeDensity,
-                complexity = preferences.averageComplexity,
-                contrastDistribution = 0.5f,
-                brightnessMap = emptyList()
-            )
-            
-            // Calculate similarity between this composition and learned preferences
-            val similarity = compositionAnalyzer.calculateCompositionSimilarity(
-                comp1 = composition,
-                comp2 = preferenceComposition
-            )
-            
-            // Convert similarity (0-1) to preference score (-1 to +1)
-            // similarity=1.0 (perfect match) → score=+1.0
-            // similarity=0.5 (neutral) → score=0.0
-            // similarity=0.0 (opposite) → score=-1.0
-            val preferenceScore = (similarity - 0.5f) * 2f
-            
-            // Apply confidence weighting based on sample count
-            val confidence = preferences.calculateConfidence()
-            val weightedScore = preferenceScore * confidence
-            
-            // Apply 8% weight to composition similarity
-            val boost = weightedScore * 0.08f
-            
-            // NOTE: Logging removed - was causing log spam for every wallpaper
-            
-            return boost
-        } catch (e: Exception) {
-            android.util.Log.e("SelectNextWallpaper", "Error calculating composition boost for $wallpaperId", e)
-            return 0f
-        }
-    }
-    
-    /**
-     * Parses hex color string to RGB integer.
-     * 
-     * @param hex Hex color string (e.g., "#FF5733" or "FF5733")
-     * @return RGB integer or null if parsing fails
-     */
-    private fun parseHexToColor(hex: String): Int? {
-        return try {
-            val cleanHex = hex.removePrefix("#")
-            android.graphics.Color.parseColor("#$cleanHex")
-        } catch (e: Exception) {
-            null
-        }
-    }
-    
-    /**
-     * Calculates color similarity using RGB Euclidean distance.
-     * 
-     * @param wallpaperColors List of RGB integers for wallpaper
-     * @param preferredColors List of RGB integers for user preferences
-     * @return Similarity score from 0.0 (completely different) to 1.0 (identical)
-     */
-    private fun calculateColorSimilarity(
-        wallpaperColors: List<Int>,
-        preferredColors: List<Int>
-    ): Float {
-        if (wallpaperColors.isEmpty() || preferredColors.isEmpty()) {
-            return 0.5f // Neutral score if no color data
-        }
-        
-        // Calculate minimum color distance between any pair
-        var minDistance = Float.MAX_VALUE
-        
-        wallpaperColors.forEach { wColor ->
-            preferredColors.forEach { pColor ->
-                val distance = colorDistance(wColor, pColor)
-                if (distance < minDistance) {
-                    minDistance = distance
-                }
-            }
-        }
-        
-        // Normalize distance to similarity score (0-1)
-        // Max distance in RGB space is sqrt(3 * 255^2) ≈ 441
-        val maxDistance = 441f
-        return 1f - (minDistance / maxDistance).coerceIn(0f, 1f)
-    }
-    
-    /**
-     * Calculates Euclidean distance between two RGB colors.
-     * 
-     * @param color1 First RGB color as integer
-     * @param color2 Second RGB color as integer
-     * @return Distance value (0 = identical, higher = more different)
-     */
-    private fun colorDistance(color1: Int, color2: Int): Float {
-        val r1 = (color1 shr 16) and 0xFF
-        val g1 = (color1 shr 8) and 0xFF
-        val b1 = color1 and 0xFF
-        
-        val r2 = (color2 shr 16) and 0xFF
-        val g2 = (color2 shr 8) and 0xFF
-        val b2 = color2 and 0xFF
-        
-        val dr = r1 - r2
-        val dg = g1 - g2
-        val db = b1 - b2
-        
-        return kotlin.math.sqrt((dr * dr + dg * dg + db * db).toFloat())
-    }
-
-    /**
      * Gets categories from recent wallpaper history.
-     * Used for diversity enforcement.
-     * 
-     * @param recentHistory Recent wallpaper IDs
-     * @param allWallpapers All available wallpapers
-     * @return Set of categories from recent history
      */
     private fun getRecentCategories(
         recentHistory: List<String>,
@@ -1009,185 +663,25 @@ class SelectNextWallpaperUseCase @Inject constructor(
     ): Set<String> {
         val wallpaperMap = allWallpapers.associateBy { it.id }
         return recentHistory
-            .take(3) // Only look at last 3 wallpapers
+            .take(3)
             .mapNotNull { wallpaperMap[it]?.category }
             .toSet()
     }
     
     /**
-     * Select diverse wallpapers for cold start (before user provides first like).
-     * 
-     * COLD START STRATEGY - Used by Auto Mode initially:
-     * - Shows diverse, high-quality wallpapers to help user discover preferences
-     * - Once user likes first wallpaper, preference vector is created
-     * - Then switches to similarity-based scoring (same as Personalize Mode)
-     * 
-     * IMPORTANT: This is TEMPORARY state for Auto Mode only!
-     * After first like, Auto Mode uses exact same algorithm as Personalize Mode.
-     * 
-     * Scoring based on universal quality signals:
-     * - Resolution (higher = better)
-     * - Source (Bing curated > GitHub community)
-     * - Contrast/brightness balance (moderate = better)
-     * - Category hints when available (nature/aesthetic > anime/gaming)
+     * Select diverse wallpapers for cold start using WallpaperScorer.
      */
     private fun selectDiverseWallpapers(
         wallpapers: List<WallpaperMetadata>,
         deviceSeed: Int
     ): List<RankedWallpaper> {
-        // Score all wallpapers using universal quality metrics
         return wallpapers.map { wallpaper ->
-            val score = calculatePopularityScore(
+            val score = wallpaperScorer.calculatePopularityScore(
                 wallpaper = wallpaper,
-                deviceSeed = deviceSeed,
-                position = 0  // Position not used
+                deviceSeed = deviceSeed
             )
             RankedWallpaper(wallpaper, score)
         }.sortedByDescending { it.similarity }
-    }
-
-    /**
-     * Calculates universal quality score for cold start (before first like).
-     * 
-     * **UNIVERSAL APPROACH - Works with any wallpaper collection:**
-     * Problem: Can't rely on specific repo information or perfect categorization
-     * Solution: Use ONLY universal quality signals available in every wallpaper
-     * 
-     * **Available fields in WallpaperMetadata:**
-     * - resolution: String (e.g., "1920x1080")
-     * - brightness: Int (0-100 scale, stored as percentage)
-     * - contrast: Int (0-100 scale, stored as percentage)
-     * - category: String (may be "other" or unreliable across repos)
-     * - source: String ("github" or "bing")
-     * 
-     * **Scoring Components:**
-     * 1. Source Base (0.4-0.75): Bing (curated professional) significantly higher than GitHub
-     * 2. Resolution (0.0-0.15): Higher resolution = better quality
-     * 3. Balance (0.0-0.08): Moderate contrast/brightness = better
-     * 4. Category Hint (0.0-0.07): Use as hint if available, neutral if "other"
-     * 5. Device Variation (0.0-0.1): Unique ordering per device
-     * 
-     * Total range: 0.4-1.05
-     * 
-     * **VOLUME BALANCING:**
-     * GitHub has 6000+ wallpapers vs Bing's ~1500. To ensure quality balance:
-     * - Bing base score: 0.75 (professional curation, UHD quality, daily featured)
-     * - GitHub base score: 0.40 (community collections, variable quality)
-     * This 0.35 difference ensures Bing wallpapers appear prominently despite lower volume.
-     * 
-     * This ensures cold start shows quality wallpapers regardless of:
-     * - Which repos are included in manifest
-     * - How categories are assigned
-     * - Position in manifest
-     * 
-     * @param wallpaper The wallpaper to score
-     * @param deviceSeed Device-specific random seed
-     * @param position Not used (kept for interface compatibility)
-     * @return Popularity score (0.4 to 1.05)
-     */
-    private fun calculatePopularityScore(
-        wallpaper: WallpaperMetadata,
-        deviceSeed: Int,
-        position: Int
-    ): Float {
-        // 1. SOURCE BASE (0.4-0.75): Source quality with volume balancing
-        // CRITICAL FIX: Bing gets much higher base to overcome GitHub's 4x volume advantage
-        val sourceBase = when (wallpaper.source.lowercase()) {
-            "bing" -> 0.75f  // Professionally curated, UHD quality, daily featured photography
-            else -> 0.40f     // GitHub collections (community curated, variable quality)
-        }
-
-        // 2. QUALITY SIGNALS (0.0-0.3): Wallpaper-specific quality
-        val qualityScore = calculateQualityScore(wallpaper)
-
-        // 3. DEVICE VARIATION (0.0-0.1): Deterministic randomness
-        val deviceVariation = ((deviceSeed + wallpaper.id.hashCode()).toLong() % 100) / 1000f
-
-        return sourceBase + qualityScore + deviceVariation
-    }
-
-    /**
-     * Calculate quality score based on wallpaper-specific attributes.
-     * 
-     * ENHANCED QUALITY METRICS (0.0-0.3 range):
-     * - Resolution: Higher is better
-     * - Aspect ratio: Prefer portrait/square for mobile
-     * - Balance: Moderate brightness/contrast is better
-     * - Color diversity: Rich color palettes score higher
-     * - Category: Use as hint when meaningful
-     * - Aesthetic composition: Rule of thirds, symmetry hints
-     * 
-     * Works regardless of source or categorization scheme.
-     */
-    private fun calculateQualityScore(wallpaper: WallpaperMetadata): Float {
-        var score = 0f
-
-        // 1. Resolution bonus (0.0-0.10): Higher resolution = better quality
-        val resolutionParts = wallpaper.resolution.split("x")
-        if (resolutionParts.size == 2) {
-            val width = resolutionParts[0].toIntOrNull() ?: 0
-            val height = resolutionParts[1].toIntOrNull() ?: 0
-            val pixels = width * height
-            
-            score += when {
-                pixels >= 3840 * 2160 -> 0.10f  // 4K or higher
-                pixels >= 2560 * 1440 -> 0.08f  // QHD
-                pixels >= 1920 * 1080 -> 0.06f  // Full HD
-                pixels >= 1280 * 720 -> 0.04f   // HD
-                else -> 0.02f                    // Lower resolution
-            }
-            
-            // 2. Aspect ratio bonus (0.0-0.03): Prefer portrait/square for mobile
-            if (width > 0 && height > 0) {
-                val aspectRatio = height.toFloat() / width.toFloat()
-                score += when {
-                    aspectRatio >= 1.5f && aspectRatio <= 2.2f -> 0.03f  // Good portrait (9:16 to 10:16)
-                    aspectRatio >= 0.9f && aspectRatio <= 1.1f -> 0.02f  // Square-ish
-                    else -> 0.01f                                          // Landscape or unusual
-                }
-            }
-        }
-
-        // 3. Contrast/Brightness balance (0.0-0.06): Well-balanced = better
-        // Values stored as Int 0-100, convert to 0.0-1.0 range
-        // Prefer moderate values (30-70) - not too dark, not too bright
-        val contrastNormalized = wallpaper.contrast / 100f
-        val brightnessNormalized = wallpaper.brightness / 100f
-        
-        val contrastBalance = 1f - kotlin.math.abs(contrastNormalized - 0.5f) * 2f
-        val brightnessBalance = 1f - kotlin.math.abs(brightnessNormalized - 0.5f) * 2f
-        score += (contrastBalance + brightnessBalance) * 0.03f
-
-        // 4. Color diversity bonus (0.0-0.04): Rich color palettes = better
-        val colorCount = wallpaper.colors.size
-        score += when {
-            colorCount >= 5 -> 0.04f  // Rich palette (5+ colors)
-            colorCount >= 3 -> 0.03f  // Moderate palette
-            colorCount >= 2 -> 0.02f  // Basic palette
-            else -> 0.01f              // Monochrome
-        }
-
-        // 5. Category hint bonus (0.0-0.07): Use when available, ignore when "other"
-        // Universal appeal categories get bonus, niche get penalty
-        score += when (wallpaper.category.lowercase()) {
-            // Universal appeal - most people like these
-            "nature", "aesthetic", "minimal", "space", "landscape" -> 0.07f
-            
-            // Broad appeal - many people like these
-            "abstract", "dark", "city", "gradient", "architecture" -> 0.05f
-            
-            // Moderate appeal
-            "art", "design", "pattern", "texture" -> 0.03f
-            
-            // Niche appeal - specific audiences only
-            "anime", "gaming", "nord", "gruvbox", "cartoon" -> -0.02f
-            
-            // Unknown/other - neutral (don't penalize repos with poor categorization)
-            "other", "" -> 0.0f
-            else -> 0.0f
-        }
-
-        return score.coerceIn(0f, 0.3f)
     }
     
     /**

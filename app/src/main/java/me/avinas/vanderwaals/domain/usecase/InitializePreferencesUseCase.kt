@@ -15,7 +15,7 @@ import javax.inject.Inject
  * Orchestrates the onboarding flow where user uploads their favorite wallpaper
  * to bootstrap the personalization system:
  * 
- * 1. Extract embedding from uploaded image using MobileNetV3
+ * 1. Extract embedding from uploaded image using MobileNetV4
  * 2. Calculate similarity against all wallpapers in catalog
  * 3. Return top 50 matches for confirmation gallery
  * 4. Average embeddings of liked wallpapers (minimum 3) to create initial preference vector
@@ -35,9 +35,9 @@ class InitializePreferencesUseCase @Inject constructor(
     companion object {
         private const val TAG = "InitializePreferences"
         /**
-         * Embedding dimension for MobileNetV3-Small model (576 floats).
+         * Embedding dimension for MobileNetV4-Conv-Small model (1280 floats).
          */
-        private const val EMBEDDING_SIZE = 576
+        private const val EMBEDDING_SIZE = 1280
     }
     
     /**

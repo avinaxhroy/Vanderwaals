@@ -39,5 +39,36 @@ class PreferenceRepositoryImpl(
             userPreferenceDao.update(preferences)
         }
     }
+    
+    override suspend fun resetForEmbeddingMigration(keepMode: Boolean) {
+        val current = getUserPreferencesOnce()
+        
+        val migratedPreferences = if (current != null) {
+            // Preserve liked/disliked IDs but clear embedding vectors
+            UserPreferences(
+                id = 1,
+                mode = if (keepMode) current.mode else UserPreferences.MODE_AUTO,
+                preferenceVector = floatArrayOf(),  // Clear - incompatible dimension
+                originalEmbedding = floatArrayOf(), // Clear - incompatible dimension
+                momentumVector = floatArrayOf(),    // Clear - incompatible dimension
+                likedWallpaperIds = current.likedWallpaperIds,    // PRESERVE
+                dislikedWallpaperIds = current.dislikedWallpaperIds, // PRESERVE
+                feedbackCount = 0,  // Reset - will rebuild from new embeddings
+                epsilon = UserPreferences.DEFAULT_EPSILON,
+                lastUpdated = System.currentTimeMillis()
+            )
+        } else {
+            // No existing preferences - create default
+            UserPreferences.createDefault()
+        }
+        
+        android.util.Log.i("PreferenceRepository", 
+            "Embedding migration reset: preserved ${migratedPreferences.likedWallpaperIds.size} likes, " +
+            "${migratedPreferences.dislikedWallpaperIds.size} dislikes, mode=${migratedPreferences.mode}"
+        )
+        
+        // Use insert to replace existing row
+        insertUserPreferences(migratedPreferences)
+    }
 }
 

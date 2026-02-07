@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.avinas.vanderwaals.ui.theme.components.*
+import me.avinas.vanderwaals.ui.theme.LiquidGlassBackground
 import me.avinas.vanderwaals.worker.ChangeInterval
 import java.time.LocalTime
 
@@ -63,20 +64,19 @@ fun ApplicationSettingsScreen(
         }
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = Color.Transparent,
+    LiquidGlassBackground {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
             // Premium Background
-            PremiumBackground(
-                modifier = Modifier.fillMaxSize(),
-                isDark = isDark
-            )
+            // Premium Background removed
+
 
             Column(
                 modifier = Modifier
@@ -115,7 +115,7 @@ fun ApplicationSettingsScreen(
                     // APPLY TO SECTION
                     item {
                         LabelSectionHeader(title = "APPLY WALLPAPERS TO")
-                        GlassCard(
+                        LiquidGlassCard(
                             modifier = Modifier.fillMaxWidth(),
                             contentPadding = PaddingValues(16.dp)
                         ) {
@@ -137,7 +137,7 @@ fun ApplicationSettingsScreen(
                     // CHANGE INTERVAL SECTION
                     item {
                         LabelSectionHeader(title = "UPDATE FREQUENCY")
-                        GlassCard(
+                        LiquidGlassCard(
                             modifier = Modifier.fillMaxWidth(),
                             contentPadding = PaddingValues(0.dp)
                         ) {
@@ -163,7 +163,7 @@ fun ApplicationSettingsScreen(
                     // DAILY TIME SETTING (Conditional)
                     if (changeInterval == ChangeInterval.DAILY) {
                         item {
-                            GlassCard(
+                            LiquidGlassCard(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { showTimePicker = true },
@@ -254,6 +254,7 @@ fun ApplicationSettingsScreen(
                 }
             }
         }
+    }
     }
     
     // Time Picker Logic (Simplified)

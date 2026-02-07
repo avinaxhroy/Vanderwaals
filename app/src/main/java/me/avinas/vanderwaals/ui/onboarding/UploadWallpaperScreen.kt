@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import me.avinas.vanderwaals.ui.theme.components.*
+import me.avinas.vanderwaals.ui.theme.LiquidGlassBackground
 
 @Composable
 fun UploadWallpaperScreen(
@@ -74,20 +75,19 @@ fun UploadWallpaperScreen(
         }
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = Color.Transparent,
+    LiquidGlassBackground {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
             // Premium Background
-            PremiumBackground(
-                modifier = Modifier.fillMaxSize(),
-                isDark = isDark
-            )
+            // Premium Background removed
+
 
             Column(
                 modifier = Modifier
@@ -153,7 +153,7 @@ fun UploadWallpaperScreen(
                         .clickable(enabled = false) {}, // Block touches
                     contentAlignment = Alignment.Center
                 ) {
-                    GlassCard(
+                    LiquidGlassCard(
                         modifier = Modifier.size(160.dp),
                         contentPadding = PaddingValues(24.dp)
                     ) {
@@ -178,6 +178,7 @@ fun UploadWallpaperScreen(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -187,7 +188,7 @@ fun UploadSection(
 ) {
     val borderColor = if (isDark) Color.White.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.2f)
     
-    GlassCard(
+    LiquidGlassCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
@@ -279,7 +280,7 @@ fun StyleSampleCard(
     onClick: () -> Unit,
     isDark: Boolean
 ) {
-    GlassCard(
+    LiquidGlassCard(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)

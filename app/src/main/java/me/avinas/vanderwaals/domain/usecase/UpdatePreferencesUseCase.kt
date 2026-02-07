@@ -322,25 +322,26 @@ class UpdatePreferencesUseCase @Inject constructor(
             FeedbackType.LIKE -> 1.0f      // Standard positive
         }
         
+        // TUNED FOR MobileNetV4: Slightly faster early/mid learning to capture richer signals
         val baseRate = when {
             feedbackCount < 10 -> {
-                // Fast initial learning
+                // Fast initial learning (tuned +20% for MobileNetV4)
                 when (feedbackType) {
-                    FeedbackType.DOWNLOAD -> 0.225f  // 0.15 * 1.5
-                    FeedbackType.DISLIKE -> 0.20f
-                    FeedbackType.LIKE -> 0.15f
+                    FeedbackType.DOWNLOAD -> 0.27f   // 0.18 * 1.5
+                    FeedbackType.DISLIKE -> 0.22f    // Faster avoidance
+                    FeedbackType.LIKE -> 0.18f       // Faster capture
                 }
             }
             feedbackCount < 50 -> {
-                // Moderate learning
+                // Moderate learning (tuned +20% for MobileNetV4)
                 when (feedbackType) {
-                    FeedbackType.DOWNLOAD -> 0.15f   // 0.10 * 1.5
-                    FeedbackType.DISLIKE -> 0.15f
-                    FeedbackType.LIKE -> 0.10f
+                    FeedbackType.DOWNLOAD -> 0.18f   // 0.12 * 1.5
+                    FeedbackType.DISLIKE -> 0.16f    // Faster mid-phase
+                    FeedbackType.LIKE -> 0.12f       // Faster mid-phase
                 }
             }
             else -> {
-                // Stable maintenance
+                // Stable maintenance (unchanged - prevent overfitting)
                 when (feedbackType) {
                     FeedbackType.DOWNLOAD -> 0.075f  // 0.05 * 1.5
                     FeedbackType.DISLIKE -> 0.10f
@@ -353,9 +354,9 @@ class UpdatePreferencesUseCase @Inject constructor(
     
     companion object {
         /**
-         * Expected embedding dimension for MobileNetV3-Small model.
+         * Expected embedding dimension for MobileNetV4-Conv-Small model.
          */
-        private const val EXPECTED_EMBEDDING_SIZE = 576
+        private const val EXPECTED_EMBEDDING_SIZE = 1280
     }
 }
 

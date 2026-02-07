@@ -1,7 +1,11 @@
 # Python dependencies for Vanderwaals wallpaper curation pipeline
 # Install with: pip install -r requirements.txt
 
-# Deep Learning - TensorFlow for MobileNetV3 embeddings
+# Deep Learning - PyTorch for MobileNetV4-Conv-Small embeddings (Manifest V3)
+torch --index-url https://download.pytorch.org/whl/cpu
+timm            # PyTorch Image Models (includes MobileNetV4)
+
+# TensorFlow for backwards compat (Manifest V2) and TFLite conversion
 tensorflow-cpu  # Use tensorflow-cpu for github actions
 
 # Image Processing

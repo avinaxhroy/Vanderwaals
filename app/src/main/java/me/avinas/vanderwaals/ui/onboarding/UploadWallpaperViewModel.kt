@@ -39,7 +39,7 @@ import javax.inject.Inject
  * 3. Find similar wallpapers (50ms)
  * 4. Navigate to confirmation gallery
  * 
- * @param extractEmbeddingUseCase Extracts 576-dim embedding from image
+ * @param extractEmbeddingUseCase Extracts 1280-dim embedding from image
  * @param findSimilarWallpapersUseCase Finds top N similar wallpapers
  */
 @HiltViewModel
@@ -69,7 +69,7 @@ class UploadWallpaperViewModel @Inject constructor(
      * 
      * Steps:
      * 1. Load bitmap from URI
-     * 2. Extract embedding from URI (MobileNetV3 deep features)
+     * 2. Extract embedding from URI (MobileNetV4 deep features)
      * 3. Extract enhanced features (color, composition, mood)
      * 4. Find top 20 similar wallpapers using both analyses
      * 5. Update state
@@ -95,7 +95,7 @@ class UploadWallpaperViewModel @Inject constructor(
                     return@launch
                 }
                 
-                // Extract embedding (MobileNetV3)
+                // Extract embedding (MobileNetV4)
                 extractEmbeddingUseCase(uri).fold(
                     onSuccess = { embedding ->
                         _userEmbedding.value = embedding
@@ -198,7 +198,7 @@ class UploadWallpaperViewModel @Inject constructor(
                 val sampleSize = minOf(5, categoryWallpapers.size)
                 val sampleWallpapers = categoryWallpapers.shuffled().take(sampleSize)
                 
-                val avgEmbedding = FloatArray(576) { 0f }
+                val avgEmbedding = FloatArray(1280) { 0f }
                 for (wallpaper in sampleWallpapers) {
                     for (i in wallpaper.embedding.indices) {
                         avgEmbedding[i] += wallpaper.embedding[i]
@@ -233,7 +233,7 @@ class UploadWallpaperViewModel @Inject constructor(
     /**
      * Find similar wallpapers based on embedding AND enhanced analysis.
      * 
-     * ENHANCED MATCHING: Uses both MobileNetV3 embeddings and semantic features
+     * ENHANCED MATCHING: Uses both MobileNetV4 embeddings and semantic features
      * (color palette, composition, mood) to capture the ESSENCE of the image.
      * 
      * Returns top 50 matches for onboarding.
@@ -372,28 +372,28 @@ class UploadWallpaperViewModel @Inject constructor(
      * or when they select wallpapers from the catalog during onboarding.
      * 
      * @param style Sample style category
-     * @return 576-dimensional embedding vector (MobileNetV3-Small)
+     * @return 1280-dimensional embedding vector (MobileNetV4-Conv-Small)
      */
     private fun getSampleEmbedding(style: WallpaperStyle): FloatArray {
         // Generate distinct placeholder embeddings for each style
         // These create different similarity patterns for demonstration
         return when (style) {
-            WallpaperStyle.NATURE -> FloatArray(576) { i -> 
+            WallpaperStyle.NATURE -> FloatArray(1280) { i -> 
                 (kotlin.math.sin(i * 0.1) * 0.5 + 0.5).toFloat()
             }
-            WallpaperStyle.MINIMAL -> FloatArray(576) { i -> 
-                if (i < 288) 0.8f else 0.2f
+            WallpaperStyle.MINIMAL -> FloatArray(1280) { i -> 
+                if (i < 640) 0.8f else 0.2f
             }
-            WallpaperStyle.DARK -> FloatArray(576) { i -> 
+            WallpaperStyle.DARK -> FloatArray(1280) { i -> 
                 (kotlin.math.cos(i * 0.15) * 0.3 + 0.3).toFloat()
             }
-            WallpaperStyle.ABSTRACT -> FloatArray(576) { i -> 
+            WallpaperStyle.ABSTRACT -> FloatArray(1280) { i -> 
                 ((i % 100) / 100f)
             }
-            WallpaperStyle.COLORFUL -> FloatArray(576) { i -> 
+            WallpaperStyle.COLORFUL -> FloatArray(1280) { i -> 
                 (kotlin.math.sin(i * 0.05) * kotlin.math.cos(i * 0.1) * 0.5 + 0.5).toFloat()
             }
-            WallpaperStyle.ANIME -> FloatArray(576) { i -> 
+            WallpaperStyle.ANIME -> FloatArray(1280) { i -> 
                 if (i % 3 == 0) 0.9f else if (i % 3 == 1) 0.6f else 0.3f
             }
         }

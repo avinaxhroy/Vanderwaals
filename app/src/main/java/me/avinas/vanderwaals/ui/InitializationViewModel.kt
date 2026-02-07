@@ -9,6 +9,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import me.avinas.vanderwaals.BuildConfig
 import me.avinas.vanderwaals.data.datastore.SettingsDataStore
@@ -28,6 +29,7 @@ import javax.inject.Inject
 @HiltViewModel
 class InitializationViewModel @Inject constructor(
     private val manifestRepository: ManifestRepository,
+    private val bingManifestRepository: me.avinas.vanderwaals.data.repository.BingManifestRepository,
     private val workManager: WorkManager,
     private val downloadProgressManager: me.avinas.vanderwaals.network.DownloadProgressManager,
     private val settingsDataStore: SettingsDataStore
@@ -100,7 +102,7 @@ class InitializationViewModel @Inject constructor(
     
     /**
      * Called when user taps "Update Now" on migration dialog.
-     * Triggers manifest re-sync with force update.
+     * Triggers manifest re-sync with force update for both GitHub and Bing sources.
      */
     fun startMigration() {
         viewModelScope.launch {
@@ -109,34 +111,84 @@ class InitializationViewModel @Inject constructor(
             _migrationMessage.value = "Connecting to server..."
             
             try {
-                manifestRepository.syncManifest(
-                    onProgress = { message, progress, count ->
-                        _migrationMessage.value = message
-                        _migrationProgress.value = progress
-                    },
-                    forceUpdate = true  // Force re-download even if not modified
-                ).fold(
-                    onSuccess = { count ->
-                        Log.i(TAG, "Migration completed successfully: $count wallpapers")
-                        _migrationMessage.value = "Updated $count wallpapers!"
-                        _migrationProgress.value = 1.0f
-                        
-                        // Update manifest version to v2
-                        settingsDataStore.updateManifestVersion(2)
-                        settingsDataStore.clearMigrationFlags()
-                        
-                        // Close dialog after brief delay
-                        kotlinx.coroutines.delay(1000L)
-                        _showMigrationDialog.value = false
-                        _migrationInProgress.value = false
-                    },
-                    onFailure = { error ->
-                        Log.e(TAG, "Migration failed", error)
-                        _migrationMessage.value = "Update failed: ${error.message}"
-                        _migrationProgress.value = null
-                        _migrationInProgress.value = false
-                    }
-                )
+                // Get settings to check if Bing is enabled
+                val settings = settingsDataStore.settings.first()
+                val bingEnabled = settings.bingEnabled
+                val bingManifestType = settings.bingManifestType
+                
+                var totalWallpapers = 0
+                var githubSuccess = false
+                var bingSuccess = false
+                
+                // Phase 1: Sync GitHub manifest v3 (MobileNetV4)
+                if (settings.githubEnabled) {
+                    _migrationMessage.value = "Updating Community wallpapers..."
+                    manifestRepository.syncManifest(
+                        onProgress = { message, progress, count ->
+                            // Scale progress: GitHub gets 0-50% if Bing enabled, else 0-100%
+                            val scaledProgress = if (bingEnabled) progress * 0.5f else progress
+                            _migrationMessage.value = "Community: $message"
+                            _migrationProgress.value = scaledProgress
+                        },
+                        forceUpdate = true
+                    ).fold(
+                        onSuccess = { count ->
+                            Log.i(TAG, "GitHub manifest migration: $count wallpapers")
+                            totalWallpapers += count
+                            githubSuccess = true
+                        },
+                        onFailure = { error ->
+                            Log.e(TAG, "GitHub manifest migration failed", error)
+                            // Continue with Bing even if GitHub fails
+                        }
+                    )
+                }
+                
+                // Phase 2: Sync Bing manifest v2 (MobileNetV4) if enabled
+                if (bingEnabled) {
+                    _migrationMessage.value = "Updating Bing wallpapers..."
+                    bingManifestRepository.syncBingManifest(
+                        manifestType = bingManifestType,
+                        onProgress = { message, progress, count ->
+                            // Scale progress: Bing gets 50-100% if both enabled
+                            val baseProgress = if (settings.githubEnabled) 0.5f else 0f
+                            val scaledProgress = baseProgress + (progress * (1f - baseProgress))
+                            _migrationMessage.value = "Bing: $message"
+                            _migrationProgress.value = scaledProgress
+                        },
+                        forceUpdate = true
+                    ).fold(
+                        onSuccess = { count ->
+                            Log.i(TAG, "Bing manifest migration: $count wallpapers")
+                            totalWallpapers += count
+                            bingSuccess = true
+                        },
+                        onFailure = { error ->
+                            Log.e(TAG, "Bing manifest migration failed", error)
+                        }
+                    )
+                }
+                
+                // Check if at least one source succeeded
+                if (githubSuccess || bingSuccess) {
+                    Log.i(TAG, "Migration completed: $totalWallpapers total wallpapers")
+                    _migrationMessage.value = "Updated $totalWallpapers wallpapers!"
+                    _migrationProgress.value = 1.0f
+                    
+                    // Update manifest version to v3 (MobileNetV4 1280D)
+                    settingsDataStore.updateManifestVersion(3)
+                    settingsDataStore.clearMigrationFlags()
+                    
+                    // Close dialog after brief delay
+                    kotlinx.coroutines.delay(1000L)
+                    _showMigrationDialog.value = false
+                    _migrationInProgress.value = false
+                } else {
+                    _migrationMessage.value = "Update failed. Please try again."
+                    _migrationProgress.value = null
+                    _migrationInProgress.value = false
+                }
+                
             } catch (e: Exception) {
                 Log.e(TAG, "Migration error", e)
                 _migrationMessage.value = "Error: ${e.message}"

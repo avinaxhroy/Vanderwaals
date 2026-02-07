@@ -55,6 +55,8 @@ import com.skydoves.landscapist.glide.GlideImage
 import me.avinas.vanderwaals.core.getDeviceScreenSize
 import me.avinas.vanderwaals.domain.usecase.FeedbackType
 import java.io.File
+import me.avinas.vanderwaals.ui.theme.LiquidGlassBackground
+import me.avinas.vanderwaals.ui.theme.components.* // This import might be redundant if specific components are imported, keeping for safety
 import me.avinas.vanderwaals.ui.theme.components.GlassCard
 
 /**
@@ -117,23 +119,19 @@ fun HistoryScreen(
         onNavigateBack()
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surface)
-        ) {
-            // Premium Background
-            val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-            me.avinas.vanderwaals.ui.theme.components.PremiumBackground(
-                modifier = Modifier.fillMaxSize(),
-                isDark = isDark
-            )
+    LiquidGlassBackground {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            containerColor = Color.Transparent
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Transparent)
+            ) {
 
-            val uiState by viewModel.historyGroups.collectAsState()
+                val uiState by viewModel.historyGroups.collectAsState()
             
             // Track scroll state for dynamic TopAppBar background
             val listState = rememberLazyListState()
@@ -344,6 +342,7 @@ fun HistoryScreen(
         }
     }
 }
+}
 
 @Composable
 private fun HistoryItemCard(
@@ -353,7 +352,7 @@ private fun HistoryItemCard(
     onDislikeClick: () -> Unit,
     onDownloadClick: () -> Unit
 ) {
-    GlassCard(
+    LiquidGlassCard(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(16.dp)
     ) {

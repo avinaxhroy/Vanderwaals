@@ -19,7 +19,7 @@ import kotlin.math.min
  * - Texture and complexity
  * - Mood and atmosphere
  * 
- * These features complement MobileNetV3 embeddings to provide better matching
+ * These features complement MobileNetV4 embeddings to provide better matching
  * of user-uploaded wallpapers to recommendations.
  */
 class EnhancedImageAnalyzer {

@@ -11,6 +11,7 @@ import me.avinas.vanderwaals.core.MediaSaver
 import me.avinas.vanderwaals.data.dao.WallpaperHistoryDao
 import me.avinas.vanderwaals.data.entity.WallpaperHistory
 import me.avinas.vanderwaals.data.entity.WallpaperMetadata
+import me.avinas.vanderwaals.data.entity.UserPreferences
 import me.avinas.vanderwaals.data.repository.WallpaperRepository
 import me.avinas.vanderwaals.domain.usecase.FeedbackType
 import me.avinas.vanderwaals.domain.usecase.UpdatePreferencesUseCase
@@ -55,7 +56,9 @@ class MainViewModel @Inject constructor(
     private val workManager: WorkManager,
     private val mediaSaver: MediaSaver,
     private val application: android.app.Application,
-    private val nextWallpaperCacheManager: me.avinas.vanderwaals.domain.NextWallpaperCacheManager
+    private val nextWallpaperCacheManager: me.avinas.vanderwaals.domain.NextWallpaperCacheManager,
+    private val settingsDataStore: me.avinas.vanderwaals.data.datastore.SettingsDataStore,
+    private val preferenceRepository: me.avinas.vanderwaals.data.repository.PreferenceRepository
 ) : ViewModel() {
 
     /**
@@ -133,6 +136,12 @@ class MainViewModel @Inject constructor(
      */
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+    
+    /**
+     * Success message state for displaying positive feedback via Snackbar.
+     */
+    private val _successMessage = MutableStateFlow<String?>(null)
+    val successMessage: StateFlow<String?> = _successMessage.asStateFlow()
 
     /**
      * Live wallpaper detection state.
@@ -154,10 +163,148 @@ class MainViewModel @Inject constructor(
     val showInstructionsDialog: StateFlow<Boolean> = _showInstructionsDialog.asStateFlow()
 
     /**
+     * Embedding migration dialog state.
+     * Shows when user has legacy 576D preferences that need to be migrated to 1280D.
+     */
+    private val _showEmbeddingMigrationDialog = MutableStateFlow(false)
+    val showEmbeddingMigrationDialog: StateFlow<Boolean> = _showEmbeddingMigrationDialog.asStateFlow()
+    
+    /**
+     * Number of liked wallpapers to show in migration dialog.
+     */
+    private val _totalLikes = MutableStateFlow(0)
+    val totalLikes: StateFlow<Int> = _totalLikes.asStateFlow()
+
+    /**
      * Clears the error message after it's been shown.
      */
     fun clearErrorMessage() {
         _errorMessage.value = null
+    }
+    
+    /**
+     * Clears the success message after it's been shown.
+     */
+    fun clearSuccessMessage() {
+        _successMessage.value = null
+    }
+    
+    /**
+     * Check for embedding migration needed and show dialog if so.
+     * Called from init and can be called from UI to refresh.
+     */
+    fun checkEmbeddingMigration() {
+        viewModelScope.launch {
+            try {
+                val prefs = preferenceRepository.getUserPreferencesOnce()
+                val hasPreferences = prefs != null
+
+                updateEmbeddingDimensionFromPreferences(prefs)
+                
+                // Get liked count for dialog
+                _totalLikes.value = prefs?.likedWallpaperIds?.size ?: 0
+                
+                val migrationNeeded = settingsDataStore.checkEmbeddingMigrationNeeded(hasPreferences)
+                
+                if (migrationNeeded) {
+                    android.util.Log.i("MainViewModel", "Embedding migration needed - showing dialog")
+                    _showEmbeddingMigrationDialog.value = true
+                } else {
+                    android.util.Log.d("MainViewModel", "No embedding migration needed")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MainViewModel", "Error checking embedding migration", e)
+            }
+        }
+    }
+
+    private suspend fun updateEmbeddingDimensionFromPreferences(preferences: UserPreferences?) {
+        if (preferences == null) {
+            return
+        }
+
+        val dimension = listOf(
+            preferences.preferenceVector,
+            preferences.originalEmbedding,
+            preferences.momentumVector
+        ).firstOrNull { it.isNotEmpty() }?.size ?: return
+
+        when (dimension) {
+            me.avinas.vanderwaals.data.datastore.SettingsDataStore.EMBEDDING_DIM_CURRENT -> {
+                settingsDataStore.updateEmbeddingDimension(
+                    me.avinas.vanderwaals.data.datastore.SettingsDataStore.EMBEDDING_DIM_CURRENT
+                )
+            }
+            me.avinas.vanderwaals.data.datastore.SettingsDataStore.EMBEDDING_DIM_LEGACY -> {
+                settingsDataStore.updateEmbeddingDimension(
+                    me.avinas.vanderwaals.data.datastore.SettingsDataStore.EMBEDDING_DIM_LEGACY
+                )
+            }
+        }
+    }
+    
+    /**
+     * Called when user taps "Re-personalize Now" on the embedding migration dialog.
+     * Navigates to the onboarding flow to re-personalize their preferences.
+     */
+    fun onRePersonalize(navigateToOnboarding: () -> Unit) {
+        viewModelScope.launch {
+            // Reset preferences for embedding migration (keeps liked/disliked IDs)
+            preferenceRepository.resetForEmbeddingMigration(keepMode = true)
+            
+            // Clear migration flags and set to current dimension
+            settingsDataStore.clearEmbeddingMigrationFlags()
+            
+            _showEmbeddingMigrationDialog.value = false
+            
+            // Navigate to onboarding
+            navigateToOnboarding()
+        }
+    }
+    
+    /**
+     * Called when user taps "Use Auto Mode" on embedding migration dialog.
+     * Resets preferences and continues with auto mode, then triggers a wallpaper change.
+     */
+    fun onAutoMode() {
+        viewModelScope.launch {
+            // Reset preferences and switch to auto mode
+            preferenceRepository.resetForEmbeddingMigration(keepMode = false)
+            
+            // Clear migration flags and set to current dimension
+            settingsDataStore.clearEmbeddingMigrationFlags()
+            
+            _showEmbeddingMigrationDialog.value = false
+            
+            android.util.Log.i("MainViewModel", "User chose auto mode for embedding migration")
+            
+            // Show success feedback to user
+            _successMessage.value = "Auto mode enabled! Finding your first wallpaper..."
+            
+            // Trigger a wallpaper change to demonstrate the new mode
+            changeNow()
+        }
+    }
+    
+    /**
+     * Called when user taps "Remind Me Later" on embedding migration dialog.
+     * Dismisses dialog for this session but will show again next launch.
+     */
+    fun onRemindLater() {
+        _showEmbeddingMigrationDialog.value = false
+        android.util.Log.d("MainViewModel", "User dismissed embedding migration dialog - will show again next launch")
+    }
+    
+    /**
+     * Called when user taps "Don't Show Again" on embedding migration dialog.
+     * Permanently dismisses the dialog.
+     */
+    fun onDontShowAgain() {
+        viewModelScope.launch {
+            settingsDataStore.setEmbeddingMigrationDismissed(true)
+            _showEmbeddingMigrationDialog.value = false
+            android.util.Log.i("MainViewModel", "User permanently dismissed embedding migration dialog")
+        }
     }
 
     /**
@@ -222,6 +369,9 @@ class MainViewModel @Inject constructor(
         // Note: We don't check for live wallpaper on init anymore.
         // Instead, we detect it only when a wallpaper change actually fails.
         // This avoids false positives from manufacturer-specific system services.
+        
+        // Check for embedding migration (legacy 576D -> 1280D)
+        checkEmbeddingMigration()
     }
 
     /**

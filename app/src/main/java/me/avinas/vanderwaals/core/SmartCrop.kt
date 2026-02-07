@@ -116,6 +116,21 @@ object SmartCrop {
     private val cropRegionCache = mutableMapOf<String, RectF>()
     private const val MAX_CROP_CACHE_SIZE = 50  // Small memory footprint (RectF is just 4 floats)
 
+    // ========================================
+    // SALIENCY DETECTION EXTRACTED TO SaliencyDetector
+    // ========================================
+    // The following methods have been moved to me.avinas.vanderwaals.core.SaliencyDetector:
+    // - detectSalientRegions(), calculateCellSaliency()
+    // - findLocalMaxima(), clusterFocalPoints()
+    // - analyzeImageCharacteristics(), calculateAdaptiveWeights()
+    // - calculateImageEntropy()
+    //
+    // This improves:
+    // - Testability: Saliency detection can be unit tested
+    // - Reusability: Can be used for similar wallpapers, search ranking
+    // - Maintainability: ~450 lines removed from this file
+    // ========================================
+
     /**
      * Represents a point of interest in an image with a weight
      */
@@ -123,7 +138,13 @@ object SmartCrop {
         val x: Float,
         val y: Float,
         val weight: Float = 1.0f
-    )
+    ) {
+        companion object {
+            fun fromSaliencyFocalPoint(fp: SaliencyDetector.FocalPoint): FocalPoint {
+                return FocalPoint(fp.x, fp.y, fp.weight)
+            }
+        }
+    }
 
     /**
      * Represents a crop region with its score
@@ -131,20 +152,6 @@ object SmartCrop {
     data class CropRegion(
         val rect: RectF,
         val score: Float
-    )
-
-    /**
-     * Represents image characteristics for adaptive processing
-     */
-    data class ImageCharacteristics(
-        val averageBrightness: Float,  // 0-255
-        val colorfulness: Float,        // 0-1 (saturation level)
-        val contrast: Float,            // 0-1 (local contrast)
-        val entropy: Float,             // Information density
-        val isDark: Boolean,            // true if avg brightness < 85
-        val isBright: Boolean,          // true if avg brightness > 170
-        val isColorful: Boolean,        // true if colorfulness > 0.4
-        val isMinimal: Boolean          // true if colorfulness < 0.2
     )
 
     /**
@@ -160,114 +167,17 @@ object SmartCrop {
     }
 
     /**
-     * Analyze image characteristics for adaptive processing.
-     * Determines brightness level, colorfulness, contrast, and entropy.
-     * 
-     * @param bitmap Image to analyze
-     * @return ImageCharacteristics with computed properties
+     * Analyze image characteristics using SaliencyDetector.
      */
-    private fun analyzeImageCharacteristics(bitmap: Bitmap): ImageCharacteristics {
-        var totalBrightness = 0L
-        var totalR = 0L
-        var totalG = 0L
-        var totalB = 0L
-        var maxBrightness = 0
-        var minBrightness = 255
-        val samplePixels = 500  // Sample for speed
-        val step = max(1, bitmap.width * bitmap.height / samplePixels)
-        var pixelCount = 0
-        
-        for (y in 0 until bitmap.height step step) {
-            for (x in 0 until bitmap.width step step) {
-                try {
-                    val pixel = bitmap.getPixel(x, y)
-                    val r = (pixel shr 16) and 0xff
-                    val g = (pixel shr 8) and 0xff
-                    val b = pixel and 0xff
-                    
-                    val brightness = (r + g + b) / 3
-                    totalBrightness += brightness
-                    totalR += r
-                    totalG += g
-                    totalB += b
-                    maxBrightness = max(maxBrightness, brightness)
-                    minBrightness = min(minBrightness, brightness)
-                    pixelCount++
-                } catch (e: Exception) {
-                    // Skip invalid pixels
-                }
-            }
-        }
-        
-        val avgBrightness = if (pixelCount > 0) totalBrightness / pixelCount else 128
-        val avgR = if (pixelCount > 0) totalR / pixelCount else 128
-        val avgG = if (pixelCount > 0) totalG / pixelCount else 128
-        val avgB = if (pixelCount > 0) totalB / pixelCount else 128
-        
-        // Calculate colorfulness (saturation range)
-        val maxC = max(max(avgR, avgG), avgB)
-        val minC = min(min(avgR, avgG), avgB)
-        val colorfulness = if (maxC > 0) (maxC - minC).toFloat() / maxC else 0f
-        
-        // Calculate contrast
-        val contrast = if (maxBrightness > minBrightness) {
-            (maxBrightness - minBrightness).toFloat() / 255f
-        } else {
-            0f
-        }
-        
-        // Calculate entropy (information density)
-        val entropy = calculateImageEntropy(bitmap)
-        
-        return ImageCharacteristics(
-            averageBrightness = avgBrightness.toFloat(),
-            colorfulness = colorfulness,
-            contrast = contrast,
-            entropy = entropy,
-            isDark = avgBrightness < 85,
-            isBright = avgBrightness > 170,
-            isColorful = colorfulness > 0.4f,
-            isMinimal = colorfulness < 0.2f
-        )
+    private fun analyzeImageCharacteristics(bitmap: Bitmap): SaliencyDetector.ImageCharacteristics {
+        return SaliencyDetector.analyzeImageCharacteristics(bitmap)
     }
 
     /**
-     * Calculate entropy of an image to measure information density.
-     * Higher entropy = more details/patterns/text
-     * Lower entropy = simpler, flatter image
+     * Calculate image entropy using SaliencyDetector.
      */
     private fun calculateImageEntropy(bitmap: Bitmap): Float {
-        val histogram = IntArray(256)
-        val samplePixels = 1000
-        val step = max(1, bitmap.width * bitmap.height / samplePixels)
-        
-        for (y in 0 until bitmap.height step step) {
-            for (x in 0 until bitmap.width step step) {
-                try {
-                    val pixel = bitmap.getPixel(x, y)
-                    val r = (pixel shr 16) and 0xff
-                    val g = (pixel shr 8) and 0xff
-                    val b = pixel and 0xff
-                    val brightness = (r + g + b) / 3
-                    histogram[brightness]++
-                } catch (e: Exception) {
-                    // Skip
-                }
-            }
-        }
-        
-        var entropy = 0.0
-        val total = histogram.sum()
-        if (total == 0) return 0f
-        
-        for (count in histogram) {
-            if (count > 0) {
-                val probability = count.toDouble() / total
-                entropy -= probability * kotlin.math.log(probability, 2.0)
-            }
-        }
-        
-        return (entropy / 8.0).toFloat().coerceIn(0f, 1f)
+        return SaliencyDetector.calculateImageEntropy(bitmap)
     }
 
     /**
@@ -422,67 +332,7 @@ object SmartCrop {
         return CropMode.SALIENCY
     }
 
-    /**
-     * Calculate adaptive saliency weights based on image characteristics.
-     * Different image types benefit from different factor weights.
-     * 
-     * @param characteristics Image properties
-     * @return Array of [edgeWeight, colorWeight, textureWeight]
-     */
-    private fun calculateAdaptiveWeights(characteristics: ImageCharacteristics): FloatArray {
-        // Base weights
-        var edgeWeight = 0.4f
-        var colorWeight = 0.4f
-        var textureWeight = 0.2f
-        
-        // Adjust for dark images - texture becomes more important
-        if (characteristics.isDark) {
-            edgeWeight = 0.35f
-            colorWeight = 0.35f
-            textureWeight = 0.30f
-            Log.d(TAG, "Dark image detected - enhanced texture weight")
-        }
-        
-        // Adjust for bright images - edges become more important
-        if (characteristics.isBright) {
-            edgeWeight = 0.45f
-            colorWeight = 0.35f
-            textureWeight = 0.20f
-            Log.d(TAG, "Bright image detected - enhanced edge weight")
-        }
-        
-        // Adjust for colorful images - boost color detection
-        if (characteristics.isColorful) {
-            edgeWeight = 0.30f
-            colorWeight = 0.50f
-            textureWeight = 0.20f
-            Log.d(TAG, "Colorful image detected - enhanced color weight")
-        }
-        
-        // Adjust for minimal images - boost texture and edges
-        if (characteristics.isMinimal) {
-            edgeWeight = 0.45f
-            colorWeight = 0.25f
-            textureWeight = 0.30f
-            Log.d(TAG, "Minimal image detected - enhanced edge & texture weight")
-        }
-        
-        // Adjust for high-contrast images
-        if (characteristics.contrast > 0.7f) {
-            edgeWeight += 0.05f
-            colorWeight = (colorWeight - 0.05f).coerceAtLeast(0.25f)
-            Log.d(TAG, "High contrast detected - enhanced edge weight")
-        }
-        
-        // Adjust for low-contrast images - use color more
-        if (characteristics.contrast < 0.3f) {
-            edgeWeight -= 0.05f
-            colorWeight += 0.05f
-            Log.d(TAG, "Low contrast detected - enhanced color weight")
-        }
-        
-        return floatArrayOf(edgeWeight, colorWeight, textureWeight)
-    }
+    // calculateAdaptiveWeights - REMOVED (now in SaliencyDetector)
 
     /**
      * Detect focal points in the image based on the mode
@@ -528,90 +378,7 @@ object SmartCrop {
         )
     }
 
-    /**
-     * Find local maxima in a 2D saliency map.
-     * Identifies peaks instead of just using threshold.
-     * Better for multi-subject images.
-     */
-    private fun findLocalMaxima(saliencyMap: Array<FloatArray>, threshold: Float = 0f): List<Pair<Int, Int>> {
-        val maxima = mutableListOf<Pair<Int, Int>>()
-        val gridSize = saliencyMap.size
-        
-        for (y in 1 until gridSize - 1) {
-            for (x in 1 until gridSize - 1) {
-                val current = saliencyMap[y][x]
-                
-                // Check if this is a local maximum (higher than all 8 neighbors)
-                var isMaximum = current > threshold
-                for (dy in -1..1) {
-                    for (dx in -1..1) {
-                        if (dx != 0 || dy != 0) {
-                            if (current <= saliencyMap[y + dy][x + dx]) {
-                                isMaximum = false
-                                break
-                            }
-                        }
-                    }
-                    if (!isMaximum) break
-                }
-                
-                if (isMaximum) {
-                    maxima.add(Pair(x, y))
-                }
-            }
-        }
-        
-        return maxima
-    }
-
-    /**
-     * Cluster nearby focal points into meaningful groups.
-     * Reduces noise from scattered high-salience areas.
-     * 
-     * @param maxima List of local maxima coordinates
-     * @param gridSize Size of grid for proximity calculation
-     * @return Clustered focal point positions
-     */
-    private fun clusterFocalPoints(maxima: List<Pair<Int, Int>>, gridSize: Int): List<Pair<Int, Int>> {
-        if (maxima.isEmpty()) return emptyList()
-        if (maxima.size <= 2) return maxima
-        
-        val clusterRadius = gridSize / 6  // Proximity threshold
-        val clustered = mutableListOf<Pair<Int, Int>>()
-        val processed = mutableSetOf<Pair<Int, Int>>()
-        
-        for (point in maxima) {
-            if (processed.contains(point)) continue
-            
-            // Find all nearby points
-            var sumX = point.first
-            var sumY = point.second
-            var count = 1
-            
-            for (other in maxima) {
-                if (other == point || processed.contains(other)) continue
-                
-                val dx = other.first - point.first
-                val dy = other.second - point.second
-                val distance = kotlin.math.sqrt((dx * dx + dy * dy).toFloat()).toInt()
-                
-                if (distance <= clusterRadius) {
-                    sumX += other.first
-                    sumY += other.second
-                    count++
-                    processed.add(other)
-                }
-            }
-            
-            // Create cluster center
-            val centerX = sumX / count
-            val centerY = sumY / count
-            clustered.add(Pair(centerX, centerY))
-            processed.add(point)
-        }
-        
-        return clustered
-    }
+    // findLocalMaxima, clusterFocalPoints - REMOVED (now in SaliencyDetector)
 
     private fun detectHorizon(bitmap: Bitmap): Int? {
         val height = bitmap.height
@@ -652,296 +419,16 @@ object SmartCrop {
     }
 
     /**
-     * Detect salient regions using enhanced edge detection, brightness analysis, and color variance.
-     * This is an improved lightweight saliency detection algorithm that:
-     * - Analyzes image characteristics for adaptive processing
-     * - Detects high-contrast regions and edges
-     * - Analyzes color saturation and variance
-     * - Uses local maxima detection instead of simple threshold
-     * - Clusters nearby maxima for cleaner focal points
-     * - Handles both bright and dark subjects
-     */
-    /**
-     * Detect salient regions using enhanced edge detection, brightness analysis, and color variance.
-     * This is an improved lightweight saliency detection algorithm that:
-     * - Analyzes image characteristics for adaptive processing
-     * - Detects high-contrast regions and edges
-     * - Analyzes color saturation and variance
-     * - Uses local maxima detection instead of simple threshold
-     * - Clusters nearby maxima for cleaner focal points
-     * - Handles both bright and dark subjects
-     * - Uses Parallel Processing for performance
+     * Detect salient regions using SaliencyDetector.
+     * Delegates to centralized saliency detection for better testability.
      */
     private fun detectSalientRegions(bitmap: Bitmap): List<FocalPoint> {
-        val focalPoints = mutableListOf<FocalPoint>()
-        
-        try {
-            // Analyze image for adaptive processing
-            val characteristics = analyzeImageCharacteristics(bitmap)
-            val adaptiveWeights = calculateAdaptiveWeights(characteristics)
-            Log.d(TAG, "Image characteristics: brightness=${characteristics.averageBrightness}, entropy=${characteristics.entropy}")
-            
-            // Use larger grid for better detail detection
-            val gridSize = 12
-            val cellWidth = bitmap.width / gridSize
-            val cellHeight = bitmap.height / gridSize
-            
-            val saliencyMap = Array(gridSize) { FloatArray(gridSize) }
-            
-            // Calculate saliency for each cell with adaptive weights using parallel processing
-            // Using Java 8 Parallel Streams which is efficient and safe for this use case (MinSDK 31)
-            java.util.stream.IntStream.range(0, gridSize).parallel().forEach { y ->
-                for (x in 0 until gridSize) {
-                    val cellX = x * cellWidth + cellWidth / 2
-                    val cellY = y * cellHeight + cellHeight / 2
-                    
-                    if (cellX < bitmap.width && cellY < bitmap.height) {
-                        saliencyMap[y][x] = calculateCellSaliency(
-                            bitmap, 
-                            x * cellWidth, 
-                            y * cellHeight,
-                            cellWidth,
-                            cellHeight,
-                            adaptiveWeights
-                        )
-                    }
-                }
-            }
-            
-            // Apply smoothing to reduce noise in saliency map
-            val smoothedMap = Array(gridSize) { FloatArray(gridSize) }
-            for (y in 0 until gridSize) {
-                for (x in 0 until gridSize) {
-                    var sum = 0f
-                    var count = 0
-                    for (dy in -1..1) {
-                        for (dx in -1..1) {
-                            val ny = y + dy
-                            val nx = x + dx
-                            if (ny in 0 until gridSize && nx in 0 until gridSize) {
-                                sum += saliencyMap[ny][nx]
-                                count++
-                            }
-                        }
-                    }
-                    smoothedMap[y][x] = sum / count
-                }
-            }
-            
-            // Find top salient regions with improved thresholding
-            val allValues = mutableListOf<Float>()
-            for (row in smoothedMap) {
-                for (value in row) {
-                    allValues.add(value)
-                }
-            }
-            val sorted = allValues.sorted()
-            val threshold = if (sorted.isNotEmpty()) {
-                // Use percentile-based threshold for better separation
-                val percentileIndex = (sorted.size * 0.65).toInt().coerceIn(0, sorted.size - 1)
-                sorted[percentileIndex]
-            } else {
-                0f
-            }
-            
-            // NEW: Find local maxima instead of just thresholding
-            val maxima = findLocalMaxima(smoothedMap, threshold * 0.5f)
-            Log.d(TAG, "Found ${maxima.size} local maxima")
-            
-            // NEW: Cluster nearby maxima
-            val clustered = clusterFocalPoints(maxima, gridSize)
-            Log.d(TAG, "After clustering: ${clustered.size} focal points")
-            
-            // Convert grid coordinates to image coordinates with entropy weighting
-            for ((gridX, gridY) in clustered) {
-                val cellX = (gridX * cellWidth + cellWidth / 2).toFloat()
-                val cellY = (gridY * cellHeight + cellHeight / 2).toFloat()
-                
-                // Use entropy to boost weight of high-information areas
-                val entropyBoost = 1f + characteristics.entropy * 0.5f
-                val weight = smoothedMap[gridY][gridX] * entropyBoost
-                
-                focalPoints.add(
-                    FocalPoint(
-                        x = cellX,
-                        y = cellY,
-                        weight = weight
-                    )
-                )
-            }
-            
-            // Fallback to traditional threshold-based approach if maxima detection fails
-            if (focalPoints.isEmpty()) {
-                Log.d(TAG, "No maxima found, using threshold-based detection")
-                for (y in 0 until gridSize) {
-                    for (x in 0 until gridSize) {
-                        if (saliencyMap[y][x] >= threshold) {
-                            val cellX = (x * cellWidth + cellWidth / 2).toFloat()
-                            val cellY = (y * cellHeight + cellHeight / 2).toFloat()
-                            focalPoints.add(
-                                FocalPoint(
-                                    x = cellX,
-                                    y = cellY,
-                                    weight = saliencyMap[y][x]
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-            
-            // Always include center as fallback
-            if (focalPoints.isEmpty()) {
-                focalPoints.add(
-                    FocalPoint(
-                        x = bitmap.width / 2f,
-                        y = bitmap.height / 2f,
-                        weight = 1.0f
-                    )
-                )
-            }
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Error detecting salient regions", e)
-            // Fallback to center
-            focalPoints.add(
-                FocalPoint(
-                    x = bitmap.width / 2f,
-                    y = bitmap.height / 2f,
-                    weight = 1.0f
-                )
-            )
+        return SaliencyDetector.detectSalientRegions(bitmap).map { 
+            FocalPoint.fromSaliencyFocalPoint(it) 
         }
-        
-        return focalPoints
     }
 
-    /**
-     * Calculate saliency score for a cell using enhanced edge detection, color variance, and texture analysis.
-     * 
-     * OPTIMIZED IMPLEMENTATION:
-     * - Removed object allocations (no List<IntArray>)
-     * - Single pass variance calculation
-     * - Improved Sobel edge detection
-     */
-    private fun calculateCellSaliency(
-        bitmap: Bitmap,
-        startX: Int,
-        startY: Int,
-        cellWidth: Int,
-        cellHeight: Int,
-        adaptiveWeights: FloatArray = floatArrayOf(0.4f, 0.4f, 0.2f)  // edge, color, texture
-    ): Float {
-        val edgeWeight = adaptiveWeights[0]
-        val colorWeight = adaptiveWeights[1]
-        val textureWeight = adaptiveWeights[2]
-        
-        var edgeScore = 0f
-        var contrastScore = 0f
-        var sampleCount = 0
-        
-        // Welford's online algorithm for variance
-        // We track variance for R, G, B separately then average
-        var count = 0
-        var m2R = 0.0
-        var meanR = 0.0
-        var m2G = 0.0
-        var meanG = 0.0
-        var m2B = 0.0
-        var meanB = 0.0
-        
-        val step = max(1, min(cellWidth, cellHeight) / 5)
-        val endY = min(startY + cellHeight, bitmap.height)
-        val endX = min(startX + cellWidth, bitmap.width)
-        
-        for (y in startY until endY step step) {
-            for (x in startX until endX step step) {
-                try {
-                    val pixel = bitmap.getPixel(x, y)
-                    val r = (pixel shr 16) and 0xff
-                    val g = (pixel shr 8) and 0xff
-                    val b = pixel and 0xff
-                    
-                    // Update variance stats
-                    count++
-                    val deltaR = r - meanR
-                    meanR += deltaR / count
-                    m2R += deltaR * (r - meanR)
-                    
-                    val deltaG = g - meanG
-                    meanG += deltaG / count
-                    m2G += deltaG * (g - meanG)
-                    
-                    val deltaB = b - meanB
-                    meanB += deltaB / count
-                    m2B += deltaB * (b - meanB)
-                    
-                    // Calculate brightness
-                    val brightness = (r + g + b) / 3f
-                    
-                    // Enhanced Sobel Edge Detection
-                    // Gx = [-1 0 1]
-                    //      [-2 0 2]
-                    //      [-1 0 1]
-                    // Gy = [-1 -2 -1]
-                    //      [ 0  0  0]
-                    //      [ 1  2  1]
-                    if (x > 0 && x < bitmap.width - 1 && y > 0 && y < bitmap.height - 1) {
-                        // We need 3x3 grid. 
-                        // To save getPixel calls, we can approximate or just do it properly.
-                        // Let's do a simplified cross gradient which is faster and "good enough" for saliency
-                        // | p1 p2 p3 |
-                        // | p4 p5 p6 |
-                        // | p7 p8 p9 |
-                        // But actually, let's just use the previous simple gradient but slightly better
-                        // Or stick to the previous logic but optimized
-                        
-                        val pRight = bitmap.getPixel(x + 1, y)
-                        val pDown = bitmap.getPixel(x, y + 1)
-                        
-                        val bRight = ((pRight shr 16) and 0xff) + ((pRight shr 8) and 0xff) + (pRight and 0xff)
-                        val bDown = ((pDown shr 16) and 0xff) + ((pDown shr 8) and 0xff) + (pDown and 0xff)
-                        
-                        // Simple gradient magnitude
-                        val gx = abs(brightness * 3 - bRight)
-                        val gy = abs(brightness * 3 - bDown)
-                        edgeScore += (gx + gy) * 0.5f
-                    }
-                    
-                    // Enhanced color analysis - saturation + chroma
-                    val maxC = max(max(r, g), b)
-                    val minC = min(min(r, g), b)
-                    val saturation = if (maxC > 0) (maxC - minC).toFloat() / maxC else 0f
-                    val chromaRange = (maxC - minC).toFloat()
-                    contrastScore += saturation * 100f + chromaRange
-                    
-                    sampleCount++
-                } catch (e: Exception) {
-                    // Skip invalid pixels
-                }
-            }
-        }
-        
-        // Calculate final texture score from variance
-        var textureScore = 0f
-        if (count > 1) {
-            val varR = m2R / (count - 1)
-            val varG = m2G / (count - 1)
-            val varB = m2B / (count - 1)
-            textureScore = ((varR + varG + varB) / 3.0).toFloat()
-        }
-        
-        return if (sampleCount > 0) {
-            // Adaptive weighted combination of saliency factors
-            val edgeComponent = (edgeScore / sampleCount) * edgeWeight
-            val contrastComponent = (contrastScore / sampleCount) * colorWeight
-            val textureComponent = textureScore * 0.002f * textureWeight // Normalize texture
-            
-            edgeComponent + contrastComponent + textureComponent
-        } else {
-            0f
-        }
-    }
+    // calculateCellSaliency - REMOVED (now in SaliencyDetector)
 
     /**
      * Detect faces in the image using ML Kit Face Detection.

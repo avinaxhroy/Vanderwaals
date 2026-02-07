@@ -96,26 +96,22 @@ fun SettingsScreen(
         }
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = if (isDark) DarkBackground else LightBackground,
-        snackbarHost = { 
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-            ) 
-        }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-        ) {
-            // Premium Background
-            me.avinas.vanderwaals.ui.theme.components.PremiumBackground(
-                modifier = Modifier.fillMaxSize(),
-                isDark = isDark
-            )
+    LiquidGlassBackground {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            containerColor = Color.Transparent,
+            snackbarHost = { 
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                ) 
+            }
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+            ) {
 
             // Calculate top padding for content (StatusBar + TopAppBar height)
             // Use safeDrawing to account for cutouts and status bars
@@ -146,7 +142,7 @@ fun SettingsScreen(
                 // MODE Section
                 item {
                     LabelSectionHeader(title = "MODE")
-                    GlassCard(
+                    LiquidGlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(0.dp)
                     ) {
@@ -238,7 +234,7 @@ fun SettingsScreen(
                 // APPEARANCE Section
                 item {
                     LabelSectionHeader(title = "APPEARANCE")
-                    GlassCard(
+                    LiquidGlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(8.dp)
                     ) {
@@ -256,7 +252,7 @@ fun SettingsScreen(
                 // AUTO-CHANGE Section
                 item {
                     LabelSectionHeader(title = "AUTO-CHANGE")
-                    GlassCard(
+                    LiquidGlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(0.dp)
                     ) {
@@ -582,7 +578,7 @@ fun SettingsScreen(
                 // APPLY TO Section
                 item {
                     LabelSectionHeader(title = "APPLY TO")
-                    GlassCard(
+                    LiquidGlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(8.dp)
                     ) {
@@ -600,7 +596,7 @@ fun SettingsScreen(
                 // SOURCES Section
                 item {
                     LabelSectionHeader(title = "SOURCES")
-                    GlassCard(
+                    LiquidGlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(16.dp)
                     ) {
@@ -773,7 +769,7 @@ fun SettingsScreen(
                 // STORAGE Section
                 item {
                     LabelSectionHeader(title = "STORAGE")
-                    GlassCard(
+                    LiquidGlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(16.dp)
                     ) {
@@ -831,7 +827,7 @@ fun SettingsScreen(
                 // INSIGHTS Section
                 item {
                     LabelSectionHeader(title = "INSIGHTS")
-                    GlassCard(
+                    LiquidGlassCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onNavigateToAnalytics() },
@@ -890,7 +886,7 @@ fun SettingsScreen(
                 // ABOUT Section
                 item {
                     LabelSectionHeader(title = "ABOUT")
-                    GlassCard(
+                    LiquidGlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(0.dp)
                     ) {
@@ -1179,6 +1175,7 @@ fun SettingsScreen(
                 }
             }
         )
+    }
     }
 }
 

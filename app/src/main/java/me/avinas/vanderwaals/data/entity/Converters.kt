@@ -97,8 +97,8 @@ class Converters(private val gson: Gson) {
      * Converts a FloatArray to a JSON string for storage in Room.
      *
      * Used for storing:
-     * - MobileNetV3 embedding vectors (576 floats)
-     * - User preference vectors (576 floats)
+     * - MobileNetV4 embedding vectors (1280 floats)
+     * - User preference vectors (1280 floats)
      *
      * FloatArray is more memory-efficient than List<Float> for large vectors.
      *

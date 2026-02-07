@@ -10,7 +10,7 @@ import androidx.room.TypeConverters
  * 
  * Stores pre-computed data for all wallpapers in the content catalog:
  * - URL and thumbnail for downloading
- * - Pre-computed embedding vector (576 floats) for similarity matching
+ * - Pre-computed embedding vector (1280 floats) for similarity matching
  * - Color palette extracted during curation
  * - Category and brightness for contextual filtering
  * - Source attribution for credits
@@ -35,7 +35,7 @@ import androidx.room.TypeConverters
  * @property category Category from folder structure (e.g., "gruvbox", "nord", "nature")
  * @property colors List of hex color codes representing the color palette
  * @property brightness Brightness level (0-100)
- * @property embedding 576-dimensional MobileNetV3 embedding vector
+ * @property embedding 1280-dimensional MobileNetV4 embedding vector
  * @property resolution Image resolution (e.g., "3840x2160")
  * @property attribution Source attribution and photographer credit
  */

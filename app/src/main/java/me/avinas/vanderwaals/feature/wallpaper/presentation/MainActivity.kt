@@ -209,82 +209,85 @@ class MainActivity : ComponentActivity() {
                 darkTheme = darkTheme,
                 dynamicColor = false // Use brand colors, not dynamic
             ) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .fillMaxSize(),
-                        // .systemBarsPadding(), // REMOVED: Allow content to extend behind system bars for edge-to-edge
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    // Show loading screen while app is initializing
-                    if (!isInitialized) {
-                        LoadingScreen(
-                            message = loadingMessage,
-                            subMessage = loadingSubMessage,
-                            progress = loadingProgress,
-                            isError = syncFailed,
-                            onRetry = { initViewModel.retryInitialization() }
-                        )
-                    } else {
-                        when (onboardingComplete) {
-                            null -> {
-                            }
-                            else -> {
-                                VanderwaalsNavGraph(onboardingComplete = onboardingComplete!!)
+                // Wrap with LiquidGlassProvider to enable Smart Launcher-style liquid glass effects
+                me.avinas.vanderwaals.ui.theme.glass.LiquidGlassProvider {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .fillMaxSize(),
+                            // .systemBarsPadding(), // REMOVED: Allow content to extend behind system bars for edge-to-edge
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        // Show loading screen while app is initializing
+                        if (!isInitialized) {
+                            LoadingScreen(
+                                message = loadingMessage,
+                                subMessage = loadingSubMessage,
+                                progress = loadingProgress,
+                                isError = syncFailed,
+                                onRetry = { initViewModel.retryInitialization() }
+                            )
+                        } else {
+                            when (onboardingComplete) {
+                                null -> {
+                                }
+                                else -> {
+                                    VanderwaalsNavGraph(onboardingComplete = onboardingComplete!!)
+                                }
                             }
                         }
-                    }
-                    
-                    if (showPermissionDeniedDialog) {
-                        PermissionRationaleDialog(
-                            onDismiss = { showPermissionDeniedDialog = false },
-                            onRetry = {
-                                showPermissionDeniedDialog = false
-                                storagePermissionLauncher.launch(getStoragePermission())
-                            }
-                        )
-                    }
-                    
-                    if (showPermissionPermanentlyDeniedDialog) {
-                        PermissionPermanentlyDeniedDialog(
-                            onDismiss = { showPermissionPermanentlyDeniedDialog = false },
-                            onOpenSettings = {
-                                showPermissionPermanentlyDeniedDialog = false
-                                openAppSettings()
-                            }
-                        )
-                    }
-                    
-                    if (showPermissionExplanationDialog) {
-                        PermissionExplanationDialog(
-                            onDismiss = { showPermissionExplanationDialog = false },
-                            onContinue = {
-                                showPermissionExplanationDialog = false
-                                storagePermissionLauncher.launch(getStoragePermission())
-                            }
-                        )
-                    }
-                    
-                    if (showAlarmPermissionDialog) {
-                        AlarmPermissionExplanationDialog(
-                            onDismiss = { showAlarmPermissionDialog = false },
-                            onContinue = {
-                                showAlarmPermissionDialog = false
-                                openAlarmPermissionSettings()
-                            }
-                        )
-                    }
-                    
-                    // Manifest migration dialog for users upgrading from older versions
-                    if (showMigrationDialog) {
-                        ManifestMigrationDialog(
-                            onUpdateNow = { initViewModel.startMigration() },
-                            onLater = { initViewModel.dismissMigrationDialog() },
-                            onDismiss = { initViewModel.dismissMigrationDialog() },
-                            isLoading = migrationInProgress,
-                            progress = migrationProgress,
-                            progressMessage = migrationMessage
-                        )
+                        
+                        if (showPermissionDeniedDialog) {
+                            PermissionRationaleDialog(
+                                onDismiss = { showPermissionDeniedDialog = false },
+                                onRetry = {
+                                    showPermissionDeniedDialog = false
+                                    storagePermissionLauncher.launch(getStoragePermission())
+                                }
+                            )
+                        }
+                        
+                        if (showPermissionPermanentlyDeniedDialog) {
+                            PermissionPermanentlyDeniedDialog(
+                                onDismiss = { showPermissionPermanentlyDeniedDialog = false },
+                                onOpenSettings = {
+                                    showPermissionPermanentlyDeniedDialog = false
+                                    openAppSettings()
+                                }
+                            )
+                        }
+                        
+                        if (showPermissionExplanationDialog) {
+                            PermissionExplanationDialog(
+                                onDismiss = { showPermissionExplanationDialog = false },
+                                onContinue = {
+                                    showPermissionExplanationDialog = false
+                                    storagePermissionLauncher.launch(getStoragePermission())
+                                }
+                            )
+                        }
+                        
+                        if (showAlarmPermissionDialog) {
+                            AlarmPermissionExplanationDialog(
+                                onDismiss = { showAlarmPermissionDialog = false },
+                                onContinue = {
+                                    showAlarmPermissionDialog = false
+                                    openAlarmPermissionSettings()
+                                }
+                            )
+                        }
+                        
+                        // Manifest migration dialog for users upgrading from older versions
+                        if (showMigrationDialog) {
+                            ManifestMigrationDialog(
+                                onUpdateNow = { initViewModel.startMigration() },
+                                onLater = { initViewModel.dismissMigrationDialog() },
+                                onDismiss = { initViewModel.dismissMigrationDialog() },
+                                isLoading = migrationInProgress,
+                                progress = migrationProgress,
+                                progressMessage = migrationMessage
+                            )
+                        }
                     }
                 }
             }

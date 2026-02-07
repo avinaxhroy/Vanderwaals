@@ -10,11 +10,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Use case for extracting 576-dimensional embedding vectors from user-uploaded wallpaper images.
+ * Use case for extracting 1280-dimensional embedding vectors from user-uploaded wallpaper images.
  * 
  * This use case handles the complete flow of:
  * 1. Loading image from Uri (content:// or file://)
- * 2. Preprocessing bitmap for MobileNetV3 model
+ * 2. Preprocessing bitmap for MobileNetV4 model
  * 3. Extracting embedding vector using TensorFlow Lite
  * 4. Error handling and validation
  * 
@@ -24,9 +24,9 @@ import javax.inject.Singleton
  * - Learning: Extract embeddings from liked wallpapers for preference updates
  * 
  * **Performance:**
- * - Typical execution: 40-80ms on modern devices
- * - Model size: 2.9MB (MobileNetV3-Small)
- * - Output: 576 floats (~2.3KB)
+ * - Typical execution: 50-100ms on modern devices
+ * - Model size: ~4-5MB (MobileNetV4-Conv-Small)
+ * - Output: 1280 floats (~5.1KB)
  * 
  * **Error Handling:**
  * Returns Result<FloatArray> with specific error types:
@@ -63,7 +63,7 @@ class ExtractEmbeddingUseCase @Inject constructor(
      * to prevent memory leaks. Large images are automatically downsampled.
      * 
      * @param imageUri Android Uri pointing to the image file
-     * @return Result<FloatArray> containing 576-dimensional embedding on success,
+     * @return Result<FloatArray> containing 1280-dimensional embedding on success,
      *         or error description on failure
      * 
      * @throws None - All exceptions are caught and returned as Result.failure
@@ -220,8 +220,8 @@ class ExtractEmbeddingUseCase @Inject constructor(
     
     companion object {
         /**
-         * Expected embedding dimension for MobileNetV3-Small model.
+         * Expected embedding dimension for MobileNetV4-Conv-Small model.
          */
-        private const val EXPECTED_EMBEDDING_SIZE = 576
+        private const val EXPECTED_EMBEDDING_SIZE = 1280
     }
 }

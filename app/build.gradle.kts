@@ -49,8 +49,8 @@ android {
         applicationId = "me.avinas.vanderwaals"
         minSdk = 30
         targetSdk = 36
-        versionCode = 415 // Vanderwaals 4.0.0
-        versionName = "4.1.5"
+        versionCode = 450 // Vanderwaals 4.5.0
+        versionName = "4.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

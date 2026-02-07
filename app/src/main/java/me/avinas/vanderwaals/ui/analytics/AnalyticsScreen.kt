@@ -49,7 +49,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.skydoves.landscapist.glide.GlideImage
 import com.skydoves.landscapist.ImageOptions
 import androidx.compose.ui.layout.ContentScale
-import me.avinas.vanderwaals.ui.theme.components.TintedGlassCard
+import me.avinas.vanderwaals.ui.theme.components.LiquidGlassCard
+import me.avinas.vanderwaals.ui.theme.LiquidGlassBackground
 
 /**
  * Analytics Screen - Beautiful conversational dashboard
@@ -76,10 +77,11 @@ fun AnalyticsScreen(
         onNavigateBack()
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = Color.Transparent, // Transparent to show blobs
+    LiquidGlassBackground {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            containerColor = Color.Transparent,
         topBar = {
             Box {
                 androidx.compose.animation.AnimatedVisibility(
@@ -127,12 +129,8 @@ fun AnalyticsScreen(
             modifier = Modifier
                 .fillMaxSize()
         ) {
-            // Dynamic Background Blobs (Centralized)
-            val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-            me.avinas.vanderwaals.ui.theme.components.PremiumBackground(
-                modifier = Modifier.fillMaxSize(),
-                isDark = isDark
-            )
+            // Premium Background removed for Liquid Glass
+
 
             
             // Blur effect over blobs
@@ -160,6 +158,7 @@ fun AnalyticsScreen(
                 }
             }
         }
+    }
     }
 }
 
@@ -251,8 +250,7 @@ private fun PersonalizationStatusCard(state: AnalyticsState) {
         }
     }
 
-    TintedGlassCard(
-        tintColor = Color(0xFF2196F3), // Blue tint
+    LiquidGlassCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -422,7 +420,6 @@ private fun InsightCard(insight: SmartInsight) {
     }
 
     // Background tint should be subtle
-    val tintColor = mainColor.copy(alpha = if (isDark) 0.5f else 0.15f)
     
     // Icon background circle
     val iconBgColor = mainColor.copy(alpha = if (isDark) 0.2f else 0.1f)
@@ -439,8 +436,7 @@ private fun InsightCard(insight: SmartInsight) {
         InsightType.WARNING -> Icons.Default.Warning
     }
 
-    TintedGlassCard(
-        tintColor = tintColor,
+    LiquidGlassCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -489,8 +485,7 @@ private fun InsightCard(insight: SmartInsight) {
 @Composable
 private fun LearningProgressCard(state: AnalyticsState) {
     val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    TintedGlassCard(
-        tintColor = Color(0xFF009688), // Teal tint
+    LiquidGlassCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -643,8 +638,7 @@ private fun AnchorExplanation(
 @Composable
 private fun FeedbackStatsCard(state: AnalyticsState) {
     val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    TintedGlassCard(
-        tintColor = Color(0xFFFF9800), // Orange tint
+    LiquidGlassCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -794,8 +788,7 @@ private fun FeedbackStatsCard(state: AnalyticsState) {
 @Composable
 private fun RecommendationImpactCard(state: AnalyticsState) {
     val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    TintedGlassCard(
-        tintColor = Color(0xFF673AB7), // Deep Purple tint
+    LiquidGlassCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -888,8 +881,7 @@ private fun RecommendationImpactCard(state: AnalyticsState) {
 @Composable
 private fun CategoryBreakdownCard(state: AnalyticsState) {
     val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    TintedGlassCard(
-        tintColor = Color(0xFF3F51B5), // Indigo tint
+    LiquidGlassCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -1023,8 +1015,7 @@ private fun HistoryStatsCard(
     favoriteCategory: String?
 ) {
     val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    TintedGlassCard(
-        tintColor = Color(0xFF607D8B), // Blue Grey tint
+    LiquidGlassCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -1077,8 +1068,7 @@ private fun HistoryStatsCard(
 @Composable
 private fun AdvancedMetricsCard(state: AnalyticsState) {
     val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    TintedGlassCard(
-        tintColor = Color(0xFF795548), // Brown tint
+    LiquidGlassCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(

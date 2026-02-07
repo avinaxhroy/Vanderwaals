@@ -5,7 +5,7 @@ import androidx.room.ColumnInfo
 /**
  * Lightweight projection of [WallpaperMetadata] for UI display.
  * 
- * Excludes the large [WallpaperMetadata.embedding] array (576 floats) to reduce
+ * Excludes the large [WallpaperMetadata.embedding] array (1280 floats) to reduce
  * memory usage and query time when loading lists of wallpapers for the UI.
  * 
  * Use [toWallpaperMetadata] to convert back to the full entity (with empty embedding)

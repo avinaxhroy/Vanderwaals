@@ -49,10 +49,10 @@ import androidx.room.TypeConverters
  * @property id Primary key, always 1 (single user preferences per device)
  * @property mode User's chosen mode: "auto" (learn from scratch) or "personalized" (started with upload)
  *                Note: Both modes use identical learning! Mode only indicates initialization method.
- * @property preferenceVector 576-dimensional vector representing aesthetic preferences
+ * @property preferenceVector 1280-dimensional vector representing aesthetic preferences
  *                Empty at start for Auto Mode, populated from upload for Personalize Mode
  * @property originalEmbedding Prime reference from upload/category (Personalize) or empty (Auto)
- * @property momentumVector 576-dimensional velocity vector for momentum-based learning
+ * @property momentumVector 1280-dimensional velocity vector for momentum-based learning
  * @property likedWallpaperIds List of wallpaper IDs the user explicitly liked
  * @property dislikedWallpaperIds List of wallpaper IDs the user explicitly disliked
  * @property feedbackCount Total number of explicit feedback events (likes + dislikes)

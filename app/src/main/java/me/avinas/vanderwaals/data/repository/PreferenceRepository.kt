@@ -42,5 +42,25 @@ interface PreferenceRepository {
      * Update user preferences
      */
     suspend fun updateUserPreferences(preferences: UserPreferences)
+    
+    /**
+     * Resets preference vectors for embedding dimension migration.
+     * 
+     * Preserves:
+     * - Liked/disliked wallpaper IDs
+     * - Mode setting
+     * 
+     * Clears:
+     * - preferenceVector (set to empty)
+     * - originalEmbedding (set to empty)
+     * - momentumVector (set to empty)
+     * - feedbackCount (reset to 0)
+     * 
+     * This is called when migrating from MobileNetV3 (576D) to MobileNetV4 (1280D)
+     * since the embedding dimensions are incompatible.
+     * 
+     * @param keepMode If true, preserves current mode (auto/personalized). If false, resets to auto.
+     */
+    suspend fun resetForEmbeddingMigration(keepMode: Boolean = false)
 }
 

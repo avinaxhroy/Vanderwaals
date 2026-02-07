@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import me.avinas.vanderwaals.ui.theme.LiquidGlassBackground
 import me.avinas.vanderwaals.ui.theme.components.*
 
 @Composable
@@ -42,19 +43,15 @@ fun WallpaperSourceSelectionScreen(
         viewModel.savePreferences { onContinue() }
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = Color.Transparent
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // Premium Background
-            PremiumBackground(
-                modifier = Modifier.fillMaxSize(),
-                isDark = isDark
-            )
+    LiquidGlassBackground {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            containerColor = Color.Transparent
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier.fillMaxSize()
+            ) {
 
 
             Column(
@@ -217,9 +214,10 @@ fun WallpaperSourceSelectionScreen(
                 }
             }
         }
+
+    }
     }
 }
-
 @Composable
 fun SourceOptionCard(
     title: String,
@@ -230,7 +228,7 @@ fun SourceOptionCard(
     isDark: Boolean,
     content: @Composable (ColumnScope.() -> Unit)? = null
 ) {
-    GlassCard(
+    LiquidGlassCard(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(20.dp)
     ) {

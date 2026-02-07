@@ -247,7 +247,7 @@ object InputValidator {
      * 
      * Requirements:
      * - Non-null
-     * - Must have exactly 576 dimensions (MobileNetV3 embedding size)
+     * - Must have exactly 1280 dimensions (MobileNetV4-Conv-Small embedding size)
      * - Must not contain NaN or Infinite values
      * 
      * @param embedding Embedding vector to validate
@@ -258,8 +258,8 @@ object InputValidator {
             return ValidationResult.Invalid("Embedding cannot be null")
         }
         
-        if (embedding.size != 576) {
-            return ValidationResult.Invalid("Embedding must have 576 dimensions, got: ${embedding.size}")
+        if (embedding.size != 1280) {
+            return ValidationResult.Invalid("Embedding must have 1280 dimensions, got: ${embedding.size}")
         }
         
         if (embedding.any { it.isNaN() || it.isInfinite() }) {
