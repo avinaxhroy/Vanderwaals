@@ -295,7 +295,8 @@ private fun HistoryItemRow(
                 alignment = Alignment.Center
             ),
             modifier = Modifier
-                .size(80.dp)
+                .width(72.dp)
+                .height(110.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .clickable(onClick = onThumbnailClick)
         )
@@ -303,11 +304,12 @@ private fun HistoryItemRow(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .height(80.dp),
+                .height(110.dp)
+                .padding(vertical = 4.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column(
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
                     text = item.wallpaper.category.ifEmpty { "Wallpaper" }.replaceFirstChar { it.uppercase() },
@@ -328,7 +330,7 @@ private fun HistoryItemRow(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.Start),
+                horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.Start),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 AnimatedFeedbackButton(
@@ -355,16 +357,13 @@ private fun HistoryItemRow(
 
                 IconButton(
                     onClick = onDownloadClick,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(if (isDark) SurfaceHighlightDark else SurfaceHighlightLight)
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Download,
                         contentDescription = "Download",
                         tint = if (isDark) TextPrimaryDark else TextPrimaryLight,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
@@ -383,13 +382,13 @@ private fun AnimatedFeedbackButton(
     onClick: () -> Unit
 ) {
     val containerColor by animateColorAsState(
-        targetValue = if (isActive) activeColor.copy(alpha = 0.15f) else (if (isDark) SurfaceHighlightDark else SurfaceHighlightLight),
+        targetValue = if (isActive) activeColor.copy(alpha = 0.15f) else Color.Transparent,
         animationSpec = tween(200),
         label = "container_color"
     )
     
     val contentColor by animateColorAsState(
-        targetValue = if (isActive) activeColor else (if (isDark) TextPrimaryDark else TextPrimaryLight),
+        targetValue = if (isActive) activeColor else (if (isDark) TextSecondaryDark else TextSecondaryLight),
         animationSpec = tween(200),
         label = "content_color"
     )
@@ -421,15 +420,15 @@ private fun AnimatedFeedbackButton(
         IconButton(
             onClick = onClick,
             modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(18.dp))
+                .size(40.dp)
+                .clip(RoundedCornerShape(20.dp))
                 .background(containerColor)
         ) {
             Icon(
                 imageVector = if (isActive) activeIcon else inactiveIcon,
                 contentDescription = null,
                 tint = contentColor,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(22.dp)
             )
         }
     }
