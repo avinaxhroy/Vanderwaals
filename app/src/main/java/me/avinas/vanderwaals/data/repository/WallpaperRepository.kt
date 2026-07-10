@@ -263,7 +263,7 @@ interface WallpaperRepository {
 
     /**
      * Gets the File object for the pre-cropped wallpaper.
-     * File path: cache/wallpapers/{wallpaperId}_cropped.png
+     * File path: cache/wallpapers/{wallpaperId}_cropped.jpg
      *
      * @param wallpaper Wallpaper metadata
      * @return File object pointing to the cropped wallpaper

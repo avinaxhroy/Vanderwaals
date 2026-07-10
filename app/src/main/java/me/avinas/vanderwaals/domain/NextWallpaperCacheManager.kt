@@ -9,36 +9,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Manages pre-computed next wallpaper recommendations for perceived instant wallpaper changes.
- * 
- * **How It Works:**
- * 1. After applying wallpaper, immediately compute next recommendation in background
- * 2. Store result in cache for instant retrieval on next "Change Now" click
- * 3. Invalidate cache when user provides explicit feedback (especially dislike)
- * 
- * **Both But Different Mode:**
- * For users with "Both But Different" enabled, this manager caches TWO wallpapers:
- * - One for home screen
- * - One for lock screen (guaranteed different from home)
- * This ensures instant wallpaper changes even when applying different wallpapers to each screen.
- * 
- * **Race Condition Safety:**
- * Uses a generation counter to handle concurrent requests safely:
- * - Each cache operation increments generation
- * - Background computations check generation before storing result
- * - If generation changed during computation, result is discarded (stale)
- * 
- * **Example Scenario:**
- * ```
- * T=1s: User clicks change → apply cached A, start computing B (gen=1)
- * T=4s: User clicks change AGAIN while B still computing
- *       → No cache available, compute fresh C, gen=2
- * T=5s: B finishes, BUT gen(1) != current(2) → discarded safely
- * ```
- * 
- * @property selectNextWallpaperUseCase The actual wallpaper selection algorithm
- * 
- * @see SelectNextWallpaperUseCase
+ * Caches the next wallpaper recommendation so "Change Now" feels instant.
+ *
+ * After each wallpaper apply, the next pick is computed in the background.
+ * For "Both But Different" mode, two wallpapers are cached (home + lock).
+ * A generation counter discards stale computations from concurrent requests.
  */
 @Singleton
 class NextWallpaperCacheManager @Inject constructor(

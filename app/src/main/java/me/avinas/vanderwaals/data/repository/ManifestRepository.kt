@@ -2,7 +2,9 @@ package me.avinas.vanderwaals.data.repository
 
 import android.util.Log
 import com.google.gson.JsonSyntaxException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import me.avinas.vanderwaals.BuildConfig
 import me.avinas.vanderwaals.data.dao.WallpaperMetadataDao
 import me.avinas.vanderwaals.network.LocalManifestService
@@ -15,53 +17,8 @@ import javax.inject.Singleton
 import kotlin.math.pow
 
 /**
- * Repository for managing wallpaper manifest synchronization.
- * 
- * Handles downloading the manifest.json file from jsDelivr/GitHub,
- * parsing the JSON response, converting to database entities, and
- * storing in the local Room database.
- * 
- * **Responsibilities:**
- * - Download manifest from CDN with retry logic
- * - Parse JSON to DTOs with validation
- * - Convert DTOs to Room entities
- * - Batch insert into database
- * - Error handling with meaningful messages
- * 
- * **Sync Strategy:**
- * - Weekly sync via WorkManager
- * - Manual sync from settings
- * - Retry on failure with exponential backoff
- * - Validate manifest structure before saving
- * 
- * **Error Handling:**
- * - Network errors: Retry with backoff
- * - HTTP errors: Log and fail with message
- * - Parse errors: Fail immediately (bad manifest)
- * - Database errors: Fail with rollback
- * 
- * **Usage:**
- * ```kotlin
- * @Inject lateinit var manifestRepository: ManifestRepository
- * 
- * viewModelScope.launch {
- *     val result = manifestRepository.syncManifest()
- *     result.fold(
- *         onSuccess = { count ->
- *             Log.d("Sync", "Synced $count wallpapers")
- *         },
- *         onFailure = { error ->
- *             Log.e("Sync", "Failed: ${error.message}")
- *         }
- *     )
- * }
- * ```
- * 
- * @property manifestService Retrofit service for manifest API
- * @property wallpaperDao DAO for database operations
- * 
- * @see ManifestService
- * @see WallpaperMetadataDao
+ * Syncs the wallpaper manifest from jsDelivr/GitHub into the local Room database.
+ * Handles download, JSON parsing, entity conversion, and batch insert with retry logic.
  */
 @Singleton
 class ManifestRepository @Inject constructor(
@@ -198,9 +155,9 @@ class ManifestRepository @Inject constructor(
                     return Result.failure(Exception(errorMessage))
                 }
                 
-                // Convert to entities
+                // Convert to entities (off Main: Base64 decode + dequantize for 6000+ embeddings)
                 onProgress?.invoke("Processing wallpaper data...", 0.6f, manifest.wallpapers.size)
-                val entities = manifest.toWallpaperEntities()
+                val entities = withContext(Dispatchers.Default) { manifest.toWallpaperEntities() }
                 Log.d(TAG, "Converted ${entities.size} wallpapers to entities")
                 
                 // Save to database (replace all)

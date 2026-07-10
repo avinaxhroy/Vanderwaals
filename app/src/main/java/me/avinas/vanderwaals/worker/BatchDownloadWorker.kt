@@ -24,31 +24,8 @@ import me.avinas.vanderwaals.data.entity.DownloadQueueItem
 import me.avinas.vanderwaals.data.repository.WallpaperRepository
 
 /**
- * WorkManager worker for batch downloading wallpapers in the background.
- * 
- * Downloads wallpapers from the download queue with the following features:
- * - Foreground service with progress notification
- * - Downloads top 50 wallpapers by priority
- * - Updates notification with current progress
- * - Supports cancellation
- * - Retries failed downloads (max 3 attempts per wallpaper)
- * 
- * Work constraints:
- * - NetworkType.UNMETERED (WiFi only, no cellular data)
- * - BatteryNotLow (preserve battery)
- * - StorageNotLow (ensure space for downloads)
- * 
- * Notification shows:
- * - Title: "Downloading wallpapers"
- * - Text: "15/50 wallpapers downloaded"
- * - Progress bar
- * - Cancel action
- * 
- * **Usage:**
- * Triggered automatically after manifest sync or manually from settings.
- * 
- * @see me.avinas.vanderwaals.data.repository.WallpaperRepository
- * @see me.avinas.vanderwaals.data.entity.DownloadQueueItem
+ * Downloads up to 50 queued wallpapers over Wi-Fi with a progress notification.
+ * Retries failures up to 3 times. Triggered after manifest sync or manually.
  */
 @HiltWorker
 class BatchDownloadWorker @AssistedInject constructor(

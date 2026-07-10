@@ -10,36 +10,9 @@ import kotlinx.coroutines.flow.Flow
 import me.avinas.vanderwaals.data.entity.DownloadQueueItem
 
 /**
- * Room DAO for managing the wallpaper download queue.
- * 
- * Provides queries for:
- * - Populating the queue based on similarity scores
- * - Retrieving top-priority wallpapers for download
- * - Updating download status and retry counts
- * - Re-ranking the queue after user feedback
- * 
- * **Queue Management:**
- * - Maintains top 50 wallpapers based on priority (similarity score)
- * - Automatically handles failed downloads with exponential backoff
- * - Re-ranks after each feedback event to reflect updated preferences
- * 
- * **Usage:**
- * ```kotlin
- * // Populate queue with top matches
- * val topMatches = calculateSimilarities(allWallpapers, preferenceVector)
- *     .take(50)
- *     .map { DownloadQueueItem.create(it.id, it.similarity) }
- * dao.insertAll(topMatches)
- * 
- * // Get wallpapers to download
- * val toDownload = dao.getTopUndownloaded(limit = 10)
- * downloadWallpapers(toDownload)
- * 
- * // Mark as downloaded
- * dao.markDownloaded(wallpaperId)
- * ```
- * 
- * @see me.avinas.vanderwaals.data.entity.DownloadQueueItem
+ * DAO for managing the wallpaper download queue.
+ * Tracks priority (similarity score), download status, and retry counts.
+ * Maintains up to 50 items, re-ranked after feedback events.
  */
 @Dao
 interface DownloadQueueDao {

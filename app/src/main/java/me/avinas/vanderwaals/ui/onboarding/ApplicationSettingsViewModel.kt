@@ -127,34 +127,57 @@ class ApplicationSettingsViewModel @Inject constructor(
                 _startState.value = StartState.Starting("Preparing wallpapers...", 0.1f)
                 
                 val isDatabaseInitialized = manifestRepository.isDatabaseInitialized()
+
+                // Get enabled sources
+                val settings = settingsDataStore.settings.first()
+                val githubEnabled = settings.githubEnabled
+                val bingEnabled = settings.bingEnabled
+                val vanderwaalsCollectionEnabled = settings.vanderwaalsCollectionEnabled
+
                 if (!isDatabaseInitialized) {
                     _startState.value = StartState.Error(
                         "Wallpaper catalog not available. Please restart the app."
                     )
                     return@launch
                 }
-                
+
                 val wallpaperCount = manifestRepository.getWallpaperCount()
                 Log.d("ApplicationSettings", "Catalog ready with $wallpaperCount wallpapers")
-                
+
                 // Download first wallpaper for immediate display (10% -> 40%)
                 // PRIORITY: Use first liked wallpaper from confirmation gallery if available
                 Log.d("ApplicationSettings", "Preparing first wallpaper for immediate display...")
                 _startState.value = StartState.Starting("Preparing your first wallpaper...", 0.2f)
-                
+
                 val existingPrefs = preferenceRepository.getUserPreferences().first()
                 val likedIds = existingPrefs?.likedWallpaperIds ?: emptySet()
-                
+
                 val allWallpapers = wallpaperRepository.getAllWallpapers().first()
+                var preDownloadedWallpaperId: String? = null
                 if (allWallpapers.isNotEmpty()) {
+                    // Build the set of enabled source names to filter candidates
+                    val enabledSources = buildSet<String> {
+                        if (githubEnabled) add("github")
+                        if (bingEnabled) add("bing")
+                        if (vanderwaalsCollectionEnabled) add("vanderwaals")
+                    }
+                    
+                    val sourceMatchingWallpapers = if (enabledSources.isEmpty()) {
+                        allWallpapers
+                    } else {
+                        allWallpapers.filter { it.source.lowercase() in enabledSources }
+                    }
+
+                    val pool = sourceMatchingWallpapers.ifEmpty { allWallpapers }
+                    
                     // Try to use first liked wallpaper, fallback to random
                     val firstWallpaper = if (likedIds.isNotEmpty()) {
                         val firstLikedId = likedIds.first()
-                        allWallpapers.find { it.id == firstLikedId }
-                            ?: allWallpapers.random()
+                        pool.find { it.id == firstLikedId }
+                            ?: pool.random()
                             .also { Log.w("ApplicationSettings", "Liked wallpaper $firstLikedId not found, using random") }
                     } else {
-                        allWallpapers.random()
+                        pool.random()
                     }
                     
                     Log.d("ApplicationSettings", "Selected wallpaper: ${firstWallpaper.id} (liked: ${likedIds.contains(firstWallpaper.id)})")
@@ -162,6 +185,7 @@ class ApplicationSettingsViewModel @Inject constructor(
                     val downloadResult = wallpaperRepository.downloadWallpaper(firstWallpaper)
                     if (downloadResult.isSuccess) {
                         wallpaperRepository.markAsDownloaded(firstWallpaper.id)
+                        preDownloadedWallpaperId = firstWallpaper.id
                         Log.d("ApplicationSettings", "Downloaded first wallpaper: ${firstWallpaper.id}")
                     } else {
                         Log.w("ApplicationSettings", "Failed to download first wallpaper: ${downloadResult.exceptionOrNull()?.message}")
@@ -209,6 +233,8 @@ class ApplicationSettingsViewModel @Inject constructor(
                     ChangeInterval.SIX_HOURS -> "6hours"
                     ChangeInterval.TWELVE_HOURS -> "12hours"
                     ChangeInterval.DAILY -> "daily"
+                    ChangeInterval.THREE_DAYS -> "3days"
+                    ChangeInterval.SEVEN_DAYS -> "7days"
                     ChangeInterval.NEVER -> "never"
                 }
                 
@@ -328,6 +354,28 @@ class ApplicationSettingsViewModel @Inject constructor(
                             return@launch
                         }
                     }
+                    ChangeInterval.THREE_DAYS -> {
+                        val schedulingResult = workScheduler.scheduleWallpaperChange(
+                            interval = ChangeInterval.THREE_DAYS,
+                            targetScreen = targetScreen
+                        )
+                        if (schedulingResult is me.avinas.vanderwaals.worker.SchedulingResult.PermissionDenied) {
+                            _needsAlarmPermission.value = true
+                            _startState.value = StartState.Error(schedulingResult.message)
+                            return@launch
+                        }
+                    }
+                    ChangeInterval.SEVEN_DAYS -> {
+                        val schedulingResult = workScheduler.scheduleWallpaperChange(
+                            interval = ChangeInterval.SEVEN_DAYS,
+                            targetScreen = targetScreen
+                        )
+                        if (schedulingResult is me.avinas.vanderwaals.worker.SchedulingResult.PermissionDenied) {
+                            _needsAlarmPermission.value = true
+                            _startState.value = StartState.Error(schedulingResult.message)
+                            return@launch
+                        }
+                    }
                     ChangeInterval.FIFTEEN_MINUTES -> {
                         val schedulingResult = workScheduler.scheduleWallpaperChange(
                             interval = ChangeInterval.FIFTEEN_MINUTES,
@@ -348,25 +396,63 @@ class ApplicationSettingsViewModel @Inject constructor(
                     }
                 }
                 
-                // Step 4: Trigger immediate wallpaper change (85% -> 95%)
+               // Step 4: Trigger immediate wallpaper change (85% -> 95%)
                 _startState.value = StartState.Starting("Applying your first wallpaper...", 0.85f)
                 
                 // IMPORTANT: Queue immediate one-time wallpaper change
                 // This ensures wallpaper is applied and visible when user returns to main screen
                 // CRITICAL FIX: Pass targetScreen parameter to worker
+                // CRITICAL FIX: Pass pre-downloaded wallpaper ID so the worker skips the
+                // expensive SelectNextWallpaperUseCase (16+ seconds) and re-download —
+                // the wallpaper is already cached on disk from the pre-download above.
                 val immediateChangeRequest = OneTimeWorkRequestBuilder<WallpaperChangeWorker>()
                     .setInputData(workDataOf(
                         WallpaperChangeWorker.KEY_TARGET_SCREEN to targetScreen,
-                        WallpaperChangeWorker.KEY_MODE to WallpaperChangeWorker.MODE_VANDERWAALS
+                        WallpaperChangeWorker.KEY_MODE to WallpaperChangeWorker.MODE_VANDERWAALS,
+                        WallpaperChangeWorker.KEY_SELECTED_WALLPAPER_ID to preDownloadedWallpaperId
                     ))
                     .addTag("manual_change")
                     .addTag("immediate_onboarding")
                     .build()
+                val workId = immediateChangeRequest.id
                 workManager.enqueue(immediateChangeRequest)
                 
                 Log.d("ApplicationSettings", "Immediate wallpaper change triggered for target: $targetScreen")
                 
-                // Step 5: Finish onboarding (95% -> 100%)
+                // Step 5: Wait for wallpaper change to complete before finishing onboarding
+                // This ensures wallpaper is applied before user sees main screen
+                var wallpaperChangeCompleted = false
+                viewModelScope.launch {
+                    workManager.getWorkInfoByIdFlow(workId).collect { workInfo ->
+                        if (workInfo != null && workInfo.state.isFinished) {
+                            if (workInfo.state == androidx.work.WorkInfo.State.SUCCEEDED) {
+                                Log.d("ApplicationSettings", "Immediate wallpaper change completed successfully")
+                            } else {
+                                Log.w("ApplicationSettings", "Immediate wallpaper change failed, continuing anyway")
+                            }
+                            wallpaperChangeCompleted = true
+                            return@collect
+                        }
+                    }
+                }
+                
+                // Wait up to 90 seconds for wallpaper change to complete
+                var waitTime = 0
+                while (!wallpaperChangeCompleted && waitTime < 90) {
+                    delay(1000)
+                    waitTime++
+                    if (waitTime % 10 == 0) {
+                        Log.d("ApplicationSettings", "Waiting for wallpaper change... ${waitTime}s")
+                    }
+                }
+                
+                if (!wallpaperChangeCompleted) {
+                    Log.w("ApplicationSettings", "Timeout waiting for wallpaper change, continuing anyway")
+                } else {
+                    Log.d("ApplicationSettings", "Wallpaper change completed, proceeding to main screen")
+                }
+                
+                // Step 6: Finish onboarding (95% -> 100%)
                 _startState.value = StartState.Starting("Finishing setup...", 0.95f)
                 
                 // Small delay for smooth UX
@@ -490,6 +576,8 @@ class ApplicationSettingsViewModel @Inject constructor(
                     ChangeInterval.SIX_HOURS -> "6hours"
                     ChangeInterval.TWELVE_HOURS -> "12hours"
                     ChangeInterval.DAILY -> "daily"
+                    ChangeInterval.THREE_DAYS -> "3days"
+                    ChangeInterval.SEVEN_DAYS -> "7days"
                     ChangeInterval.NEVER -> "never"
                 }
                 

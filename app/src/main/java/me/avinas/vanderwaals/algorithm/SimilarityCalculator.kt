@@ -6,16 +6,15 @@ import kotlin.math.sqrt
 
 /**
  * Calculates similarity scores between wallpaper embeddings using cosine similarity and color matching.
- * 
+ *
  * This class implements the ranking algorithm that combines:
- * - Embedding similarity (70% weight): Cosine similarity between 1280-dimensional vectors
- * - Color similarity (20% weight): Distance between color palettes in RGB space
- * - Category bonus (10% weight): Boost for matching categories and brightness
- * 
- * The final ranking formula:
- * ```
- * final_score = (embedding_score × 0.7) + (color_score × 0.2) + (category_bonus × 0.1)
- * ```
+ * - Embedding similarity (75% weight): Cosine similarity between 1280-dimensional vectors
+ * - Color similarity (12% weight): CIE76 ΔE distance in LAB colour space
+ * - Category bonus (2% weight): Boost for matching categories and brightness
+ *
+ * Weights are centralised in [RecommendationWeights].  Non-enhanced paths
+ * renormalise by [RecommendationWeights.STANDARD_WEIGHTS_SUM] (excludes
+ * composition) so a perfect match scores 1.0.
  * 
  * @see EmbeddingExtractor for generating embeddings
  * @see PreferenceUpdater for updating user preferences
@@ -23,12 +22,13 @@ import kotlin.math.sqrt
 class SimilarityCalculator {
     
     companion object {
-        // ENHANCED WEIGHTS: Focus more on deep semantic understanding
-        private const val EMBEDDING_WEIGHT = 0.75f       // MobileNetV4 captures aesthetic essence
-        private const val COLOR_WEIGHT = 0.12f           // Perceptual LAB matching
-        private const val COMPOSITION_WEIGHT = 0.11f     // Visual composition similarity
-        private const val CATEGORY_WEIGHT = 0.02f        // Minimal: labels unreliable across sources
-        
+        // Canonical weights — see RecommendationWeights for documentation.
+        private val EMBEDDING_WEIGHT = RecommendationWeights.EMBEDDING_WEIGHT
+        private val COLOR_WEIGHT = RecommendationWeights.COLOR_WEIGHT
+        private val COMPOSITION_WEIGHT = RecommendationWeights.COMPOSITION_WEIGHT
+        private val CATEGORY_WEIGHT = RecommendationWeights.CATEGORY_WEIGHT
+        private val STANDARD_WEIGHTS_SUM = RecommendationWeights.STANDARD_WEIGHTS_SUM
+
         // Brightness tolerance for matching (±20 on 0-100 scale)
         private const val BRIGHTNESS_TOLERANCE = 20
         
@@ -73,26 +73,38 @@ class SimilarityCalculator {
         userCategory: String?,
         userBrightness: Int,
         userContrast: Int,
-        wallpaper: WallpaperMetadata
+        wallpaper: WallpaperMetadata,
+        dislikedEmbedding: FloatArray? = null
     ): Float {
-        // 1. Embedding similarity (70% weight)
+        // 1. Embedding similarity (primary aesthetic signal)
         val embeddingScore = cosineSimilarity(userEmbedding, wallpaper.embedding)
-        
-        // 2. Color similarity (20% weight)
+
+        // 2. Dislike penalty: reduce score for wallpapers whose embedding is positively
+        //    similar to the disliked content centroid.  This doubles down on the negative
+        //    EMA signal already encoded in userEmbedding, catching residual similarity.
+        val dislikePenalty = if (dislikedEmbedding != null && wallpaper.embedding.isNotEmpty()) {
+            // cosineSimilarity returns [0, 1]; clamp at 0 so anti-correlated content gets no penalty
+            cosineSimilarity(dislikedEmbedding, wallpaper.embedding).coerceAtLeast(0f) * 0.30f
+        } else 0f
+
+        // 3. Color similarity using perceptual CIE76 ΔE distance
         val colorScore = calculateColorSimilarity(userColors, wallpaper.colors)
-        
-        // 3. Category and brightness bonus (10% weight)
+
+        // 4. Category and brightness bonus
         val categoryScore = calculateCategoryBonus(
             userCategory = userCategory,
             userBrightness = userBrightness,
             userContrast = userContrast,
             wallpaper = wallpaper
         )
-        
-        // Combine weighted scores
-        return (embeddingScore * EMBEDDING_WEIGHT) + 
-               (colorScore * COLOR_WEIGHT) + 
-               (categoryScore * CATEGORY_WEIGHT)
+
+        // Combine weighted scores; dislike penalty applied inside the embedding term.
+        // Renormalise by STANDARD_WEIGHTS_SUM so a perfect match scores 1.0
+        // (composition weight is excluded here because no composition data is
+        // available in this code path).
+        return (((embeddingScore - dislikePenalty).coerceAtLeast(0f) * EMBEDDING_WEIGHT) +
+               (colorScore * COLOR_WEIGHT) +
+               (categoryScore * CATEGORY_WEIGHT)) / STANDARD_WEIGHTS_SUM
     }
     
     /**
@@ -124,22 +136,29 @@ class SimilarityCalculator {
         userBrightness: Int,
         userContrast: Int,
         wallpaper: WallpaperMetadata,
-        wallpaperAnalysis: EnhancedImageAnalyzer.ImageAnalysis?
+        wallpaperAnalysis: EnhancedImageAnalyzer.ImageAnalysis?,
+        dislikedEmbedding: FloatArray? = null
     ): Float {
         // 1. Embedding similarity (75% weight) - Core aesthetic understanding
         val embeddingScore = cosineSimilarity(userEmbedding, wallpaper.embedding)
-        
-        // 2. If we have enhanced analysis, use semantic similarity for remaining 25%
+
+        // 2. Dislike penalty — same logic as calculateCompositeSimilarity
+        val dislikePenalty = if (dislikedEmbedding != null && wallpaper.embedding.isNotEmpty()) {
+            cosineSimilarity(dislikedEmbedding, wallpaper.embedding).coerceAtLeast(0f) * 0.30f
+        } else 0f
+        val adjustedEmbeddingScore = (embeddingScore - dislikePenalty).coerceAtLeast(0f)
+
+        // 3. If we have enhanced analysis, use semantic similarity for remaining 25%
         return if (userAnalysis != null && wallpaperAnalysis != null) {
             val semanticScore = EnhancedImageAnalyzer.calculateSemanticSimilarity(
-                userAnalysis, 
+                userAnalysis,
                 wallpaperAnalysis
             )
-            
-            // Combine: 75% embedding (deep learning) + 25% semantic (composition/mood/color)
-            (embeddingScore * EMBEDDING_WEIGHT) + (semanticScore * (1f - EMBEDDING_WEIGHT))
+            // Combine: 75% adjusted embedding + 25% semantic (composition/mood/colour)
+            (adjustedEmbeddingScore * EMBEDDING_WEIGHT) + (semanticScore * (1f - EMBEDDING_WEIGHT))
         } else {
-            // Fallback to standard composite similarity
+            // Fallback to standard composite similarity (renormalised, same as
+            // calculateCompositeSimilarity, so a perfect match scores 1.0).
             val colorScore = calculateColorSimilarity(userColors, wallpaper.colors)
             val categoryScore = calculateCategoryBonus(
                 userCategory = userCategory,
@@ -147,10 +166,9 @@ class SimilarityCalculator {
                 userContrast = userContrast,
                 wallpaper = wallpaper
             )
-            
-            (embeddingScore * EMBEDDING_WEIGHT) + 
-            (colorScore * COLOR_WEIGHT) + 
-            (categoryScore * CATEGORY_WEIGHT)
+            ((adjustedEmbeddingScore * EMBEDDING_WEIGHT) +
+            (colorScore * COLOR_WEIGHT) +
+            (categoryScore * CATEGORY_WEIGHT)) / STANDARD_WEIGHTS_SUM
         }
     }
     
@@ -229,8 +247,8 @@ class SimilarityCalculator {
         // Average distance per color
         val avgDistance = totalDistance / rgb1.size
         
-        // Normalize: max possible distance in RGB space is sqrt(3 * 255^2) ≈ 441
-        val maxDistance = 441f
+        // Normalize: max CIE76 ΔE ≈ 100 (black ↔ white in CIELab space)
+        val maxDistance = 100f
         val normalizedDistance = (avgDistance / maxDistance).coerceIn(0f, 1f)
         
         // Convert distance to similarity (inverse)
@@ -301,21 +319,33 @@ class SimilarityCalculator {
     }
     
     /**
-     * Calculates Euclidean distance between two colors in RGB space.
-     * 
+     * Perceptual colour distance (CIE76 ΔE) between two colours given as RGB triples.
+     *
+     * Operates in the perceptually-uniform CIELab colour space so distances closely match
+     * how humans perceive colour differences (unlike Euclidean RGB distance).
+     * Max ΔE ≈ 100 (black ↔ white).
+     *
      * @param color1 First RGB triple
      * @param color2 Second RGB triple
-     * @return Euclidean distance (0 to ~441)
+     * @return CIE76 ΔE (0 to ~100)
      */
     private fun euclideanColorDistance(
         color1: Triple<Int, Int, Int>,
         color2: Triple<Int, Int, Int>
-    ): Float {
-        val dr = (color1.first - color2.first).toFloat()
-        val dg = (color1.second - color2.second).toFloat()
-        val db = (color1.third - color2.third).toFloat()
-        
-        return sqrt(dr * dr + dg * dg + db * db)
+    ): Float = labDeltaE(color1, color2).toFloat()
+
+    /**
+     * Converts an RGB triple to CIELab (D65 illuminant).
+     * Delegates to the shared [me.avinas.vanderwaals.core.ColorSpace] implementation.
+     */
+    private fun rgbTripleToLab(c: Triple<Int, Int, Int>): Triple<Double, Double, Double> =
+        me.avinas.vanderwaals.core.ColorSpace.rgbToLab(c.first, c.second, c.third)
+
+    /** CIE76 ΔE between two RGB triples. */
+    private fun labDeltaE(c1: Triple<Int, Int, Int>, c2: Triple<Int, Int, Int>): Double {
+        val lab1 = rgbTripleToLab(c1)
+        val lab2 = rgbTripleToLab(c2)
+        return me.avinas.vanderwaals.core.ColorSpace.labDeltaE(lab1, lab2)
     }
 }
 

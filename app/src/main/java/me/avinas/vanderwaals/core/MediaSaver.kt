@@ -32,8 +32,8 @@ class MediaSaver @Inject constructor(
             if (!file.exists() || file.length() <= 0) {
                 return Result.failure(Exception("Source file is empty or does not exist"))
             }
-            
-            android.util.Log.d("MediaSaver", "Saving image: ${file.absolutePath} (${file.length()} bytes)")
+
+            android.util.Log.d("MediaSaver", "Saving image to gallery (${file.length()} bytes)")
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 saveImageScopedStorage(file, fileName)
@@ -92,7 +92,7 @@ class MediaSaver @Inject constructor(
         
         if (!appDir.exists()) {
             if (!appDir.mkdirs()) {
-                return Result.failure(Exception("Failed to create directory: ${appDir.absolutePath}"))
+                return Result.failure(Exception("Failed to create media directory"))
             }
         }
 

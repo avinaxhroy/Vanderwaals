@@ -1,41 +1,8 @@
 package me.avinas.vanderwaals.network
 
 /**
- * Configuration for Bing Wallpaper Archive regions and languages.
- * 
+ * Region/language constants for Bing Wallpaper Archive queries.
  * Based on npanuhin/Bing-Wallpaper-Archive supported regions.
- * Each region has different wallpapers based on Bing's localization.
- * 
- * **Supported Regions**:
- * - United States (en)
- * - United Kingdom (en)
- * - Canada (en, fr)
- * - France (fr)
- * - Germany (de)
- * - Italy (it)
- * - Spain (es)
- * - India (en)
- * - China (zh)
- * - Japan (ja)
- * - Brazil (pt)
- * - Rest of World (en)
- * 
- * **Usage**:
- * ```kotlin
- * // Get all enabled regions
- * val regions = BingRegionConfig.getEnabledRegions()
- * regions.forEach { region ->
- *     val wallpapers = bingService.getArchiveManifest(region.country, region.language)
- *     // Process wallpapers
- * }
- * 
- * // Get specific region
- * val usRegion = BingRegionConfig.US_ENGLISH
- * println(usRegion.displayName)  // "United States (English)"
- * 
- * // Get all available regions for user selection
- * val allRegions = BingRegionConfig.ALL_REGIONS
- * ```
  */
 object BingRegionConfig {
     

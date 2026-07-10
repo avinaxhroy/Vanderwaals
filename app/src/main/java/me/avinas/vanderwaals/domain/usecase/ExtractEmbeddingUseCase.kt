@@ -10,36 +10,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Use case for extracting 1280-dimensional embedding vectors from user-uploaded wallpaper images.
- * 
- * This use case handles the complete flow of:
- * 1. Loading image from Uri (content:// or file://)
- * 2. Preprocessing bitmap for MobileNetV4 model
- * 3. Extracting embedding vector using TensorFlow Lite
- * 4. Error handling and validation
- * 
- * **Usage Scenarios:**
- * - Initial onboarding: User uploads favorite wallpaper to personalize recommendations
- * - Re-personalization: User can change their preference base at any time
- * - Learning: Extract embeddings from liked wallpapers for preference updates
- * 
- * **Performance:**
- * - Typical execution: 50-100ms on modern devices
- * - Model size: ~4-5MB (MobileNetV4-Conv-Small)
- * - Output: 1280 floats (~5.1KB)
- * 
- * **Error Handling:**
- * Returns Result<FloatArray> with specific error types:
- * - Invalid URI: File not found or permission denied
- * - Invalid image: Corrupted file or unsupported format
- * - Model error: TFLite initialization or inference failure
- * 
- * @property context Application context for accessing content resolver
- * @property embeddingExtractor TensorFlow Lite model wrapper for extracting embeddings
- * 
- * @see EmbeddingExtractor
- * @see FindSimilarWallpapersUseCase
- * @see UpdatePreferencesUseCase
+ * Extracts 1280-dimensional embedding vectors from user-uploaded wallpaper images
+ * using MobileNetV4 via TensorFlow Lite.
+ *
+ * Loads image from Uri, preprocesses it, and returns the embedding vector.
  */
 @Singleton
 class ExtractEmbeddingUseCase @Inject constructor(
@@ -48,42 +22,11 @@ class ExtractEmbeddingUseCase @Inject constructor(
 ) {
     /**
      * Extracts embedding vector from an image Uri.
-     * 
-     * Handles all common Android Uri schemes:
-     * - content:// (from gallery, file picker, or other content providers)
-     * - file:// (direct file system access)
-     * - android.resource:// (bundled resources)
-     * 
-     * **Thread Safety:**
-     * This operation performs I/O and ML inference. Should be called from
-     * a background coroutine context (IO or Default dispatcher).
-     * 
-     * **Memory Management:**
-     * Bitmaps are loaded efficiently and released after embedding extraction
-     * to prevent memory leaks. Large images are automatically downsampled.
-     * 
-     * @param imageUri Android Uri pointing to the image file
-     * @return Result<FloatArray> containing 1280-dimensional embedding on success,
-     *         or error description on failure
-     * 
-     * @throws None - All exceptions are caught and returned as Result.failure
-     * 
-     * Example:
-     * ```kotlin
-     * viewModelScope.launch {
-     *     val result = extractEmbeddingUseCase(selectedImageUri)
-     *     result.fold(
-     *         onSuccess = { embedding ->
-     *             // Use embedding for matching or preference initialization
-     *             findSimilarWallpapers(embedding)
-     *         },
-     *         onFailure = { error ->
-     *             // Show error to user
-     *             showToast("Failed to process image: ${error.message}")
-     *         }
-     *     )
-     * }
-     * ```
+     * Handles content://, file://, and android.resource:// schemes.
+     * Should be called from a background coroutine (IO dispatcher).
+     *
+     * @param imageUri Uri pointing to the image
+     * @return Result containing 1280-dimensional embedding or error
      */
     operator fun invoke(imageUri: Uri): Result<FloatArray> {
         return try {

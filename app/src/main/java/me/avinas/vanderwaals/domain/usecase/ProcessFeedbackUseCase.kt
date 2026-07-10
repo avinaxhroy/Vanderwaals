@@ -1,30 +1,36 @@
 package me.avinas.vanderwaals.domain.usecase
 
+import me.avinas.vanderwaals.data.entity.WallpaperMetadata
+import javax.inject.Inject
+import javax.inject.Singleton
+
 /**
- * Use case for processing user feedback and updating preferences.
- * 
- * Handles both explicit feedback (likes/dislikes) and implicit feedback (wallpaper duration):
- * 
- * Explicit feedback flow:
- * 1. Record feedback in history database
- * 2. Extract embedding from liked/disliked wallpaper
- * 3. Update preference vector using EMA algorithm with adaptive learning rate
- * 4. Normalize preference vector to unit length
- * 5. Persist updated preferences
- * 6. Trigger reranking of wallpaper queue
- * 
- * Implicit feedback flow:
- * 1. Calculate wallpaper duration (time_removed - time_applied)
- * 2. Convert duration to feedback signal:
- *    - < 5 minutes: Strong dislike (weight = -0.2)
- *    - > 24 hours: Strong like (weight = +0.2)
- *    - Otherwise: Neutral (no update)
- * 3. Apply same EMA update process
- * 
- * @see me.avinas.vanderwaals.algorithm.PreferenceUpdater
- * @see me.avinas.vanderwaals.data.repository.PreferenceRepository
- * @see me.avinas.vanderwaals.data.repository.FeedbackRepository
+ * Use case for processing explicit user feedback and updating all relevant preferences.
+ *
+ * This is the single entry point for like/dislike/download signals. It delegates
+ * fully to [UpdatePreferencesUseCase], which updates the embedding preference
+ * vector, category preferences, color preferences, and composition preferences
+ * using EMA with adaptive learning rates.
+ *
+ * @see UpdatePreferencesUseCase
  */
-class ProcessFeedbackUseCase {
-    
+@Singleton
+class ProcessFeedbackUseCase @Inject constructor(
+    private val updatePreferencesUseCase: UpdatePreferencesUseCase
+) {
+
+    /**
+     * Processes explicit feedback for a wallpaper.
+     *
+     * @param wallpaper  The wallpaper that received feedback.
+     * @param feedback   The type of feedback ([FeedbackType.LIKE], [FeedbackType.DISLIKE],
+     *                   or [FeedbackType.DOWNLOAD]).
+     * @return [Result.success] on success, [Result.failure] with the underlying error otherwise.
+     */
+    suspend operator fun invoke(
+        wallpaper: WallpaperMetadata,
+        feedback: FeedbackType
+    ): Result<Unit> {
+        return updatePreferencesUseCase(wallpaper, feedback)
+    }
 }

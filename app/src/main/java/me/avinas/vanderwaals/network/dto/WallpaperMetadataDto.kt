@@ -61,14 +61,20 @@ data class WallpaperMetadataDto(
     @SerializedName("thumbnail")
     val thumbnail: String?,  // Nullable to handle missing fields in JSON
     val source: String,
-    val repo: String,
+    val repo: String? = null,
     val category: String,
     val colors: List<String>,
     val brightness: Int,
     val contrast: Int,
     val resolution: String,
     val attribution: String?,
-    
+
+    // Vanderwaals Collection semantic metadata (optional, absent for GitHub/Bing sources)
+    @SerializedName("aestheticScore")
+    val aestheticScore: Float = 0f,
+    val mood: List<String> = emptyList(),
+    val style: List<String> = emptyList(),
+
     // Legacy full embedding (v1 format)
     val embedding: List<Float>? = null,
     
@@ -147,7 +153,10 @@ fun WallpaperMetadataDto.toEntity(): WallpaperMetadata {
         contrast = contrast,
         embedding = getEmbeddingArray(),  // Handles both v1 and v2 formats
         resolution = resolution,
-        attribution = attribution
+        attribution = attribution,
+        aestheticScore = aestheticScore,
+        mood = mood,
+        style = style
     )
 }
 

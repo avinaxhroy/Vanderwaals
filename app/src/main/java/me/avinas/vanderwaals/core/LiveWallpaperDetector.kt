@@ -6,26 +6,9 @@ import android.provider.Settings
 import android.util.Log
 
 /**
- * Helper class for detecting live wallpaper services that may block wallpaper changes.
- * 
- * **Why This Matters:**
- * - Brand-supported dynamic wallpapers (Glance, Samsung Dynamic Wallpaper) prevent
- *   apps from changing wallpapers using WallpaperManager.setBitmap()
- * - These services run as live wallpaper implementations that take priority
- * - Users must disable these services before auto-change can work
- * 
- * **How It Works:**
- * 1. Check if live wallpaper is active using WallpaperManager.getWallpaperInfo()
- * 2. Identify if it's a known blocking service (Glance, etc.)
- * 3. Provide service name for user-facing messages
- * 
- * **Supported Detection:**
- * - Glance (Xiaomi, Samsung, Realme variants)
- * - Samsung Dynamic Wallpaper
- * - Generic live wallpaper services
- * 
- * @see android.app.WallpaperManager
- * @see android.service.wallpaper.WallpaperService
+ * Detects active live wallpapers (Glance, Samsung Dynamic Wallpaper, etc.)
+ * that block WallpaperManager.setBitmap(). Reports the service name
+ * so the user can be prompted to disable it.
  */
 object LiveWallpaperDetector {
     

@@ -18,12 +18,12 @@ Enjoy Fresh Wallpapers
 • Or browse and pick manually
 • Always something new that fits your style
 
-🤖 INTELLIGENT PERSONALIZATION
+🤖 PERSONALIZATION
 
-Unlike typical wallpaper galleries, Vanderwaals uses machine learning to understand YOUR aesthetic:
+Vanderwaals uses on-device machine learning to understand your aesthetic:
 
 • Deep Visual Features (70%)
-  MobileNetV3 neural network analyzes artistic style, composition, and mood
+  MobileNetV4 neural network analyzes artistic style, composition, and mood
 
 • Color Matching (20%)
   LAB color space for perceptually accurate palette matching
@@ -80,7 +80,7 @@ Apply Anywhere
 • Both simultaneously
 
 Smart Crop
-• AI focuses on interesting regions
+• Focuses on interesting regions via saliency detection
 • No awkward cropping surprises
 
 🔒 PRIVACY YOU CAN TRUST

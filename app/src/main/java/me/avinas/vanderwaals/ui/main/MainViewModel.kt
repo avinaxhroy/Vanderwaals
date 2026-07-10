@@ -82,17 +82,13 @@ class MainViewModel @Inject constructor(
     /**
      * Current wallpaper state.
      * Emits Loading initially, then Success with wallpaper or null.
-     * 
-     * CRITICAL FIX: Uses SharingStarted.Lazily instead of WhileSubscribed(5000)
-     * to prevent the flow from stopping/restarting when navigating between screens.
-     * This ensures stable wallpaper state when returning to MainScreen.
+     * Uses SharingStarted.Lazily to keep state stable across navigation.
      */
     val currentWallpaper: StateFlow<MainUiState> = historyDao.getActiveWallpaperFlow()
         // Load wallpapers (summaries only for UI performance)
         .combine(wallpaperRepository.getAllWallpaperSummaries().distinctUntilChanged()) { activeHistory: WallpaperHistory?, wallpapers: List<WallpaperMetadata> ->
             if (activeHistory != null) {
-                // CRITICAL FIX: If we have history but no wallpapers yet, it means metadata is still loading.
-                // Don't emit Success(null) yet, wait for metadata.
+                // Wait for metadata to load before emitting Success
                 if (wallpapers.isEmpty()) {
                     MainUiState.Loading
                 } else {
@@ -109,10 +105,7 @@ class MainViewModel @Inject constructor(
         }
         .stateIn(
             scope = viewModelScope,
-            // CRITICAL FIX: Use Lazily instead of WhileSubscribed(5000)
-            // WhileSubscribed stops the flow after 5 seconds of no subscribers,
-            // causing re-emission of Loading when returning to MainScreen from navigation.
-            // Lazily keeps the last value cached and never restarts.
+            // Lazily keeps the last value cached and avoids re-emission on navigation.
             started = SharingStarted.Lazily,
             initialValue = MainUiState.Loading
         )
@@ -398,9 +391,8 @@ class MainViewModel @Inject constructor(
      * - If no downloaded wallpapers available, show error
      * - If WorkManager fails, show error toast
      * - Network errors handled by worker retry logic
-     * 
-     * CRITICAL FIX: Worker will dynamically load Apply To setting from DataStore,
-     * so no need to pass targetScreen here - worker handles it.
+     *
+     * Worker dynamically loads Apply To setting from DataStore.
      */
     fun changeNow() {
         viewModelScope.launch {
@@ -598,16 +590,7 @@ class MainViewModel @Inject constructor(
     
     /**
      * Changes wallpaper after a dislike using diversity-focused selection.
-     * 
-     * This method:
-     * 1. Uses specialized selectAfterDislike algorithm
-     * 2. Prioritizes wallpapers from DIFFERENT categories
-     * 3. Prefers wallpapers visually DISSIMILAR to the disliked one
-     * 4. Uses 70% exploration rate for noticeable change
-     * 
-     * @param dislikedWallpaperId ID of the disliked wallpaper
-     * @param dislikedCategory Category of the disliked wallpaper
-     * @param dislikedEmbedding Embedding vector of the disliked wallpaper
+     * Prioritizes wallpapers from different categories and visually dissimilar ones.
      */
     private fun changeAfterDislike(
         dislikedWallpaperId: String,

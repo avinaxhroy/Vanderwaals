@@ -14,34 +14,8 @@ import me.avinas.vanderwaals.BuildConfig
 import javax.inject.Singleton
 
 /**
- * Hilt module for WorkManager dependency injection.
- * 
- * Provides custom WorkManager configuration with:
- * - HiltWorkerFactory for injecting dependencies into Workers
- * - Limited executor threads (4) to avoid resource exhaustion
- * - Debug/release logging levels
- * 
- * **Integration:**
- * The Application class must implement Configuration.Provider and
- * override workManagerConfiguration to use this custom configuration.
- * 
- * **Usage:**
- * Workers can now use @HiltWorker annotation and constructor injection:
- * ```kotlin
- * @HiltWorker
- * class WallpaperChangeWorker @AssistedInject constructor(
- *     @Assisted appContext: Context,
- *     @Assisted workerParams: WorkerParameters,
- *     private val repository: WallpaperRepository
- * ) : CoroutineWorker(appContext, workerParams) {
- *     // repository is injected automatically
- * }
- * ```
- * 
- * @see me.avinas.vanderwaals.VanderwaalsApplication
- * @see me.avinas.vanderwaals.worker.WallpaperChangeWorker
- * @see me.avinas.vanderwaals.worker.ManifestSyncWorker
- * @see me.avinas.vanderwaals.worker.CleanupWorker
+ * Hilt module providing custom WorkManager configuration with
+ * HiltWorkerFactory and a 4-thread executor.
  */
 @Module
 @InstallIn(SingletonComponent::class)

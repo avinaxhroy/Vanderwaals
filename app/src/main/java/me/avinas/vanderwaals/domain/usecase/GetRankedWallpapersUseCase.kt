@@ -2,6 +2,7 @@ package me.avinas.vanderwaals.domain.usecase
 
 import kotlinx.coroutines.flow.first
 import me.avinas.vanderwaals.algorithm.SimilarityCalculator
+import me.avinas.vanderwaals.algorithm.WallpaperScorer
 import me.avinas.vanderwaals.data.entity.WallpaperMetadata
 import me.avinas.vanderwaals.data.repository.PreferenceRepository
 import me.avinas.vanderwaals.data.repository.WallpaperRepository
@@ -12,15 +13,15 @@ import javax.inject.Singleton
  * Use case for getting ranked wallpaper recommendations.
  * 
  * Implements the complete ranking algorithm:
- * 
+ *
  * 1. Load user's current preference vector
  * 2. Calculate embedding similarity for all wallpapers
- * 3. Calculate color similarity for all wallpapers
+ * 3. Calculate color similarity (CIE76 ΔE in LAB space) for all wallpapers
  * 4. Apply category bonus based on feedback history
- * 5. Combine scores: (embedding × 0.7) + (color × 0.2) + (category × 0.1)
- * 6. Apply epsilon-greedy exploration (10% random from top 100)
+ * 5. Combine scores using centralized weights (see RecommendationWeights)
+ * 6. Apply dislike penalty and brightness variation bonus
  * 7. Filter out recently shown wallpapers
- * 8. Return top 50 ranked wallpapers
+ * 8. Return top N ranked wallpapers
  * 
  * Used for:
  * - Populating wallpaper rotation queue
@@ -35,7 +36,8 @@ import javax.inject.Singleton
 class GetRankedWallpapersUseCase @Inject constructor(
     private val wallpaperRepository: WallpaperRepository,
     private val preferenceRepository: PreferenceRepository,
-    private val similarityCalculator: SimilarityCalculator
+    private val similarityCalculator: SimilarityCalculator,
+    private val wallpaperScorer: WallpaperScorer
 ) {
     
     /**
@@ -55,7 +57,7 @@ class GetRankedWallpapersUseCase @Inject constructor(
     
     /**
      * Calculate color similarity between wallpaper and user preferences.
-     * Uses RGB distance in color space.
+     * Uses perceptual CIE76 ΔE in LAB colour space (via shared ColorSpace).
      */
     private fun calculateColorSimilarity(
         wallpaperColors: List<Int>,
@@ -64,42 +66,27 @@ class GetRankedWallpapersUseCase @Inject constructor(
         if (wallpaperColors.isEmpty() || preferredColors.isEmpty()) {
             return 0.5f // Neutral score if no color data
         }
-        
-        // Calculate minimum color distance between any pair
-        var minDistance = Float.MAX_VALUE
-        
+
+        // Calculate minimum colour distance between any pair
+        var minDeltaE = Double.MAX_VALUE
+
         wallpaperColors.take(3).forEach { wColor ->
             preferredColors.take(3).forEach { pColor ->
-                val distance = colorDistance(wColor, pColor)
-                if (distance < minDistance) {
-                    minDistance = distance
+                val wr = (wColor shr 16) and 0xFF
+                val wg = (wColor shr 8) and 0xFF
+                val wb = wColor and 0xFF
+                val pr = (pColor shr 16) and 0xFF
+                val pg = (pColor shr 8) and 0xFF
+                val pb = pColor and 0xFF
+                val deltaE = me.avinas.vanderwaals.core.ColorSpace.rgbDeltaE(wr, wg, wb, pr, pg, pb)
+                if (deltaE < minDeltaE) {
+                    minDeltaE = deltaE
                 }
             }
         }
-        
-        // Normalize distance to similarity score (0-1)
-        // Max distance in RGB space is sqrt(3 * 255^2) ≈ 441
-        val maxDistance = 441f
-        return 1f - (minDistance / maxDistance).coerceIn(0f, 1f)
-    }
-    
-    /**
-     * Calculate Euclidean distance between two RGB colors.
-     */
-    private fun colorDistance(color1: Int, color2: Int): Float {
-        val r1 = (color1 shr 16) and 0xFF
-        val g1 = (color1 shr 8) and 0xFF
-        val b1 = color1 and 0xFF
-        
-        val r2 = (color2 shr 16) and 0xFF
-        val g2 = (color2 shr 8) and 0xFF
-        val b2 = color2 and 0xFF
-        
-        val dr = r1 - r2
-        val dg = g1 - g2
-        val db = b1 - b2
-        
-        return kotlin.math.sqrt((dr * dr + dg * dg + db * db).toFloat())
+
+        // Normalize ΔE to similarity score (0-1). Max ΔE ≈ 100 (black ↔ white).
+        return (1f - (minDeltaE / 100.0).coerceIn(0.0, 1.0)).toFloat()
     }
     
     /**
@@ -138,6 +125,27 @@ class GetRankedWallpapersUseCase @Inject constructor(
                 candidateWallpapers
             }
             
+            // Pre-compute liked/disliked wallpaper data once to avoid O(n²)
+            // lookups inside the ranking loop (was: allWallpapers.find{} per
+            // liked/disliked ID per candidate wallpaper).
+            val wallpaperById = allWallpapers.associateBy { it.id }
+            val preferredColors = preferences.likedWallpaperIds
+                .mapNotNull { wallpaperById[it] }
+                .flatMap { it.colors }
+                .mapNotNull { hexToRgb(it) }
+                .distinct()
+            val topCategories = preferences.likedWallpaperIds
+                .mapNotNull { wallpaperById[it]?.category }
+                .groupingBy { it }
+                .eachCount()
+                .entries
+                .sortedByDescending { it.value }
+                .take(3)
+                .map { it.key }
+            val dislikedCategories = preferences.dislikedWallpaperIds
+                .mapNotNull { wallpaperById[it]?.category }
+                .toSet()
+
             // Calculate similarity scores with improved algorithm
             val rankedWallpapers = wallpapersToRank.map { wallpaper ->
                 // 1. Embedding similarity (70% weight) - semantic understanding
@@ -150,13 +158,6 @@ class GetRankedWallpapersUseCase @Inject constructor(
                 // Use color palette from wallpaper metadata
                 val wallpaperColors = wallpaper.colors.mapNotNull { hexToRgb(it) }
                 
-                // Extract colors from user's liked wallpapers
-                val preferredColors = preferences.likedWallpaperIds
-                    .mapNotNull { id -> allWallpapers.find { it.id == id } }
-                    .flatMap { it.colors }
-                    .mapNotNull { hexToRgb(it) }
-                    .distinct()
-                
                 val colorSimilarity = if (wallpaperColors.isNotEmpty() && preferredColors.isNotEmpty()) {
                     calculateColorSimilarity(wallpaperColors, preferredColors)
                 } else {
@@ -164,17 +165,6 @@ class GetRankedWallpapersUseCase @Inject constructor(
                 }
                 
                 // 3. Category bonus (10% weight) - enhanced with feedback decay
-                val likedCategories = preferences.likedWallpaperIds
-                    .mapNotNull { id -> allWallpapers.find { it.id == id }?.category }
-                    .groupingBy { it }
-                    .eachCount()
-                
-                // Get top 3 favorite categories instead of just 1
-                val topCategories = likedCategories.entries
-                    .sortedByDescending { it.value }
-                    .take(3)
-                    .map { it.key }
-                
                 val categoryBonus = when {
                     wallpaper.category in topCategories.take(1) -> 0.3f  // Top category
                     wallpaper.category in topCategories.take(2) -> 0.2f  // 2nd category
@@ -182,27 +172,33 @@ class GetRankedWallpapersUseCase @Inject constructor(
                     else -> 0.0f
                 }
                 
-                // 4. Dislike penalty - reduce score for disliked wallpapers' categories
-                val dislikedCategories = preferences.dislikedWallpaperIds
-                    .mapNotNull { id -> allWallpapers.find { it.id == id }?.category }
-                    .toSet()
-                
+                // 4. Semantic boost — mood/style tag affinity (Vanderwaals Collection)
+                val semanticBoost = wallpaperScorer.getSemanticBoost(
+                    wallpaper = wallpaper,
+                    moodAffinity = preferences.moodAffinity,
+                    styleAffinity = preferences.styleAffinity
+                )
+
+                // 5. Dislike penalty - reduce score for disliked wallpapers' categories
                 val dislikePenalty = if (wallpaper.category in dislikedCategories) {
                     -0.2f
                 } else {
                     0.0f
                 }
-                
-                // 5. Brightness variation bonus - prefer variety
+
+                // 6. Brightness variation bonus - prefer variety
                 // This helps avoid showing too many similar brightness levels
                 val brightnessVariationBonus = 0.02f * (1f - kotlin.math.abs(wallpaper.brightness - 50) / 50f)
                 
-                // Combined score with improved weights
-                val finalScore = (embeddingSimilarity * 0.7f) + 
-                               (colorSimilarity * 0.2f) + 
-                               (categoryBonus * 0.1f) +
+                // Combined score using centralized weights (see RecommendationWeights).
+                // Renormalised by STANDARD_WEIGHTS_SUM so a perfect match scores 1.0.
+                val finalScore = ((embeddingSimilarity * me.avinas.vanderwaals.algorithm.RecommendationWeights.EMBEDDING_WEIGHT) +
+                               (colorSimilarity * me.avinas.vanderwaals.algorithm.RecommendationWeights.COLOR_WEIGHT) +
+                               (categoryBonus * me.avinas.vanderwaals.algorithm.RecommendationWeights.CATEGORY_WEIGHT)) /
+                               me.avinas.vanderwaals.algorithm.RecommendationWeights.STANDARD_WEIGHTS_SUM +
                                dislikePenalty +
-                               brightnessVariationBonus
+                               brightnessVariationBonus +
+                               semanticBoost
                 
                 wallpaper to finalScore
             }

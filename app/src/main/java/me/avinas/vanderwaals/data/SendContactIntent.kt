@@ -8,7 +8,7 @@ import android.net.Uri
  * Opens an email intent to contact the developer.
  */
 fun SendContactIntent(context: Context) {
-    val authorEmail = "anthonyyla.dev@gmail.com"
+    val authorEmail = "hi@avinas.me"
     val cc = ""
     val subject = "[Support] Vanderwaals"
     val bodyText = "This is regarding the Vanderwaals app for Android:\n"

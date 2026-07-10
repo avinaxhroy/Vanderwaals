@@ -30,37 +30,22 @@ class SegmentedDownloader @Inject constructor(
 
     /**
      * Downloads a file from the given URL to the target file.
-     * Uses segmented download if possible, otherwise falls back to standard download.
+     *
+     * Segmented download is currently disabled, so a single GET stream is used.
+     * The previous HEAD pre-flight was removed — it added a full network
+     * round-trip (~300-450ms) whose result (Content-Length / Accept-Ranges)
+     * was never used once segmented download was turned off.
      */
     suspend fun download(url: String, targetFile: File): Result<File> = withContext(Dispatchers.IO) {
         try {
-            // Step 1: Get content length and check support for Range headers
-            val headRequest = Request.Builder().url(url).head().build()
-            val headResponse = okHttpClient.newCall(headRequest).execute()
+            downloadStandard(url, targetFile)
 
-            if (!headResponse.isSuccessful) {
-                return@withContext Result.failure(IOException("Failed to fetch file info: ${headResponse.code}"))
-            }
-
-            val contentLength = headResponse.header("Content-Length")?.toLongOrNull() ?: -1L
-            val acceptRanges = headResponse.header("Accept-Ranges")
-
-            headResponse.close()
-
-            // Step 2: Decide strategy
-            // FORCE STANDARD DOWNLOAD: Temporarily disabling segmented download to rule out corruption
-            // if (contentLength > MIN_SEGMENT_SIZE && acceptRanges == "bytes") {
-            //    downloadSegmented(url, targetFile, contentLength)
-            // } else {
-                downloadStandard(url, targetFile)
-            // }
-            
-            // Step 3: Verify file integrity
+            // Verify file integrity
             if (targetFile.length() <= 0) {
                  if (targetFile.exists()) targetFile.delete()
                  return@withContext Result.failure(IOException("Download failed: File is empty"))
             }
-            
+
             Result.success(targetFile)
         } catch (e: Exception) {
             if (targetFile.exists()) targetFile.delete()

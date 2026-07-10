@@ -9,38 +9,8 @@ import kotlinx.coroutines.flow.Flow
 import me.avinas.vanderwaals.data.entity.UserPreferences
 
 /**
- * Room DAO for managing user preference vectors.
- * 
- * Provides queries for:
- * - Loading the current user's preference vector
- * - Updating preference vector after feedback
- * - Switching between personalized and auto modes
- * - Resetting preferences when user re-personalizes
- * 
- * **Singleton Pattern:**
- * The user_preferences table always contains exactly one row (id = 1).
- * All operations target this single row.
- * 
- * **Usage:**
- * ```kotlin
- * // Initialize on first launch
- * dao.insert(UserPreferences.createDefault())
- * 
- * // Load preferences reactively
- * dao.get().collect { preferences ->
- *     // Calculate similarities using preferences.preferenceVector
- * }
- * 
- * // Update after feedback
- * val updated = currentPreferences.copy(
- *     preferenceVector = newVector,
- *     feedbackCount = currentPreferences.feedbackCount + 1,
- *     lastUpdated = System.currentTimeMillis()
- * )
- * dao.update(updated)
- * ```
- * 
- * @see me.avinas.vanderwaals.data.entity.UserPreferences
+ * DAO for the single-row user_preferences table.
+ * Stores the preference vector, feedback count, and personalization mode.
  */
 @Dao
 interface UserPreferenceDao {

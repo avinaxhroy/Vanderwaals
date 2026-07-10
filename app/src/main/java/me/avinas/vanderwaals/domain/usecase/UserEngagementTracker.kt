@@ -15,28 +15,13 @@ import kotlin.math.min
 private val Context.engagementDataStore by preferencesDataStore("user_engagement")
 
 /**
- * Tracks user engagement and determines optimal sync intervals.
- * 
- * Engagement is measured by:
- * - App launches (frequency and recency)
- * - Wallpaper changes (manual interactions)
- * - Time spent in app (estimated from session starts)
- * - Feedback given (likes/dislikes indicate active usage)
- * 
- * **Sync Intervals**:
- * - HIGH engagement: Daily (24 hours)
- * - MEDIUM engagement: Every 3 days (72 hours)
- * - LOW engagement: Weekly (168 hours)
- * - MINIMAL engagement: Every 2 weeks (336 hours)
- * 
- * **Usage**:
- * ```kotlin
- * val engagement = userEngagementTracker.calculateEngagement()
- * val syncInterval = userEngagementTracker.getSyncIntervalHours(engagement)
- * 
- * // Schedule sync with optimal interval
- * scheduleSyncWork(intervalHours = syncInterval)
- * ```
+ * Tracks user engagement to determine optimal catalog sync intervals.
+ *
+ * Engagement levels and sync intervals:
+ * - HIGH: Daily (24h)
+ * - MEDIUM: Every 3 days (72h)
+ * - LOW: Weekly (168h)
+ * - MINIMAL: Every 2 weeks (336h)
  */
 @Singleton
 class UserEngagementTracker @Inject constructor(

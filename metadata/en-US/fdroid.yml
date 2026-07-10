@@ -17,11 +17,11 @@ Build:
     prebuild: echo "Building from clean state"
 
 MaintainerNotes: |
-  AI-powered wallpaper application with on-device machine learning.
+  Wallpaper application with on-device machine learning personalization.
   - Uses TensorFlow Lite for local ML processing
   - Zero cloud analytics or tracking
   - Privacy-first architecture
-  - 100% offline AI personalization
+  - 100% offline ML personalization
   - Material 3 design with dynamic colors
   
 AllowedAPKSigningKeys:

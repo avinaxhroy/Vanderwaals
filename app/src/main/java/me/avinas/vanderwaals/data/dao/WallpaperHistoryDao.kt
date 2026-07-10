@@ -16,45 +16,9 @@ data class FeedbackStat(
 )
 
 /**
- * Room DAO for managing wallpaper application history.
- * 
- * Provides queries for:
- * - Recording when wallpapers are applied/removed
- * - Tracking user feedback (likes/dislikes)
- * - Displaying history in UI
- * - Learning from implicit feedback (duration)
- * - Preventing duplicate wallpapers in rotation
- * 
- * **Auto-cleanup:**
- * Automatically maintains only the last 100 history entries per device.
- * Older entries are deleted to prevent database bloat.
- * 
- * **Usage:**
- * ```kotlin
- * // Record wallpaper application
- * val historyId = dao.insert(
- *     WallpaperHistory(
- *         wallpaperId = "wall123",
- *         appliedAt = System.currentTimeMillis(),
- *         removedAt = null,
- *         userFeedback = null,
- *         downloadedToStorage = false
- *     )
- * )
- * 
- * // User likes the wallpaper
- * dao.setFeedback(historyId, "like")
- * 
- * // Wallpaper is removed
- * dao.markRemoved(historyId, System.currentTimeMillis())
- * 
- * // Display history in UI
- * dao.getHistory().collect { history ->
- *     displayHistory(history)
- * }
- * ```
- * 
- * @see me.avinas.vanderwaals.data.entity.WallpaperHistory
+ * DAO for wallpaper application history.
+ * Tracks applied/removed timestamps, user feedback, and implicit duration signals.
+ * Auto-cleans entries beyond 100 per device.
  */
 @Dao
 interface WallpaperHistoryDao {

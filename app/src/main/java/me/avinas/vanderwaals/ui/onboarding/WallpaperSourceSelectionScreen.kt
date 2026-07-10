@@ -1,236 +1,487 @@
 package me.avinas.vanderwaals.ui.onboarding
 
-import androidx.compose.foundation.Image
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import me.avinas.vanderwaals.ui.theme.LiquidGlassBackground
-import me.avinas.vanderwaals.ui.theme.components.*
+import me.avinas.vanderwaals.ui.theme.BorderDark
+import me.avinas.vanderwaals.ui.theme.BorderLight
+import me.avinas.vanderwaals.ui.theme.BrandPrimary
+import me.avinas.vanderwaals.ui.theme.BrandAccent
+import me.avinas.vanderwaals.ui.theme.ErrorColor
+import me.avinas.vanderwaals.ui.theme.LocalThemeIsDark
+import me.avinas.vanderwaals.ui.theme.LuxeBodyStyle
+import me.avinas.vanderwaals.ui.theme.LuxeHeadlineStyle
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun WallpaperSourceSelectionScreen(
     onContinue: () -> Unit,
-    viewModel: WallpaperSourceSelectionViewModel = hiltViewModel()
+    onBack: () -> Unit = {},
+    viewModel: WallpaperSourceSelectionViewModel = hiltViewModel(),
+    currentStep: Int = 1,
+    totalSteps: Int = 4
 ) {
+    androidx.activity.compose.BackHandler(onBack = onBack)
     val communityEnabled by viewModel.communityEnabled.collectAsState()
     val bingEnabled by viewModel.bingEnabled.collectAsState()
     val bingManifestType by viewModel.bingManifestType.collectAsState()
-    val isDark = isSystemInDarkTheme()
-    
-    // Save preferences when leaving
+    val vanderwaalsCollectionEnabled by viewModel.vanderwaalsCollectionEnabled.collectAsState()
+    val vanderwaalsCollectionManifestType by viewModel.vanderwaalsCollectionManifestType.collectAsState()
+    val isDark = LocalThemeIsDark.current
+    val metrics = rememberOnboardingLayoutMetrics()
+
     val handleContinue = {
         viewModel.savePreferences { onContinue() }
     }
 
-    LiquidGlassBackground {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            containerColor = Color.Transparent
-        ) { paddingValues ->
-            Box(
-                modifier = Modifier.fillMaxSize()
-            ) {
+    val anyEnabled = communityEnabled || bingEnabled || vanderwaalsCollectionEnabled
 
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = Color.Transparent,
+        topBar = {
+            // Transparent top navigation with back button only
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .height(metrics.topBarHeight),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = metrics.maxContentWidth)
+                        .padding(horizontal = metrics.horizontalPadding),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = getOnboardingTextPrimary(isDark)
+                        )
+                    }
+                }
+            }
+        },
+        bottomBar = {
+            OnboardingBottomBar(
+                isDark = isDark,
+                metrics = metrics,
+                buttonEnabled = anyEnabled,
+                onButtonClick = handleContinue,
+                extraContent = {
+                    AnimatedVisibility(
+                        visible = !anyEnabled,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .widthIn(max = metrics.maxContentWidth)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(ErrorColor.copy(alpha = 0.08f))
+                                .padding(vertical = 10.dp, horizontal = 12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = ErrorColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Please select at least one source",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                                color = ErrorColor
+                            )
+                        }
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+        ) {
+            OnboardingBackdrop(
+                isDark = isDark,
+                modifier = Modifier.matchParentSize()
+            )
 
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
+                    .padding(horizontal = metrics.horizontalPadding),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                     OnboardingTopAppBar(
-                        onBack = { },
-                        showBack = false 
-                    )
-                
                 Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .fillMaxWidth()
+                        .widthIn(max = metrics.maxContentWidth)
                 ) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    Text(
-                        text = "Content Sources",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDark) Color.White else Color(0xFF111827)
-                    )
-                    
-                    Text(
-                        text = "Where should we find your wallpapers?",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF4B5563),
-                        modifier = Modifier.padding(top = 8.dp, bottom = 32.dp)
-                    )
-                    
-                    // Sources List
                     LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(24.dp),
-                        contentPadding = PaddingValues(bottom = 100.dp)
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(metrics.cardSpacing),
+                        contentPadding = PaddingValues(
+                            top = paddingValues.calculateTopPadding() + 12.dp,
+                            bottom = paddingValues.calculateBottomPadding() + 24.dp
+                        )
                     ) {
-                         // GITHUB SOURCE
+                        // Move step indicators and headers to a scrollable header item
                         item {
-                            SourceOptionCard(
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = metrics.sectionSpacing),
+                                horizontalAlignment = Alignment.Start
+                            ) {
+                                OnboardingStepIndicator(
+                                    currentStep = currentStep - 1,
+                                    totalSteps = totalSteps,
+                                    isDark = isDark,
+                                    modifier = Modifier.padding(bottom = 12.dp)
+                                )
+
+                                Text(
+                                    text = "Step $currentStep of $totalSteps",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = BrandPrimary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+
+                                Text(
+                                    text = "Choose Your Sources",
+                                    style = LuxeHeadlineStyle,
+                                    color = getOnboardingTextPrimary(isDark),
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+
+                                Text(
+                                    text = "Select where Vanderwaals finds your wallpapers",
+                                    style = LuxeBodyStyle,
+                                    color = getOnboardingTextSecondary(isDark),
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+                            }
+                        }
+
+                        item {
+                            SourceToggleCard(
                                 title = "Community Collection",
                                 subtitle = "Curated high-quality wallpapers from the open-source community.",
                                 icon = Icons.Default.Public,
                                 isEnabled = communityEnabled,
                                 onToggle = { viewModel.toggleCommunity(it) },
-                                isDark = isDark
+                                isDark = isDark,
+                                metrics = metrics
                             )
                         }
-                        
-                        // BING SOURCE
+
                         item {
-                            SourceOptionCard(
+                            SourceToggleCard(
                                 title = "Bing Daily Wallpapers",
                                 subtitle = "Stunning photography from around the world, updated daily.",
                                 icon = Icons.Default.Image,
                                 isEnabled = bingEnabled,
                                 onToggle = { viewModel.toggleBing(it) },
-                                isDark = isDark
-                            ) {
-                                // Bing Options
-                                if (bingEnabled) {
-                                    ModernDivider(
-                                        modifier = Modifier.padding(vertical = 16.dp),
-                                        color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f)
-                                    )
-                                    
-                                    Text(
-                                        text = "COLLECTION TYPE",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isDark) Color.White.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.5f),
-                                        modifier = Modifier.padding(bottom = 12.dp)
-                                    )
-                                    
-                                    // Use Segmented Control style or Radio rows
-                                    // Since ViewModel uses String "lite"/"full"
-                                    val options = listOf("Recent Hits (Lite)", "Global Archive (Full)")
-                                    val selectedIndex = if (bingManifestType == "lite") 0 else 1
-                                    
-                                    SegmentedControl(
-                                        items = options,
-                                        selectedIndex = selectedIndex,
-                                        onItemSelected = { index ->
-                                            viewModel.setBingManifestType(if (index == 0) "lite" else "full")
-                                        },
-                                        isDark = isDark
-                                    )
-                                    
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    
-                                    Text(
-                                        text = if (bingManifestType == "lite") 
-                                            "Quick download. Best for getting started." 
-                                        else 
-                                            "Thousands of images. Requires larger download.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (isDark) Color.White.copy(alpha = 0.5f) else Color(0xFF6B7280),
-                                        modifier = Modifier.padding(start = 4.dp)
-                                    )
-                                }
-                            }
+                                isDark = isDark,
+                                expandableContent = if (bingEnabled) {
+                                    {
+                                        HorizontalDivider(
+                                            color = getOnboardingCardBorder(isDark),
+                                            modifier = Modifier.padding(vertical = 14.dp)
+                                        )
+
+                                        Text(
+                                            text = "COLLECTION TYPE",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = getOnboardingTextSecondary(isDark),
+                                            letterSpacing = 1.2.sp,
+                                            modifier = Modifier.padding(bottom = 10.dp)
+                                        )
+
+                                        val options = listOf("Recent Hits (Lite)", "Global Archive (Full)")
+                                        val selectedIndex = if (bingManifestType == "lite") 0 else 1
+
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(
+                                                    if (isDark) Color(0xFF0F0F12) else Color(0xFFF1F5F9),
+                                                    RoundedCornerShape(14.dp)
+                                                )
+                                                .padding(4.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            options.forEachIndexed { index, option ->
+                                                val isSelected = index == selectedIndex
+                                                Box(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .clip(RoundedCornerShape(12.dp))
+                                                        .background(
+                                                            brush = if (isSelected) {
+                                                                Brush.horizontalGradient(
+                                                                    colors = listOf(BrandPrimary, BrandAccent)
+                                                                )
+                                                            } else {
+                                                                Brush.linearGradient(
+                                                                    colors = listOf(
+                                                                        Color.Transparent,
+                                                                        Color.Transparent
+                                                                    )
+                                                                )
+                                                            },
+                                                            shape = RoundedCornerShape(12.dp)
+                                                        )
+                                                        .bounceClick {
+                                                            viewModel.setBingManifestType(if (index == 0) "lite" else "full")
+                                                        }
+                                                        .padding(vertical = 12.dp, horizontal = 10.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = option,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = if (isSelected) Color.White else getOnboardingTextSecondary(isDark),
+                                                        maxLines = 1,
+                                                        textAlign = TextAlign.Center
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        Text(
+                                            text = if (bingManifestType == "lite") {
+                                                "Quick download. Best for getting started."
+                                            } else {
+                                                "Thousands of images. Requires larger download."
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = getOnboardingTextSecondary(isDark)
+                                        )
+                                    }
+                                } else {
+                                    null
+                                },
+                                metrics = metrics
+                            )
                         }
-                    }
-                }
-                
-                // Bottom Bar
-                GlassSheet(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    val anyEnabled = communityEnabled || bingEnabled
-                    
-                    if (!anyEnabled) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
-                        ) {
-                             Icon(
-                                 imageVector = Icons.Default.Warning,
-                                 contentDescription = null,
-                                 tint = if (isDark) me.avinas.vanderwaals.ui.theme.ErrorColorDark else Color(0xFFEF4444),
-                                 modifier = Modifier.size(16.dp)
-                             )
-                             Spacer(modifier = Modifier.width(8.dp))
-                             Text(
-                                 text = "Please select at least one source",
-                                 style = MaterialTheme.typography.bodySmall,
-                                 color = if (isDark) me.avinas.vanderwaals.ui.theme.ErrorColorDark else Color(0xFFEF4444)
-                             )
+
+                        item {
+                            SourceToggleCard(
+                                title = "Vanderwaals Collection",
+                                subtitle = "The app's own curated wallpaper archive, served fresh with smart embeddings.",
+                                icon = Icons.Default.Wallpaper,
+                                isEnabled = vanderwaalsCollectionEnabled,
+                                onToggle = { viewModel.toggleVanderwaalsCollection(it) },
+                                isDark = isDark,
+                                expandableContent = if (vanderwaalsCollectionEnabled) {
+                                    {
+                                        HorizontalDivider(
+                                            color = getOnboardingCardBorder(isDark),
+                                            modifier = Modifier.padding(vertical = 14.dp)
+                                        )
+
+                                        Text(
+                                            text = "COLLECTION TYPE",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = getOnboardingTextSecondary(isDark),
+                                            letterSpacing = 1.2.sp,
+                                            modifier = Modifier.padding(bottom = 10.dp)
+                                        )
+
+                                        val vdOptions = listOf("Curated (Lite)", "Full Archive (Full)")
+                                        val vdSelectedIndex = if (vanderwaalsCollectionManifestType == "lite") 0 else 1
+
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(
+                                                    if (isDark) Color(0xFF0F0F12) else Color(0xFFF1F5F9),
+                                                    RoundedCornerShape(14.dp)
+                                                )
+                                                .padding(4.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            vdOptions.forEachIndexed { index, option ->
+                                                val isSelected = index == vdSelectedIndex
+                                                Box(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .clip(RoundedCornerShape(12.dp))
+                                                        .background(
+                                                            brush = if (isSelected) {
+                                                                Brush.horizontalGradient(
+                                                                    colors = listOf(BrandPrimary, BrandAccent)
+                                                                )
+                                                            } else {
+                                                                Brush.linearGradient(
+                                                                    colors = listOf(
+                                                                        Color.Transparent,
+                                                                        Color.Transparent
+                                                                    )
+                                                                )
+                                                            },
+                                                            shape = RoundedCornerShape(12.dp)
+                                                        )
+                                                        .bounceClick {
+                                                            viewModel.setVanderwaalsCollectionManifestType(if (index == 0) "lite" else "full")
+                                                        }
+                                                        .padding(vertical = 12.dp, horizontal = 10.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = option,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = if (isSelected) Color.White else getOnboardingTextSecondary(isDark),
+                                                        maxLines = 1,
+                                                        textAlign = TextAlign.Center
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        Text(
+                                            text = if (vanderwaalsCollectionManifestType == "lite") {
+                                                "Curated highlights. Best for getting started."
+                                            } else {
+                                                "Complete collection. Requires larger download."
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = getOnboardingTextSecondary(isDark)
+                                        )
+                                    }
+                                } else {
+                                    null
+                                },
+                                metrics = metrics
+                            )
                         }
-                    }
-                    
-                    Button(
-                        onClick = handleContinue,
-                        enabled = anyEnabled,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else me.avinas.vanderwaals.ui.theme.LightPrimary,
-                            contentColor = Color.White,
-                            disabledContainerColor = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f),
-                            disabledContentColor = if (isDark) Color.White.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.3f)
-                        )
-                    ) {
-                        Text(
-                            text = "Continue",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null
-                        )
                     }
                 }
             }
         }
-
-    }
     }
 }
+
 @Composable
-fun SourceOptionCard(
+private fun SourceToggleCard(
     title: String,
     subtitle: String,
     icon: ImageVector,
     isEnabled: Boolean,
     onToggle: (Boolean) -> Unit,
     isDark: Boolean,
-    content: @Composable (ColumnScope.() -> Unit)? = null
+    expandableContent: @Composable (() -> Unit)? = null,
+    metrics: OnboardingLayoutMetrics = rememberOnboardingLayoutMetrics()
 ) {
-    LiquidGlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(20.dp)
+    val targetBackgroundColor = if (isDark) {
+        if (isEnabled) {
+            Color.White.copy(alpha = 0.16f)
+        } else {
+            Color.White.copy(alpha = 0.09f)
+        }
+    } else {
+        if (isEnabled) {
+            Color.White.copy(alpha = 0.75f)
+        } else {
+            Color.White.copy(alpha = 0.40f)
+        }
+    }
+
+    val targetBorderColor = if (isEnabled) {
+        BrandPrimary.copy(alpha = 0.7f)
+    } else {
+        getOnboardingCardBorder(isDark)
+    }
+
+    val backgroundColor by androidx.compose.animation.animateColorAsState(
+        targetValue = targetBackgroundColor,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 300),
+        label = "cardBackground"
+    )
+
+    val borderColor by androidx.compose.animation.animateColorAsState(
+        targetValue = targetBorderColor,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 300),
+        label = "cardBorder"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .bounceClick { onToggle(!isEnabled) }
+            .shadow(
+                elevation = if (isEnabled) 12.dp else 2.dp,
+                shape = RoundedCornerShape(metrics.cardCornerRadius),
+                ambientColor = if (isEnabled) BrandPrimary.copy(alpha = 0.2f) else Color.Transparent,
+                spotColor = Color.Transparent
+            )
+            .clip(RoundedCornerShape(metrics.cardCornerRadius))
+            .background(backgroundColor)
+            .border(
+                width = if (isEnabled) 1.5.dp else 1.dp,
+                color = borderColor,
+                shape = RoundedCornerShape(metrics.cardCornerRadius)
+            )
+            .padding(if (metrics.compactWidth) 16.dp else 20.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -239,59 +490,66 @@ fun SourceOptionCard(
         ) {
             Row(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .size(metrics.iconBoxSize)
+                        .clip(RoundedCornerShape(14.dp))
                         .background(
-                            if (isEnabled) (if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else me.avinas.vanderwaals.ui.theme.LightPrimary)
-                            else (if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
+                            if (isEnabled) {
+                                Brush.linearGradient(
+                                    colors = listOf(BrandPrimary, BrandAccent)
+                                )
+                            } else {
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        if (isDark) Color(0xFF27272A) else Color(0xFFF1F5F9),
+                                        if (isDark) Color(0xFF1F1F23) else Color(0xFFE2E8F0)
+                                    )
+                                )
+                            }
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = if (isEnabled) Color.White else (if (isDark) Color.White.copy(alpha = 0.5f) else Color(0xFF6B7280))
+                        tint = if (isEnabled) Color.White else (if (isDark) Color(0xFF52525B) else Color(0xFF64748B)),
+                        modifier = Modifier.size(metrics.iconSize)
                     )
                 }
-                
+
                 Column {
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDark) Color.White else Color(0xFF111827)
+                        fontWeight = FontWeight.SemiBold,
+                        color = getOnboardingTextPrimary(isDark)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = subtitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF4B5563),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = getOnboardingTextSecondary(isDark),
                         lineHeight = 20.sp
                     )
                 }
             }
-            
+
             Switch(
                 checked = isEnabled,
                 onCheckedChange = onToggle,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Color.White,
-                    checkedTrackColor = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else me.avinas.vanderwaals.ui.theme.LightPrimary,
+                    checkedTrackColor = BrandPrimary,
                     uncheckedThumbColor = Color.White,
-                    uncheckedTrackColor = if (isDark) Color.Gray.copy(alpha = 0.5f) else Color(0xFFE5E7EB)
+                    uncheckedTrackColor = if (isDark) Color(0xFF27272A) else Color(0xFFCBD5E1)
                 ),
                 modifier = Modifier.padding(start = 12.dp)
             )
         }
-        
-        content?.let { 
-            Column(modifier = Modifier.fillMaxWidth()) {
-                it()
-            }
-        }
+
+        expandableContent?.let { it() }
     }
 }

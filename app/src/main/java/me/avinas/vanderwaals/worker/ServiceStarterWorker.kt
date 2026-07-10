@@ -11,25 +11,8 @@ import me.avinas.vanderwaals.data.datastore.SettingsDataStore
 import kotlinx.coroutines.flow.first
 
 /**
- * One-shot worker that starts the WallpaperMonitorService.
- * 
- * **Purpose:**
- * On Android 15+ (API 35+), foreground services with `dataSync` type cannot be started
- * directly from BOOT_COMPLETED broadcast receivers. This worker provides a deferred
- * mechanism to start the service after boot completes.
- * 
- * **How it works:**
- * 1. BootCompletedReceiver schedules this worker with a short delay (5-10 seconds)
- * 2. Worker runs after boot completes (when foreground services are allowed)
- * 3. Worker starts WallpaperMonitorService for "Every Unlock" mode
- * 
- * **Key Benefits:**
- * - Avoids ForegroundServiceStartNotAllowedException on Android 15+
- * - Service starts on first user interaction (unlock)
- * - All subsequent unlocks trigger wallpaper changes as expected
- * 
- * @see me.avinas.vanderwaals.receiver.BootCompletedReceiver
- * @see me.avinas.vanderwaals.service.WallpaperMonitorService
+ * One-shot worker that starts WallpaperMonitorService after boot.
+ * Required on API 35+ where foreground services can't start from BOOT_COMPLETED directly.
  */
 class ServiceStarterWorker(
     appContext: Context,

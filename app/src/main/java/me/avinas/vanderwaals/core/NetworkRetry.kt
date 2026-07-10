@@ -9,35 +9,9 @@ import kotlin.math.pow
 import kotlin.random.Random
 
 /**
- * Centralized network retry utility with exponential backoff and jitter.
- * 
- * Provides reusable retry logic for all network operations in the application.
- * Implements industry-standard exponential backoff with jitter to prevent
- * thundering herd problems when multiple clients retry simultaneously.
- * 
- * **Features:**
- * - Generic suspend function support (works with any suspend operation)
- * - Configurable max retries, base delay, and max delay
- * - Exponential backoff: delay = min(baseDelay * 2^attempt, maxDelay)
- * - Jitter: adds random ±25% variance to prevent synchronized retries
- * - Selective retry: retries on IOException and HTTP 5xx, fails fast on HTTP 4xx
- * - Comprehensive logging for debugging
- * 
- * **Usage:**
- * ```kotlin
- * val result = NetworkRetry.retryWithBackoff(
- *     maxRetries = 3,
- *     baseDelayMs = 1000L,
- *     maxDelayMs = 30000L,
- *     onRetry = { attempt, error ->
- *         Log.d(TAG, "Retry attempt $attempt after error: ${error.message}")
- *     }
- * ) {
- *     manifestService.getManifest()
- * }
- * ```
- * 
- * @see retryWithBackoff
+ * Exponential backoff retry for suspend functions.
+ * Retries on IOException and HTTP 5xx; fails fast on 4xx.
+ * Adds ±25% jitter to prevent synchronized retries.
  */
 object NetworkRetry {
     

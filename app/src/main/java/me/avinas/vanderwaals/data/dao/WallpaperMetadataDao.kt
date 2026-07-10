@@ -4,30 +4,15 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 import me.avinas.vanderwaals.data.entity.WallpaperMetadata
 import me.avinas.vanderwaals.data.entity.WallpaperSummary
 
 /**
- * Room DAO for accessing wallpaper metadata from the local database.
- * 
- * Provides queries for:
- * - Retrieving all wallpapers or filtering by source/category
- * - Inserting/updating wallpapers from manifest sync
- * - Searching wallpapers by similarity score
- * - Managing wallpaper queue for rotation
- * 
- * All queries return Flow for reactive updates in the UI layer.
- * 
- * **Usage:**
- * - Call [insertAll] after downloading manifest.json (weekly sync)
- * - Use [getAll] for loading all wallpapers into memory for similarity calculations
- * - Use [getByCategory] for category-filtered browsing
- * - Use [getBySource] to separate GitHub vs Bing wallpapers
- * - Use [getByBrightnessRange] for contextual filtering (time-based)
- * 
- * @see me.avinas.vanderwaals.data.entity.WallpaperMetadata
+ * DAO for the wallpaper catalog. Supports filtering by source, category,
+ * and brightness. Updated during manifest sync.
  */
 @Dao
 interface WallpaperMetadataDao {
@@ -51,7 +36,24 @@ interface WallpaperMetadataDao {
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(wallpapers: List<WallpaperMetadata>)
-    
+
+    /**
+     * Atomically replaces all wallpapers from a given source.
+     *
+     * Deletes every existing row where `source = source`, then inserts the
+     * new batch — all inside a single SQLite transaction. If the process is
+     * killed between the delete and the inserts, the old data is kept intact.
+     *
+     * @param source Source identifier ("github", "bing", "vanderwaals", …)
+     * @param wallpapers Replacement wallpapers for that source
+     */
+    @Transaction
+    suspend fun replaceSourceWallpapers(source: String, wallpapers: List<WallpaperMetadata>) {
+        deleteBySource(source)
+        // Insert in batches to stay under SQLite's 999-variable-binding limit
+        wallpapers.chunked(500).forEach { batch -> insertAll(batch) }
+    }
+
     /**
      * Inserts or replaces a single wallpaper metadata entry.
      * 
@@ -284,6 +286,15 @@ interface WallpaperMetadataDao {
      */
     @Query("SELECT COUNT(*) FROM wallpaper_metadata WHERE category = :category")
     suspend fun getCountByCategory(category: String): Int
+
+    /**
+     * Counts wallpapers by source.
+     *
+     * @param source Source identifier ("github", "bing", or "vanderwaals")
+     * @return Number of wallpapers from the source
+     */
+    @Query("SELECT COUNT(*) FROM wallpaper_metadata WHERE source = :source")
+    suspend fun getCountBySource(source: String): Int
     
     /**
      * Gets all unique categories from the database.

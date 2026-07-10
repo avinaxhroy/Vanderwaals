@@ -42,53 +42,19 @@ sealed class SchedulingResult {
 }
 
 /**
- * Manages WorkManager initialization and scheduling for Vanderwaals workers.
- * 
- * Responsibilities:
- * - Schedule periodic workers (manifest sync, cleanup)
- * - Schedule wallpaper change workers with different intervals
- * - Configure work constraints and backoff policies
- * - Provide methods for manual triggering
- * 
- * **Periodic Workers:**
- * - ManifestSyncWorker: Adaptive (based on user engagement)
- *   - HIGH engagement: Daily (24 hours)
- *   - MEDIUM engagement: Every 3 days (72 hours)
- *   - LOW engagement: Weekly (168 hours)
- *   - MINIMAL engagement: Bi-weekly (336 hours)
- * - CleanupWorker: Daily (24 hours)
- * 
- * **Dynamic Workers:**
- * - WallpaperChangeWorker: Every unlock, hourly, daily, or never
- * - BatchDownloadWorker: On-demand after sync
- * 
- * **Usage:**
- * ```kotlin
- * @Inject lateinit var workScheduler: WorkScheduler
- * 
- * // Initialize periodic workers
- * workScheduler.initializePeriodicWorkers()
- * 
- * // Schedule wallpaper change
- * workScheduler.scheduleWallpaperChange(
- *     interval = ChangeInterval.DAILY,
- *     time = LocalTime.of(9, 0)
- * )
- * ```
- * 
- * @property context Application context
- * @property workManager WorkManager instance
- * @property networkStateTracker Tracks network connectivity and triggers fresh downloads
+ * Schedules and manages WorkManager jobs (manifest sync, cleanup,
+ * wallpaper change, batch download). Sync frequency adapts to user engagement.
  */
 @Singleton
 class WorkScheduler @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val engagementTracker: UserEngagementTracker,
     private val networkStateTracker: me.avinas.vanderwaals.network.NetworkStateTracker,
-    private val alarmScheduler: AlarmScheduler
+    private val alarmScheduler: AlarmScheduler,
+    private val settingsDataStore: me.avinas.vanderwaals.data.datastore.SettingsDataStore
 ) {
     private val workManager = WorkManager.getInstance(context)
-    private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     
     companion object {
         private const val TAG = "WorkScheduler"
@@ -123,7 +89,6 @@ class WorkScheduler @Inject constructor(
                 kotlinx.coroutines.delay(2000L)
                 
                 // Get current target screen from settings
-                val settingsDataStore = me.avinas.vanderwaals.data.datastore.SettingsDataStore(context)
                 val settings = settingsDataStore.settings.first()
                 
                 val targetScreen = when (settings.applyTo) {
@@ -347,6 +312,18 @@ class WorkScheduler @Inject constructor(
                 stopWallpaperMonitorService() // Ensure service is stopped
                 scheduleDailyWallpaperChange(changeTime, targetScreen)
             }
+
+            ChangeInterval.THREE_DAYS -> {
+                android.util.Log.d(TAG, "Scheduling 3-day wallpaper change for target: $targetScreen")
+                stopWallpaperMonitorService() // Ensure service is stopped
+                scheduleRepeatingAlarm(3 * 24 * 60 * 60 * 1000L, targetScreen) // 3 days in milliseconds
+            }
+
+            ChangeInterval.SEVEN_DAYS -> {
+                android.util.Log.d(TAG, "Scheduling 7-day wallpaper change for target: $targetScreen")
+                stopWallpaperMonitorService() // Ensure service is stopped
+                scheduleRepeatingAlarm(7 * 24 * 60 * 60 * 1000L, targetScreen) // 7 days in milliseconds
+            }
         }
     }
     
@@ -397,7 +374,7 @@ class WorkScheduler @Inject constructor(
         android.util.Log.d(TAG, "Periodic work scheduled successfully (NO network constraint)")
         
         // CRITICAL DEBUG: Verify the work was actually scheduled
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        coroutineScope.launch {
             kotlinx.coroutines.delay(500) // Wait for WorkManager to process
             logWallpaperChangeStatus()
         }
@@ -600,7 +577,6 @@ class WorkScheduler @Inject constructor(
         workManager.cancelUniqueWork(CatalogSyncWorker.WORK_NAME)
         workManager.cancelUniqueWork(CleanupWorker.WORK_NAME)
         workManager.cancelUniqueWork(WallpaperChangeWorker.WORK_NAME)
-        workManager.cancelUniqueWork(WallpaperChangeWorker.WORK_NAME)
         workManager.cancelUniqueWork(BatchDownloadWorker.WORK_NAME)
         workManager.cancelUniqueWork(DailyPlaylistWorker.WORK_NAME)
     }
@@ -746,6 +722,16 @@ enum class ChangeInterval(val displayName: String) {
      * Change wallpaper once per day at specific time.
      */
     DAILY("Daily"),
+    
+    /**
+     * Change wallpaper every 3 days.
+     */
+    THREE_DAYS("3 Days"),
+    
+    /**
+     * Change wallpaper every 7 days.
+     */
+    SEVEN_DAYS("7 Days"),
     
     /**
      * Never change wallpaper automatically.

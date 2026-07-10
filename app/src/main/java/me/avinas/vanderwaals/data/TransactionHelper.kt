@@ -3,27 +3,7 @@ package me.avinas.vanderwaals.data
 import android.util.Log
 import androidx.room.withTransaction
 
-/**
- * Database transaction utilities for safe, atomic operations.
- * 
- * Provides wrappers for executing database operations within Room transactions
- * with proper error handling and automatic rollback on failure.
- * 
- * **Usage:**
- * ```kotlin
- * // Simple transaction
- * TransactionHelper.withTransaction(database) {
- *     dao.insert(item1)
- *     dao.update(item2)
- *     // Both operations committed atomically
- * }
- * 
- * // Transaction with retry on conflict
- * TransactionHelper.withRetryableTransaction(database, maxRetries = 3) {
- *     dao.updateWithConflict(item)
- * }
- * ```
- */
+/** Wrappers for Room transactions with error handling and optional retry. */
 object TransactionHelper {
     
     private const val TAG = "TransactionHelper"

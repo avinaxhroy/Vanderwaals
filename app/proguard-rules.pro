@@ -25,8 +25,9 @@
 -keep class kotlin.coroutines.Continuation
 -keep class androidx.datastore.*.** {*;}
 
--keepclassmembers class me.avinas.vanderwaals.feature.wallpaper.domain.model.Album {
- !transient <fields>;
+# Keep all domain model classes used by Gson serialization
+-keepclassmembers class me.avinas.vanderwaals.data.entity.** {
+  !transient <fields>;
 }
 
 # ========== Vanderwaals-specific rules ==========
@@ -104,28 +105,22 @@
 -keepclassmembers class kotlinx.coroutines.** {
     volatile <fields>;
 }
--keepclassmembers class me.avinas.vanderwaals.feature.wallpaper.domain.model.AlbumWithWallpaperAndFolder {
- !transient <fields>;
-}
--keepclassmembers class me.avinas.vanderwaals.feature.wallpaper.domain.model.Wallpaper {
- !transient <fields>;
-}
--keepclassmembers class me.avinas.vanderwaals.feature.wallpaper.domain.model.Folder {
- !transient <fields>;
-}
 
-# Keep wallpaper services and their action enums
--keep class me.avinas.vanderwaals.feature.wallpaper.wallpaper_service.HomeWallpaperService { *; }
--keep class me.avinas.vanderwaals.feature.wallpaper.wallpaper_service.HomeWallpaperService$Actions { *; }
--keep class me.avinas.vanderwaals.feature.wallpaper.wallpaper_service.LockWallpaperService { *; }
--keep class me.avinas.vanderwaals.feature.wallpaper.wallpaper_service.LockWallpaperService$Actions { *; }
+# Keep Vanderwaals services and receivers
+-keep class me.avinas.vanderwaals.service.** { *; }
+-keep class me.avinas.vanderwaals.receiver.** { *; }
+-keep class me.avinas.vanderwaals.worker.** { *; }
 
-# Keep WallpaperAction classes
--keep class me.avinas.vanderwaals.feature.wallpaper.wallpaper_alarmmanager.WallpaperAction { *; }
--keep class me.avinas.vanderwaals.feature.wallpaper.wallpaper_alarmmanager.WallpaperAction$* { *; }
+# Keep HiltWorker annotated classes (WorkManager + Hilt integration)
+-keep class * extends androidx.work.CoroutineWorker { *; }
+-keep class * extends androidx.work.ListenableWorker { *; }
 
-# Keep Type enum
--keep class me.avinas.vanderwaals.core.Type { *; }
+# Keep Kotlinx Serialization
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.AnnotationsKt
+-keepclassmembers class kotlinx.serialization.json.** {
+    *** Companion;
+}
 
 # OkHttp - Required for Retrofit networking
 -dontwarn okhttp3.**
@@ -139,3 +134,14 @@
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
+
+# Strip android.util.Log calls from release builds to avoid leaking internal state.
+-assumenosideeffects class android.util.Log {
+    public static boolean isLoggable(...);
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+    public static int w(...);
+    public static int e(...);
+    public static int wtf(...);
+}

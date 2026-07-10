@@ -6,23 +6,23 @@
         <img src="https://img.shields.io/github/downloads/avinaxhroy/Vanderwaals/total?style=for-the-badge" alt="Downloads">
         <img src="https://img.shields.io/github/license/avinaxhroy/Vanderwaals?style=for-the-badge" alt="License">
     </p>
-    <p><strong>AI-Powered Wallpaper App That Learns Your Aesthetic</strong></p>
-    <p><i>Next-generation wallpaper personalization powered by MobileNetV4</i></p>
+    <p><strong>Wallpaper App That Learns Your Aesthetic</strong></p>
+    <p><i>On-device wallpaper personalization powered by MobileNetV4</i></p>
 </div>
 
 ---
 
 ## ✨ What is Vanderwaals?
 
-**Vanderwaals** is a cutting-edge Android wallpaper application that leverages state-of-the-art on-device machine learning to understand your unique aesthetic preferences and automatically curate wallpapers you'll love. Powered by **MobileNetV4-Conv-Small**, it delivers unparalleled personalization without compromising your privacy.
+**Vanderwaals** is an Android wallpaper app that uses on-device machine learning to understand your aesthetic preferences and automatically pick wallpapers you'll like. It runs **MobileNetV4-Conv-Small** entirely on your phone — no data leaves the device.
 
 ### 🎯 Key Highlights
 
-- **🤖 Advanced ML Engine**: MobileNetV4-Conv-Small neural network with 1280-dimensional embeddings for superior aesthetic understanding
+- **🤖 On-Device ML**: MobileNetV4-Conv-Small with 1280-dimensional embeddings for aesthetic matching
 - **📚 Massive Curated Library**: 6,000+ wallpapers from GitHub collections + 5,400+ from Bing's photography archive
 - **🔒 Privacy-First**: 100% offline ML processing, zero analytics, no data collection
-- **⚡ Lightning Fast**: 9x faster wallpaper changes (~5s) with intelligent pre-caching and chunked processing
-- **🎨 Revolutionary Glassmorphism**: True Apple-style liquid glass effect that Jetpack Compose can't natively achieve—engineered around platform limitations
+- **⚡ Fast**: ~5s wallpaper changes with pre-caching and chunked processing
+- **🎨 Liquid Glass UI**: Apple-style glassmorphism using pre-rendered blur technique (workaround for Compose limitations)
 - **📦 90% Smaller Downloads**: Quantized embeddings reduce manifest size from 60MB to ~6MB
 
 ---
@@ -45,7 +45,7 @@
 - **Instant Dislike**: Automatically applies new wallpaper when you dislike one
 - **Flexible Intervals**: New 3h, 6h, 12h auto-change options
 - **Daily Playlist**: 15 pre-selected wallpapers for "Every Unlock" mode
-- **Smart Migration**: Seamless upgrade from v3.x with user-friendly dialog
+- **Smart Migration**: Upgrade from v3.x with user-friendly dialog
 
 ### Reliability & Stability 🛡️
 - **Samsung Optimized**: WakeLock and foreground service for One UI battery restrictions
@@ -54,7 +54,7 @@
 - **Smart Crop 2.0**: Lossless PNG caching and resolution preservation
 
 ### UI Polish 🎨
-- **True Liquid Glass**: Revolutionary glassmorphism technique that solves Compose's blur limitations
+- **Liquid Glass**: Glassmorphism technique that works around Compose's blur limitations
   - Pre-rendered backgrounds with chromatic aberration and barrel distortion
   - Slice-based rendering for pixel-perfect glass cards
   - 80px Gaussian blur + RGB separation for authentic Apple-style frosted glass
@@ -103,24 +103,24 @@
 
 ## 🚀 Features
 
-### 🎨 Intelligent Personalization
+### 🎨 Personalization
 
 #### Auto Mode
-Start fresh with algorithm-selected wallpapers from curated collections. The app learns your taste as you provide feedback with lightning-fast initialization—your first like immediately shapes recommendations.
+Start fresh with algorithm-selected wallpapers from curated collections. The app learns your taste as you provide feedback — your first like immediately shapes recommendations.
 
 #### Personalize Mode
-Upload one favorite wallpaper and instantly get 100+ similar matches. The advanced ML algorithm analyzes:
-- **Deep Visual Features (70%)**: MobileNetV4 1280D embeddings capture artistic style, composition, and mood with 2.2x more detail than previous models
+Upload one favorite wallpaper and get 100+ similar matches. The ML model analyzes:
+- **Deep Visual Features (70%)**: MobileNetV4 1280D embeddings capture artistic style, composition, and mood
 - **Color Palette (20%)**: LAB color space analysis for perceptually accurate matching
 - **Category Affinity (10%)**: Learns your preference for categories (gruvbox, nord, nature, minimal, etc.)
 
-### 🧠 Advanced Learning Algorithm
+### 🧠 Learning Algorithm
 
-- **MobileNetV4-Conv-Small**: State-of-the-art 1280-dimensional embeddings for superior aesthetic understanding
-- **Fast Initialization**: First like/download immediately sets preference baseline for instant personalization
+- **MobileNetV4-Conv-Small**: 1280-dimensional embeddings for aesthetic matching
+- **Fast Initialization**: First like/download immediately sets preference baseline
 - **Exponential Moving Average (EMA)**: Smoothly integrates new preferences without forgetting old ones
 - **Implicit Feedback**: Learns from wallpaper duration (quick changes = dislike, long duration = like)
-- **Temporal Diversity**: Prevents repetitive categories with intelligent recency penalties
+- **Temporal Diversity**: Prevents repetitive categories with recency penalties
 - **Progressive Trust**: Balances original embeddings with learned preferences over time
 
 ### 📚 Rich Content Sources
@@ -161,7 +161,7 @@ Upload one favorite wallpaper and instantly get 100+ similar matches. The advanc
   - **Instant Dislike**: Automatically applies new wallpaper when you dislike one
   - **Samsung Optimized**: Dedicated "Keep-Alive" service with WakeLock for One UI battery restrictions
   - **Reliable Background Processing**: Foreground service ensures consistent auto-change even after app swipe
-  - **Smart Crop**: Intelligent image cropping using saliency detection to focus on interesting regions
+  - **Smart Crop**: Image cropping using saliency detection to focus on interesting regions
 
 ### 📊 History & Analytics
 
@@ -173,12 +173,11 @@ Upload one favorite wallpaper and instantly get 100+ similar matches. The advanc
 
 ### 🎨 Modern UI/UX
 
-- **True Liquid Glass Effect**: Revolutionary Apple-style glassmorphism that Jetpack Compose can't natively achieve
-  - **Pre-rendered backgrounds** with chromatic aberration and edge distortion
-  - **Slice-based rendering** - cards display perfectly aligned background slices
-  - **Multi-layer processing**: Heavy Gaussian blur (80px) + chromatic RGB separation + barrel distortion
-  - **Smart Launcher technique**: Process once, render infinitely - solves Compose's real-time blur limitations
-  - **Opaque illusion**: Cards are solid surfaces that create the *perception* of transparency
+- **Liquid Glass Effect**: Apple-style glassmorphism (workaround for Compose's lack of background blur)
+  - Pre-rendered backgrounds with chromatic aberration and edge distortion
+  - Slice-based rendering - cards display aligned background slices
+  - 80px Gaussian blur + chromatic RGB separation + barrel distortion
+  - Process once, render infinitely (Smart Launcher-inspired technique)
 - **Material 3 Design**: Latest Material Design 3 guidelines with modern components
 - **Dynamic Colors**: Automatic color extraction from wallpapers (Android 12+)
 - **Dark Theme**: AMOLED-optimized pure black theme with "Deep Ocean" aesthetics
@@ -189,7 +188,7 @@ Upload one favorite wallpaper and instantly get 100+ similar matches. The advanc
 
 ## 🏗️ Architecture
 
-Vanderwaals follows **Clean Architecture** principles with **MVVM** pattern, leveraging modern Android development best practices.
+Vanderwaals follows **Clean Architecture** with **MVVM** pattern.
 
 ```
 📁 me.avinas.vanderwaals/
@@ -277,7 +276,7 @@ Vanderwaals follows **Clean Architecture** principles with **MVVM** pattern, lev
 
 #### Machine Learning
 - **[TensorFlow Lite / LiteRT](https://www.tensorflow.org/lite)** - On-device ML inference with GPU acceleration
-- **[MobileNetV4-Conv-Small](https://tfhub.dev/)** - State-of-the-art image embedding model (1280 dimensions, 80% faster than V3)
+- **[MobileNetV4-Conv-Small](https://tfhub.dev/)** - Image embedding model (1280 dimensions)
 
 #### Android Jetpack
 - **[Jetpack Compose](https://developer.android.com/compose)** - Modern declarative UI toolkit
@@ -422,7 +421,7 @@ val croppedBitmap = smartCrop.cropToAspectRatio(bitmap, focalPoint, targetRatio)
 
 **The Problem**: Jetpack Compose doesn't support real-time background blur like iOS `UIVisualEffectView`. The `blur()` modifier only blurs the content itself, not what's behind it, making true "frosted glass" transparency impossible to achieve directly.
 
-**The Solution**: We engineered a revolutionary **pre-processing + slice extraction** technique inspired by Smart Launcher:
+**The Solution**: A **pre-processing + slice extraction** technique inspired by Smart Launcher:
 
 ```kotlin
 // 1. Pre-process background ONCE with multiple effects
@@ -666,7 +665,7 @@ For the community, Vanderwaals is licensed under **AGPL-3.0** (GNU Affero Genera
 - Any derivative work must also be licensed under AGPL-3.0
 
 ```
-Vanderwaals - AI-Powered Wallpaper App
+Vanderwaals - Wallpaper App
 Copyright (C) 2024-2025 Avinash/Confused Coconut
 
 This program is free software: you can redistribute it and/or modify
@@ -751,19 +750,19 @@ This multi-layered protection strategy ensures:
 Vanderwaals is a derivative work inspired by [Paperize](https://github.com/Anthonyy232/Paperize) by Anthony La (Apache-2.0 license). The original wallpaper infrastructure and UI architecture provided inspiration for Vanderwaals' design.
 
 **Vanderwaals' unique contributions**:
-- **MobileNetV4 Integration**: State-of-the-art 1280D embeddings (upgraded from MobileNetV3 576D)
-- **Revolutionary Liquid Glass System**: Apple-style glassmorphism engineered around Jetpack Compose limitations
+- **MobileNetV4 Integration**: 1280D embeddings (upgraded from MobileNetV3 576D)
+- **Liquid Glass System**: Apple-style glassmorphism working around Jetpack Compose limitations
   - Pre-rendering with chromatic aberration + barrel distortion + heavy blur
   - Slice-based rendering for pixel-perfect glass cards
   - Smart Launcher-inspired technique solving real-time blur impossibility
-- **Advanced ML Algorithm**: EMA learning with fast initialization and momentum-based adaptation
+- **ML Algorithm**: EMA learning with fast initialization and momentum-based adaptation
 - **Multi-Source Architecture**: GitHub + Bing integration with unified embedding support
 - **Chunked Processing**: Memory-efficient batch processing of 8,000+ wallpapers
 - **Pre-Caching System**: Background computation for instant wallpaper changes
 - **Quantized Manifests**: 90% smaller downloads with int8 quantization
 - **Smart Cropping 2.0**: Enhanced saliency detection with resolution preservation
 - **Premium UI Components**: Custom glassmorphic cards, sheets, and backgrounds
-- **Version-Aware Migrations**: Seamless upgrades between manifest versions (v1/v2/v3)
+- **Version-Aware Migrations**: Upgrades between manifest versions (v1/v2/v3)
 - **Samsung Optimizations**: WakeLock and foreground service for One UI compatibility
 - **Bing Wallpaper Support**: Full archive integration with MobileNetV4 embeddings
 - **Category Learning**: Fine-grained preference tracking at category level

@@ -22,14 +22,11 @@ import kotlin.random.Random
 
 /**
  * Worker to download the daily set of wallpapers.
- * 
- * FIXED (Nov 2025): Now properly downloads from network instead of relying on 
- * already-downloaded wallpapers.
- * 
+ *
  * Responsibilities:
  * 1. Get all wallpapers from catalog
  * 2. Score and select based on user preferences
- * 3. Actually download them from the network with progress reporting
+ * 3. Download them from the network with progress reporting
  * 4. Update DailyPlaylistManager with the new list
  * 5. Apply the first wallpaper immediately after download
  */
@@ -109,6 +106,7 @@ class DailyPlaylistWorker @AssistedInject constructor(
             val enabledSources = mutableListOf<String>()
             if (settings.githubEnabled) enabledSources.add("github")
             if (settings.bingEnabled) enabledSources.add("bing")
+            if (settings.vanderwaalsCollectionEnabled) enabledSources.add("vanderwaals")
             
             val sourceFilteredWallpapers = if (enabledSources.isEmpty()) {
                 allWallpapers
@@ -330,12 +328,8 @@ class DailyPlaylistWorker @AssistedInject constructor(
     /**
      * Applies wallpaper immediately to the specified screen(s).
      * Uses SmartCrop for optimal display.
-     * 
-     * CRITICAL FIX: applyTo values from DataStore are:
-     * - "lock_screen" (not "lock")
-     * - "home_screen" (not "home")
-     * - "both"
-     * - "both_different"
+     *
+     * applyTo values: "lock_screen", "home_screen", "both", "both_different"
      */
     private suspend fun applyWallpaperImmediately(wallpaperFile: File, applyTo: String): Boolean {
         var originalBitmap: android.graphics.Bitmap? = null
@@ -356,7 +350,7 @@ class DailyPlaylistWorker @AssistedInject constructor(
             val screenSize = me.avinas.vanderwaals.core.getDeviceScreenSize(applicationContext)
             
             // Apply SmartCrop to actual screen dimensions
-            processedBitmap = me.avinas.vanderwaals.core.SmartCrop.smartCropBitmap(
+            processedBitmap = me.avinas.vanderwaals.core.SmartCrop.smartCropBitmapAsync(
                 source = originalBitmap,
                 targetWidth = screenSize.width,
                 targetHeight = screenSize.height,
@@ -369,8 +363,7 @@ class DailyPlaylistWorker @AssistedInject constructor(
                 originalBitmap = null // Clear reference
             }
             
-            // Apply based on user settings
-            // CRITICAL FIX: Match the actual DataStore values (lock_screen, home_screen, both)
+            // Apply based on user settings (DataStore values: lock_screen, home_screen, both)
             when (applyTo) {
                 "home_screen" -> {
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {

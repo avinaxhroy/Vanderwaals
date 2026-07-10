@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.first
 import me.avinas.vanderwaals.data.datastore.SettingsDataStore
 import me.avinas.vanderwaals.data.repository.BingManifestRepository
 import me.avinas.vanderwaals.data.repository.ManifestRepository
+import me.avinas.vanderwaals.data.repository.VanderwaalsCollectionRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -40,6 +41,7 @@ import javax.inject.Singleton
 class SyncWallpaperCatalogUseCase @Inject constructor(
     private val manifestRepository: ManifestRepository,
     private val bingManifestRepository: BingManifestRepository,
+    private val vanderwaalsCollectionRepository: VanderwaalsCollectionRepository,
     private val settingsDataStore: SettingsDataStore
 ) {
     
@@ -65,27 +67,32 @@ class SyncWallpaperCatalogUseCase @Inject constructor(
             val githubEnabled = settings.githubEnabled
             val bingEnabled = settings.bingEnabled
             val bingManifestType = settings.bingManifestType
-            
-            Log.d(TAG, "Sources enabled - GitHub: $githubEnabled, Bing: $bingEnabled (type: $bingManifestType)")
-            
+            val vanderwaalsCollectionEnabled = settings.vanderwaalsCollectionEnabled
+            val vanderwaalsCollectionManifestType = settings.vanderwaalsCollectionManifestType
+
+            Log.d(TAG, "Sources enabled - GitHub: $githubEnabled, Bing: $bingEnabled, Vanderwaals Collection: $vanderwaalsCollectionEnabled")
+
             var totalCount = 0
-            
-            // Calculate progress ranges based on which sources are enabled
-            val progressRanges = when {
-                githubEnabled && bingEnabled -> Pair(0f to 0.5f, 0.5f to 1f) // GitHub: 0-50%, Bing: 50-100%
-                githubEnabled -> Pair(0f to 1f, null)
-                bingEnabled -> Pair(null, 0f to 1f)
-                else -> Pair(null, null)
+
+            // Progress ranges: split evenly between manifest sources only
+            val enabledCount = listOf(githubEnabled, bingEnabled, vanderwaalsCollectionEnabled).count { it }
+            val sliceSize = if (enabledCount > 0) 1f / enabledCount else 1f
+            var sliceIndex = 0
+
+            fun nextRange(): Pair<Float, Float> {
+                val start = sliceIndex * sliceSize
+                val end = start + sliceSize
+                sliceIndex++
+                return start to end
             }
             
             // Sync GitHub manifest if enabled
             if (githubEnabled) {
                 Log.d(TAG, "Syncing GitHub manifest...")
-                val range = progressRanges.first!!
+                val range = nextRange()
                 
                 manifestRepository.syncManifest(
                     onProgress = { message, progress, count ->
-                        // Scale progress to the GitHub range
                         val scaledProgress = range.first + (progress * (range.second - range.first))
                         onProgress?.invoke("Community: $message", scaledProgress, count)
                     }
@@ -96,20 +103,18 @@ class SyncWallpaperCatalogUseCase @Inject constructor(
                     },
                     onFailure = { error ->
                         Log.e(TAG, "GitHub sync failed: ${error.message}", error)
-                        // Continue with Bing if enabled, don't fail completely
                     }
                 )
             }
             
-            // Sync Bing manifest if enabled - uses curated manifest with ML embeddings
+            // Sync Bing manifest if enabled
             if (bingEnabled) {
                 Log.d(TAG, "Syncing Bing manifest ($bingManifestType)...")
-                val range = progressRanges.second!!
+                val range = nextRange()
                 
                 bingManifestRepository.syncBingManifest(
                     manifestType = bingManifestType,
                     onProgress = { message, progress, count ->
-                        // Scale progress to the Bing range
                         val scaledProgress = range.first + (progress * (range.second - range.first))
                         onProgress?.invoke("Bing: $message", scaledProgress, totalCount + count)
                     }
@@ -120,12 +125,33 @@ class SyncWallpaperCatalogUseCase @Inject constructor(
                     },
                     onFailure = { error ->
                         Log.e(TAG, "Bing sync failed: ${error.message}", error)
-                        // Continue even if Bing fails
                     }
                 )
             }
-            
-            if (totalCount == 0 && (githubEnabled || bingEnabled)) {
+
+            // Sync Vanderwaals Collection manifest if enabled
+            if (vanderwaalsCollectionEnabled) {
+                Log.d(TAG, "Syncing Vanderwaals Collection manifest ($vanderwaalsCollectionManifestType)...")
+                val range = nextRange()
+
+                vanderwaalsCollectionRepository.syncVanderwaalsCollectionManifest(
+                    manifestType = vanderwaalsCollectionManifestType,
+                    onProgress = { message, progress, count ->
+                        val scaledProgress = range.first + (progress * (range.second - range.first))
+                        onProgress?.invoke("Vanderwaals: $message", scaledProgress, totalCount + count)
+                    }
+                ).fold(
+                    onSuccess = { count ->
+                        totalCount += count
+                        Log.d(TAG, "Vanderwaals Collection sync successful: $count wallpapers")
+                    },
+                    onFailure = { error ->
+                        Log.e(TAG, "Vanderwaals Collection sync failed: ${error.message}", error)
+                    }
+                )
+            }
+
+            if (totalCount == 0 && (githubEnabled || bingEnabled || vanderwaalsCollectionEnabled)) {
                 Result.failure(Exception("No wallpapers synced from any source"))
             } else {
                 Log.d(TAG, "Sync complete: $totalCount total wallpapers")

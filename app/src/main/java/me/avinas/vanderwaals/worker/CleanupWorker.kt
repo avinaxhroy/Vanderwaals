@@ -13,30 +13,8 @@ import me.avinas.vanderwaals.data.repository.PreferenceRepository
 import me.avinas.vanderwaals.data.repository.WallpaperRepository
 
 /**
- * WorkManager worker for daily database and cache cleanup.
- * 
- * Performs maintenance tasks to keep the app performant:
- * - Removes old wallpaper history entries (keeps last 100)
- * - Deletes cached wallpapers not in top 100 by priority
- * - Deletes wallpapers explicitly disliked by user
- * - Cleans up orphaned files
- * 
- * Work constraints:
- * - BatteryNotLow (waits for sufficient battery)
- * - DeviceIdle (runs when device is idle)
- * 
- * Scheduled:
- * - Daily at 3:00 AM (low usage time)
- * - Periodic with 24 hour interval
- * 
- * **Benefits:**
- * - Prevents database bloat
- * - Manages storage efficiently
- * - Improves query performance
- * - Respects user preferences (disliked wallpapers)
- * 
- * @see me.avinas.vanderwaals.data.repository.WallpaperRepository
- * @see me.avinas.vanderwaals.data.entity.WallpaperHistory
+ * Daily worker that prunes old history entries, removes disliked wallpapers,
+ * and cleans orphaned cache files. Runs idle + battery-not-low.
  */
 @HiltWorker
 class CleanupWorker @AssistedInject constructor(

@@ -1,42 +1,85 @@
 package me.avinas.vanderwaals.ui.onboarding
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Wallpaper
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import me.avinas.vanderwaals.ui.theme.components.*
-import me.avinas.vanderwaals.ui.theme.LiquidGlassBackground
+import me.avinas.vanderwaals.ui.theme.BorderDark
+import me.avinas.vanderwaals.ui.theme.BorderLight
+import me.avinas.vanderwaals.ui.theme.BrandPrimary
+import me.avinas.vanderwaals.ui.theme.LocalThemeIsDark
+import me.avinas.vanderwaals.ui.theme.LuxeBodyStyle
+import me.avinas.vanderwaals.ui.theme.LuxeCardBackground
+import me.avinas.vanderwaals.ui.theme.LuxeCardBorder
+import me.avinas.vanderwaals.ui.theme.LuxeHeadlineStyle
+import me.avinas.vanderwaals.ui.theme.LuxeTextPrimary
+import me.avinas.vanderwaals.ui.theme.LuxeTextSecondary
+import me.avinas.vanderwaals.ui.theme.SurfaceElevatedDark
+import me.avinas.vanderwaals.ui.theme.SurfaceHighlightDark
+import me.avinas.vanderwaals.ui.theme.SurfaceHighlightLight
+import me.avinas.vanderwaals.ui.theme.SurfaceLight
+import me.avinas.vanderwaals.ui.theme.SurfaceOverlayDark
+import me.avinas.vanderwaals.ui.theme.TextPrimaryDark
+import me.avinas.vanderwaals.ui.theme.TextPrimaryLight
+import me.avinas.vanderwaals.ui.theme.TextSecondaryDark
+import me.avinas.vanderwaals.ui.theme.TextSecondaryLight
+import me.avinas.vanderwaals.ui.theme.TextTertiaryDark
+import me.avinas.vanderwaals.ui.theme.TextTertiaryLight
+import me.avinas.vanderwaals.ui.theme.components.SegmentedControl
 import me.avinas.vanderwaals.worker.ChangeInterval
 import java.time.LocalTime
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ApplicationSettingsScreen(
     onStartUsing: () -> Unit,
     onBackPressed: () -> Unit = {},
     selectedMode: OnboardingMode? = null,
-    viewModel: ApplicationSettingsViewModel = hiltViewModel()
+    viewModel: ApplicationSettingsViewModel = hiltViewModel(),
+    currentStep: Int = 6,
+    totalSteps: Int = 6
 ) {
-    // Handle system back button
     androidx.activity.compose.BackHandler {
         onBackPressed()
     }
@@ -46,317 +89,480 @@ fun ApplicationSettingsScreen(
     val dailyTime by viewModel.dailyTime.collectAsStateWithLifecycle()
     val startState by viewModel.startState.collectAsStateWithLifecycle()
     val needsAlarmPermission by viewModel.needsAlarmPermission.collectAsStateWithLifecycle()
-    val warningMessage by viewModel.warningMessage.collectAsStateWithLifecycle() // Assuming this exists or added
 
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalThemeIsDark.current
+    val metrics = rememberOnboardingLayoutMetrics()
     var showTimePicker by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Start using effect - trigger navigation
     LaunchedEffect(startState) {
         if (startState is StartState.Success) {
             onStartUsing()
         }
         if (startState is StartState.Error) {
-             val error = (startState as StartState.Error).message
-             snackbarHostState.showSnackbar(error)
-             viewModel.resetStartState()
+            val error = (startState as StartState.Error).message
+            snackbarHostState.showSnackbar(error)
+            viewModel.resetStartState()
         }
     }
 
-    LiquidGlassBackground {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            containerColor = Color.Transparent,
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+    val isLoading = startState is StartState.Starting
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = Color.Transparent,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .height(metrics.topBarHeight),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = metrics.maxContentWidth)
+                        .padding(horizontal = metrics.horizontalPadding),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBackPressed) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = getOnboardingTextPrimary(isDark)
+                        )
+                    }
+                }
+            }
+        },
+        bottomBar = {
+            OnboardingBottomBar(
+                isDark = isDark,
+                metrics = metrics,
+                buttonEnabled = startState !is StartState.Starting,
+                buttonText = "Start Using Vanderwaals",
+                showBorderGradient = !isLoading,
+                showLoading = isLoading,
+                loadingText = if (isLoading) (startState as StartState.Starting).step else "",
+                onButtonClick = { viewModel.startUsing(selectedMode) }
+            )
+        }
     ) { paddingValues ->
         Box(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
         ) {
-            // Premium Background
-            // Premium Background removed
-
+            OnboardingBackdrop(
+                isDark = isDark,
+                modifier = Modifier.matchParentSize()
+            )
 
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
+                    .padding(horizontal = metrics.horizontalPadding),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                OnboardingTopAppBar(
-                    onBack = onBackPressed,
-                    showBack = true,
-                    title = {
-                        Text(
-                            text = "Final Polish",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isDark) Color.White else Color(0xFF111827)
-                        )
-                    }
-                )
-
-                LazyColumn(
+                Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 16.dp),
-                    contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp),
-                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                        .fillMaxWidth()
+                        .widthIn(max = metrics.maxContentWidth)
                 ) {
-                    item {
-                        Text(
-                            text = "Customize how Vanderwaals works for you.",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF4B5563),
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                    }
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            top = paddingValues.calculateTopPadding() + 12.dp,
+                            bottom = paddingValues.calculateBottomPadding() + 24.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(metrics.cardSpacing)
+                    ) {
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = metrics.sectionSpacing),
+                                horizontalAlignment = Alignment.Start
+                            ) {
+                                OnboardingStepIndicator(
+                                    currentStep = currentStep - 1,
+                                    totalSteps = totalSteps,
+                                    isDark = isDark,
+                                    modifier = Modifier.padding(bottom = 12.dp)
+                                )
 
-                    // APPLY TO SECTION
-                    item {
-                        LabelSectionHeader(title = "APPLY WALLPAPERS TO")
-                        LiquidGlassCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = PaddingValues(16.dp)
-                        ) {
-                             // Use ApplyTo enum values
-                             val options = ApplyTo.values().toList()
-                             val selectedIndex = options.indexOf(applyTo).coerceAtLeast(0)
-                             
-                             SegmentedControl(
-                                 items = options.map { it.displayName },
-                                 selectedIndex = selectedIndex,
-                                 onItemSelected = { index ->
-                                     viewModel.setApplyTo(options[index])
-                                 },
-                                 isDark = isDark
-                             )
+                                Text(
+                                    text = "Step $currentStep of $totalSteps",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = BrandPrimary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+
+                                Text(
+                                    text = "Final Touches",
+                                    style = LuxeHeadlineStyle,
+                                    color = getOnboardingTextPrimary(isDark),
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+
+                                Text(
+                                    text = "Set how and when wallpapers change",
+                                    style = LuxeBodyStyle,
+                                    color = getOnboardingTextSecondary(isDark),
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+                            }
                         }
-                    }
 
-                    // CHANGE INTERVAL SECTION
-                    item {
-                        LabelSectionHeader(title = "UPDATE FREQUENCY")
-                        LiquidGlassCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Column {
-                                // We can use SettingsRow here for selection if list is long, 
-                                // OR SegmentedControl if short. 
-                                // ChangeInterval has 5 options. A vertical list of radio rows might be cleaner than a cramped 5-item segmented control.
-                                
-                                ChangeInterval.values().forEachIndexed { index, interval ->
-                                    SettingsRadioButton(
-                                        text = interval.displayName,
-                                        selected = changeInterval == interval,
-                                        onClick = { viewModel.setChangeInterval(interval) }
-                                    )
-                                    if (index < ChangeInterval.values().lastIndex) {
-                                         ModernDivider(isDark = isDark)
+                        item {
+                            SettingsSectionHeader("APPLY WALLPAPERS TO", isDark)
+                            PremiumSettingsCard(
+                                isDark = isDark,
+                                contentPadding = PaddingValues(10.dp)
+                            ) {
+                                val options = ApplyTo.values().toList()
+                                val selectedIndex = options.indexOf(applyTo).coerceAtLeast(0)
+
+                                SegmentedControl(
+                                    items = options.map { it.displayName },
+                                    selectedIndex = selectedIndex,
+                                    onItemSelected = { index ->
+                                        viewModel.setApplyTo(options[index])
+                                    },
+                                    isDark = isDark
+                                )
+                            }
+                        }
+
+                        item {
+                            SettingsSectionHeader("UPDATE FREQUENCY", isDark)
+                            PremiumSettingsCard(isDark = isDark) {
+                                Column {
+                                    ChangeInterval.values().forEachIndexed { index, interval ->
+                                        RadioRow(
+                                            text = interval.displayName,
+                                            selected = changeInterval == interval,
+                                            onClick = { viewModel.setChangeInterval(interval) },
+                                            isDark = isDark
+                                        )
+                                        if (index < ChangeInterval.values().lastIndex) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(start = 56.dp),
+                                                color = getOnboardingCardBorder(isDark)
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                    
-                    // DAILY TIME SETTING (Conditional)
-                    if (changeInterval == ChangeInterval.DAILY) {
-                        item {
-                            LiquidGlassCard(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { showTimePicker = true },
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                SettingsRow(
-                                    title = "Update Time",
-                                    subtitle = "Wallpapers will change at this time daily",
-                                    onClick = { showTimePicker = true },
-                                    trailing = {
+
+                        if (changeInterval == ChangeInterval.DAILY) {
+                            item {
+                                PremiumSettingsCard(
+                                    isDark = isDark,
+                                    onClick = { showTimePicker = true }
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(18.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(metrics.iconBoxSize)
+                                                    .clip(RoundedCornerShape(14.dp))
+                                                    .background(BrandPrimary.copy(alpha = 0.15f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Schedule,
+                                                    contentDescription = null,
+                                                    tint = BrandPrimary,
+                                                    modifier = Modifier.size(metrics.iconSize)
+                                                )
+                                            }
+                                            Column {
+                                                Text(
+                                                    text = "Update Time",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = getOnboardingTextPrimary(isDark)
+                                                )
+                                                Text(
+                                                    text = "Wallpapers change daily at this time",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = getOnboardingTextSecondary(isDark)
+                                                )
+                                            }
+                                        }
                                         Text(
                                             text = String.format("%02d:%02d", dailyTime.hour, dailyTime.minute),
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary
+                                            color = BrandPrimary
                                         )
                                     }
-                                )
+                                }
                             }
                         }
-                    }
-                    
-                    // Note regarding battery for high frequency
-                    if (changeInterval == ChangeInterval.EVERY_UNLOCK) {
-                        item {
-                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.Top
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle, // Using generic icon or battery if available
-                                    contentDescription = null,
-                                    tint = if (isDark) Color.White.copy(alpha = 0.5f) else Color.Gray,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = "Changes happen once per minute max to preserve battery.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (isDark) Color.White.copy(alpha = 0.5f) else Color.Gray
-                                )
+
+                        if (changeInterval == ChangeInterval.EVERY_UNLOCK) {
+                            item {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(getOnboardingCardBackground(isDark))
+                                        .border(1.dp, getOnboardingCardBorder(isDark), RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = BrandPrimary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = "Changes happen once per minute max to preserve battery.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = getOnboardingTextSecondary(isDark)
+                                    )
+                                }
                             }
-                        }
-                    }
-                }
-                
-                // Bottom Bar
-                GlassSheet(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Button(
-                        onClick = { viewModel.startUsing(selectedMode) },
-                        enabled = startState !is StartState.Starting,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary,
-                            contentColor = Color.White
-                        )
-                    ) {
-                        if (startState is StartState.Starting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = Color.White
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = (startState as StartState.Starting).step,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        } else {
-                            Text(
-                                text = "Start Using Vanderwaals",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null
-                            )
                         }
                     }
                 }
             }
         }
     }
-    }
-    
-    // Time Picker Logic (Simplified)
+
     if (showTimePicker) {
-         // Use a custom Date/Time picker dialog or standard Material one
-         // For simplicity here, assuming TimePickerDialog component exists or we use one from library.
-         // If not, we might need to implement a simple one.
-         // `ApplicationSettingsScreen` Step 145 included `TimePickerDialog`. I will assume it exists or needs to be retained.
-         // Checking Step 144 view... it referenced `TimePickerDialog`.
-         // I'll add a minimal implementation if needed, or rely on import if previously defined.
-         // I'll add a basic AlertDialog with time inputs if needed.
-         
-         // Assuming TimePickerDialog composable exists in the file or nearby.
-         // Wait, I am overwriting the file. If `TimePickerDialog` was in the file, I need to include it.
-         // Step 144 showed `TimePickerDialog` at line 600+. I should copy it back or reimplement it.
-         // I'll reimplement it briefly.
-         
-         BasicTimePickerDialog(
-             initialTime = dailyTime,
-             onConfirm = { 
-                 viewModel.setDailyTime(it)
-                 showTimePicker = false
-             },
-             onDismiss = { showTimePicker = false }
-         )
+        PremiumTimePickerDialog(
+            initialTime = dailyTime,
+            onConfirm = {
+                viewModel.setDailyTime(it)
+                showTimePicker = false
+            },
+            onDismiss = { showTimePicker = false },
+            isDark = isDark
+        )
     }
-    
-    // Alarm Permission
+
     if (needsAlarmPermission) {
-         AlertDialog(
-             onDismissRequest = { viewModel.dismissAlarmPermissionDialog() },
-             title = { Text("Permission Required") },
-             text = { Text("To change wallpapers at exact times, Vanderwaals needs 'Alarms & Reminders' permission. Without it, times may be inexact.") },
-             confirmButton = {
-                 TextButton(onClick = { viewModel.openAlarmPermissionSettings() }) {
-                     Text("Grant")
-                 }
-             },
-             dismissButton = {
-                 TextButton(onClick = { viewModel.dismissAlarmPermissionDialog() }) {
-                     Text("Use Inexact Timing")
-                 }
-             }
-         )
+        PremiumAlertDialog(
+            onDismissRequest = { viewModel.dismissAlarmPermissionDialog() },
+            title = "Permission Required",
+            message = "To change wallpapers at exact times, Vanderwaals needs 'Alarms & Reminders' permission. Without it, times may be inexact.",
+            confirmText = "Grant",
+            onConfirm = { viewModel.openAlarmPermissionSettings() },
+            dismissText = "Use Inexact Timing",
+            onDismiss = { viewModel.dismissAlarmPermissionDialog() },
+            isDark = isDark
+        )
     }
 }
 
 @Composable
-fun SettingsRadioButton(
+private fun SettingsSectionHeader(title: String, isDark: Boolean) {
+    Text(
+        text = title.uppercase(),
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Bold,
+        color = getOnboardingTextSecondary(isDark),
+        letterSpacing = 1.2.sp,
+        modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+    )
+}
+
+@Composable
+private fun PremiumSettingsCard(
+    isDark: Boolean,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    onClick: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val backgroundColor = getOnboardingCardBackground(isDark)
+    val borderColor = getOnboardingCardBorder(isDark)
+    val metrics = rememberOnboardingLayoutMetrics()
+
+    val cardModifier = Modifier
+        .fillMaxWidth()
+        .shadow(
+            elevation = 4.dp,
+            shape = RoundedCornerShape(metrics.cardCornerRadius),
+            ambientColor = if (isDark) Color(0xFF3F3F46).copy(alpha = 0.12f) else Color(0x0A000000),
+            spotColor = Color.Transparent
+        )
+        .border(1.dp, borderColor, RoundedCornerShape(metrics.cardCornerRadius))
+        .clip(RoundedCornerShape(metrics.cardCornerRadius))
+        .background(backgroundColor)
+        .let {
+            if (onClick != null) it.bounceClick(onClick) else it
+        }
+
+    Column(
+        modifier = cardModifier.padding(contentPadding),
+        content = content
+    )
+}
+
+@Composable
+private fun RadioRow(
     text: String,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isDark: Boolean
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .bounceClick(onClick)
+            .padding(18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        RadioButton(
-            selected = selected,
-            onClick = null // Handled by row
-        )
-        Spacer(modifier = Modifier.width(16.dp))
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .border(
+                    width = 2.dp,
+                    color = if (selected) BrandPrimary else (if (isDark) Color(0xFF3F3F46) else Color(0xFFD4D4D4)),
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (selected) {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(BrandPrimary)
+                )
+            }
+        }
         Text(
             text = text,
             style = MaterialTheme.typography.bodyLarge,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = getOnboardingTextPrimary(isDark)
         )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BasicTimePickerDialog(
+private fun PremiumTimePickerDialog(
     initialTime: LocalTime,
     onConfirm: (LocalTime) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    isDark: Boolean
 ) {
     val timePickerState = rememberTimePickerState(
         initialHour = initialTime.hour,
         initialMinute = initialTime.minute
     )
-    
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = {
-                onConfirm(LocalTime.of(timePickerState.hour, timePickerState.minute))
-            }) {
-                Text("OK")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
+        containerColor = if (isDark) Color(0xFF14120F) else Color(0xFFF9F7F5),
+        title = {
+            Text(
+                text = "Set Update Time",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = getOnboardingTextPrimary(isDark)
+            )
         },
         text = {
             TimePicker(state = timePickerState)
-        }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onConfirm(LocalTime.of(timePickerState.hour, timePickerState.minute))
+                },
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = BrandPrimary
+                )
+            ) {
+                Text("OK", fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = getOnboardingTextSecondary(isDark)
+                )
+            ) {
+                Text("Cancel")
+            }
+        },
+        shape = RoundedCornerShape(24.dp)
+    )
+}
+
+@Composable
+private fun PremiumAlertDialog(
+    onDismissRequest: () -> Unit,
+    title: String,
+    message: String,
+    confirmText: String,
+    onConfirm: () -> Unit,
+    dismissText: String,
+    onDismiss: () -> Unit,
+    isDark: Boolean
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        containerColor = if (isDark) Color(0xFF14120F) else Color(0xFFF9F7F5),
+        title = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = getOnboardingTextPrimary(isDark)
+            )
+        },
+        text = {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = getOnboardingTextSecondary(isDark)
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = BrandPrimary
+                )
+            ) {
+                Text(confirmText, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = getOnboardingTextSecondary(isDark)
+                )
+            ) {
+                Text(dismissText)
+            }
+        },
+        shape = RoundedCornerShape(24.dp)
     )
 }

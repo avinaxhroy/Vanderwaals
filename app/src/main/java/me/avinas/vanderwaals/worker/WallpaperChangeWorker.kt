@@ -72,7 +72,8 @@ class WallpaperChangeWorker @AssistedInject constructor(
     private val findCachedWallpaperUseCase: me.avinas.vanderwaals.domain.usecase.FindCachedWallpaperUseCase,
     private val networkStateTracker: NetworkStateTracker,
     private val nextWallpaperCacheManager: me.avinas.vanderwaals.domain.NextWallpaperCacheManager,
-    private val wallpaperApplicator: WallpaperApplicator
+    private val wallpaperApplicator: WallpaperApplicator,
+    private val settingsDataStore: me.avinas.vanderwaals.data.datastore.SettingsDataStore
 ) : CoroutineWorker(appContext, workerParams) {
     
     companion object {
@@ -173,7 +174,6 @@ class WallpaperChangeWorker @AssistedInject constructor(
             // CRITICAL FIX: Always load current Apply To setting from DataStore
             // This ensures we respect the latest user preference, even if WorkManager
             // data is stale or was scheduled before the user changed settings
-            val settingsDataStore = me.avinas.vanderwaals.data.datastore.SettingsDataStore(applicationContext)
             val currentSettings = settingsDataStore.settings.first()
             
             // Map DataStore setting to worker constant
@@ -456,7 +456,11 @@ class WallpaperChangeWorker @AssistedInject constructor(
         }
         
         // Step 4: Apply wallpaper to specified screen(s)
-        val applied = applyWallpaperToScreen(wallpaperFile!!, targetScreen)
+        if (wallpaperFile == null) {
+            Log.e(TAG, "wallpaperFile is null after download/cache step — cannot apply")
+            return Result.retry()
+        }
+        val applied = applyWallpaperToScreen(wallpaperFile, targetScreen)
         
         if (!applied) {
             Log.e(TAG, "Failed to apply wallpaper")

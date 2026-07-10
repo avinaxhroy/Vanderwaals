@@ -8,32 +8,8 @@ import retrofit2.http.HEAD
 import retrofit2.http.Header
 
 /**
- * Retrofit service interface for downloading the wallpaper manifest.
- * 
- * Provides endpoints to fetch the pre-computed manifest.json file
- * from jsDelivr CDN or GitHub. The manifest contains metadata and embeddings
- * for all 6000+ curated wallpapers from multiple GitHub repositories.
- * 
- * **Note:** The manifest contains wallpapers from ALL configured repositories
- * (dharmx/walls, D3Ext/aesthetic-wallpapers, makccr/wallpapers, etc.),
- * not just a single repository.
- * 
- * **Base URL (configured in NetworkModule):**
- * - Primary: `https://cdn.jsdelivr.net/gh/{owner}/{repo}@{branch}/`
- * - Fallback: GitHub raw URL
- * 
- * **Smart Update Support:**
- * - Use [checkManifestHeaders] to check if manifest was updated without downloading
- * - Use [getManifestConditional] with If-Modified-Since header to skip unchanged manifests
- * 
- * **Manifest file:** `manifest_v3.json`
- * - Size: ~10-15MB compressed (with MobileNetV4 1280D embeddings)
- * - Format: JSON with wallpaper metadata array
- * - Updated: Weekly via GitHub Actions
- * - Note: v3.8.x uses manifest.json, v4.0.0 uses manifest_v2.json, v5.0.0+ uses manifest_v3.json
- * 
- * @see ManifestDto
- * @see ManifestRepository
+ * Retrofit interface for downloading the wallpaper manifest (manifest_v3.json)
+ * from jsDelivr CDN. Supports conditional requests via If-Modified-Since.
  */
 interface ManifestService {
     

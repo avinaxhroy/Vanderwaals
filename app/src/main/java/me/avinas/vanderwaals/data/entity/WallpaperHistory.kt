@@ -5,44 +5,8 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Room entity representing user interaction history with wallpapers.
- * 
- * Tracks all user interactions with wallpapers including:
- * - Explicit feedback (likes, dislikes)
- * - Implicit feedback (wallpaper duration)
- * - Application and removal timestamps
- * - Download status
- * - Contextual information (time, battery, brightness)
- * 
- * This data is used for:
- * - Displaying history in the UI (chronological list)
- * - Learning user preferences through feedback
- * - Preventing duplicate wallpapers in rotation
- * - Category preference tracking
- * - Contextual recommendations (future enhancement)
- * - Analytics and usage patterns
- * 
- * **Auto-cleanup:**
- * Keeps last 100 entries per user, auto-deletes older records to prevent bloat.
- * 
- * **Database Indexes:**
- * - `wallpaperId`: Fast lookup for checking if wallpaper was previously applied
- * - `appliedAt`: Enables efficient chronological sorting and time-based queries
- * - `userFeedback`: Optimizes queries filtering by feedback (likes, dislikes) - added in v7
- * - `removedAt`: Optimizes queries for active wallpaper (WHERE removedAt IS NULL) - added in v7
- * 
- * **User Feedback Values:**
- * - "like": User explicitly liked the wallpaper (heart icon)
- * - "dislike": User explicitly disliked the wallpaper (thumbs down icon)
- * - null: No explicit feedback provided
- * 
- * @property id Auto-generated unique identifier for the history entry
- * @property wallpaperId Reference to WallpaperMetadata.id
- * @property appliedAt Timestamp when wallpaper was applied (milliseconds since epoch)
- * @property removedAt Timestamp when wallpaper was removed (null if currently active)
- * @property userFeedback User's explicit feedback: "like", "dislike", or null
- * @property downloadedToStorage Whether the wallpaper was downloaded to device storage
- * @property feedbackContext Contextual information when feedback was provided (null if no feedback or legacy data)
+ * Tracks when each wallpaper was applied/removed, user feedback ("like"/"dislike"/null),
+ * and implicit duration signal. Auto-cleaned to keep last 100 entries.
  */
 @Entity(
     tableName = "wallpaper_history",

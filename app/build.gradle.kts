@@ -16,6 +16,14 @@ if (localPropertiesFile.exists()) {
     localProperties.load(localPropertiesFile.inputStream())
 }
 
+fun localOrEnv(propertyKey: String, vararg envKeys: String): String {
+    return envKeys.asSequence()
+        .mapNotNull { key -> System.getenv(key)?.ifBlank { null } }
+        .firstOrNull()
+        ?: localProperties.getProperty(propertyKey)?.ifBlank { null }
+        ?: ""
+}
+
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
@@ -49,8 +57,8 @@ android {
         applicationId = "me.avinas.vanderwaals"
         minSdk = 30
         targetSdk = 36
-        versionCode = 450 // Vanderwaals 4.5.0
-        versionName = "4.5.0"
+        versionCode = 462 // Vanderwaals 4.6.2
+        versionName = "4.6.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -130,7 +138,10 @@ android {
         disable.add("RemoveWorkManagerInitializer")
         disable.add("DefaultLocale")
         disable.add("DiscouragedPrivateApi")
-        disable.add("SelectedPhotoAccess")
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 }
 

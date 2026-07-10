@@ -15,17 +15,27 @@ import androidx.navigation.compose.rememberNavController
  * Onboarding navigation graph.
  * 
  * Flow:
- * 1. **ModeSelection**: Choose Auto or Personalize
+ * 0. **Welcome**: Informational overview with Get Started/Skip
+ *    - Get Started → WallpaperSourceSelection
+ *    - Skip → WallpaperSourceSelection
+ * 
+ * 1. **WallpaperSourceSelection**: Choose wallpaper sources
+ *    - Continue → InitialSync
+ * 
+ * 2. **InitialSync**: Download wallpaper catalog
+ *    - On complete → ModeSelection
+ * 
+ * 3. **ModeSelection**: Choose Auto or Personalize
  *    - Auto → ApplicationSettings
  *    - Personalize → UploadWallpaper
  * 
- * 2. **UploadWallpaper**: Upload image or select sample
+ * 4. **UploadWallpaper**: Upload image or select sample
  *    - After processing → ConfirmationGallery
  * 
- * 3. **ConfirmationGallery**: Like/dislike wallpapers
+ * 5. **ConfirmationGallery**: Like/dislike wallpapers
  *    - After 3+ likes → ApplicationSettings
  * 
- * 4. **ApplicationSettings**: Configure app settings
+ * 6. **ApplicationSettings**: Configure app settings
  *    - Start Using → Main screen (onOnboardingComplete)
  * 
  * **Shared ViewModels:**
@@ -50,55 +60,99 @@ fun OnboardingNavGraph(
     
     NavHost(
         navController = navController,
-        startDestination = OnboardingRoutes.MODE_SELECTION
+        startDestination = OnboardingRoutes.WELCOME
     ) {
-        // Screen 1: Mode Selection
+        // Screen 0: Welcome (NEW!)
+        composable(OnboardingRoutes.WELCOME) {
+            WelcomeScreen(
+                onGetStarted = {
+                    navController.navigate(OnboardingRoutes.WALLPAPER_SOURCE_SELECTION) {
+                        popUpTo(OnboardingRoutes.WELCOME) { inclusive = true }
+                    }
+                },
+                onSkip = {
+                    navController.navigate(OnboardingRoutes.WALLPAPER_SOURCE_SELECTION) {
+                        popUpTo(OnboardingRoutes.WELCOME) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        // Screen 1: Wallpaper Source Selection
+        composable(OnboardingRoutes.WALLPAPER_SOURCE_SELECTION) {
+            WallpaperSourceSelectionScreen(
+                onContinue = {
+                    navController.navigate(OnboardingRoutes.INITIAL_SYNC)
+                },
+                onBack = {
+                    navController.popBackStack()
+                },
+                currentStep = 1,
+                totalSteps = 4
+            )
+        }
+
+        // Screen 2: Initial Sync (Download)
+        composable(OnboardingRoutes.INITIAL_SYNC) {
+            InitialSyncScreen(
+                onSyncComplete = {
+                    navController.navigate(OnboardingRoutes.MODE_SELECTION)
+                },
+                currentStep = 2,
+                totalSteps = 4
+            )
+        }
+
+        // Screen 3: Mode Selection
         composable(OnboardingRoutes.MODE_SELECTION) {
+            val selectedMode by modeSelectionViewModel.selectedMode.collectAsState()
+            val totalSteps = if (selectedMode == OnboardingMode.AUTO) 4 else 6
+
             ModeSelectionScreen(
                 onModeSelected = { mode ->
                     when (mode) {
-                        OnboardingMode.AUTO -> navController.navigate(OnboardingRoutes.WALLPAPER_SOURCE_SELECTION)
+                        OnboardingMode.AUTO -> navController.navigate(OnboardingRoutes.APPLICATION_SETTINGS)
                         OnboardingMode.PERSONALIZE -> navController.navigate(OnboardingRoutes.UPLOAD_WALLPAPER)
                     }
                 },
-                viewModel = modeSelectionViewModel
+                onBack = { navController.popBackStack() },
+                viewModel = modeSelectionViewModel,
+                currentStep = 3,
+                totalSteps = totalSteps
             )
         }
-        
-        // Screen 2: Upload Wallpaper (Personalize only)
+
+        // Screen 4: Upload Wallpaper (Personalize only)
         composable(OnboardingRoutes.UPLOAD_WALLPAPER) {
             val uploadViewModel: UploadWallpaperViewModel = hiltViewModel()
             val similarWallpapers by uploadViewModel.similarWallpapers.collectAsState()
-            
+
             UploadWallpaperScreen(
                 onMatchesFound = {
                     navController.navigate(OnboardingRoutes.CONFIRMATION_GALLERY)
                 },
                 onBackPressed = {
                     android.util.Log.d("OnboardingNav", "UPLOAD_WALLPAPER back pressed")
-                    // Reset state completely when going back to mode selection
                     uploadViewModel.resetState()
                     navController.popBackStack()
                 },
-                viewModel = uploadViewModel
+                viewModel = uploadViewModel,
+                currentStep = 4,
+                totalSteps = 6
             )
         }
-        
-        // Screen 3: Confirmation Gallery (Personalize only)
+
+        // Screen 5: Confirmation Gallery (Personalize only)
         composable(OnboardingRoutes.CONFIRMATION_GALLERY) { backStackEntry ->
-            // Get shared ViewModel from parent navigation graph
             val parentEntry = remember(backStackEntry) {
                 navController.getBackStackEntry(OnboardingRoutes.UPLOAD_WALLPAPER)
             }
             val uploadViewModel: UploadWallpaperViewModel = hiltViewModel(parentEntry)
             val confirmationViewModel: ConfirmationGalleryViewModel = hiltViewModel()
-            
+
             val similarWallpapers by uploadViewModel.similarWallpapers.collectAsState()
             val userEmbedding by uploadViewModel.userEmbedding.collectAsState()
-            
-            // CRITICAL: Set wallpapers on first composition or when they change
-            // Using 'true' as key ensures this runs once on composition
-            // Using similarWallpapers as additional dependency catches updates
+
             LaunchedEffect(key1 = true, key2 = similarWallpapers.size) {
                 android.util.Log.d("OnboardingNav", "LaunchedEffect: Checking wallpapers - count: ${similarWallpapers.size}")
                 if (similarWallpapers.isNotEmpty()) {
@@ -108,87 +162,47 @@ fun OnboardingNavGraph(
                     android.util.Log.w("OnboardingNav", "LaunchedEffect: No wallpapers available!")
                 }
             }
-            
+
             ConfirmationGalleryScreen(
                 onContinue = {
-                    // Keep backstack for back navigation
-                    navController.navigate(OnboardingRoutes.WALLPAPER_SOURCE_SELECTION)
+                    navController.navigate(OnboardingRoutes.APPLICATION_SETTINGS)
                 },
                 onBack = {
                     android.util.Log.d("OnboardingNav", "CONFIRMATION_GALLERY back pressed")
-                    
-                    // CRITICAL: Reset confirmation state when going back
-                    // User might want to upload a different wallpaper
                     confirmationViewModel.resetStateForBackNavigation()
-                    
-                    // CRITICAL: Reset upload state to Initial to prevent auto-navigation
-                    // back to confirmation gallery. The similar wallpapers are preserved
-                    // in case user wants to continue without making changes.
                     uploadViewModel.resetStateForBackNavigation()
-                    
                     navController.popBackStack()
                 },
-                viewModel = confirmationViewModel
+                viewModel = confirmationViewModel,
+                currentStep = 5,
+                totalSteps = 6
             )
         }
-        
-        // Screen 4: Wallpaper Source Selection (New)
-        composable(OnboardingRoutes.WALLPAPER_SOURCE_SELECTION) {
-            WallpaperSourceSelectionScreen(
-                onContinue = {
-                    navController.navigate(OnboardingRoutes.INITIAL_SYNC)
-                }
-            )
-        }
-        
-        // Screen 5: Initial Sync (New)
-        composable(OnboardingRoutes.INITIAL_SYNC) {
-            InitialSyncScreen(
-                onSyncComplete = {
-                    navController.navigate(OnboardingRoutes.APPLICATION_SETTINGS) {
-                        // Pop up to Source Selection (exclusive) to remove Initial Sync from back stack
-                        // This prevents user from pressing Back and going into the specific sync screen
-                        popUpTo(OnboardingRoutes.WALLPAPER_SOURCE_SELECTION) {
-                            inclusive = false
-                        }
-                    }
-                }
-            )
-        }
-        
+
         // Screen 6: Application Settings (Both flows)
         composable(OnboardingRoutes.APPLICATION_SETTINGS) {
             val selectedMode by modeSelectionViewModel.selectedMode.collectAsState()
-            
+            val isAuto = selectedMode == OnboardingMode.AUTO
+            val totalNum = if (isAuto) 4 else 6
+
             ApplicationSettingsScreen(
                 onStartUsing = {
                     onOnboardingComplete()
                 },
                 onBackPressed = {
-                    // Navigate back - always goes to previous screen in backstack
                     android.util.Log.d("OnboardingNav", "APPLICATION_SETTINGS back pressed")
-                    android.util.Log.d("OnboardingNav", "Previous entry: ${navController.previousBackStackEntry?.destination?.route}")
-                    android.util.Log.d("OnboardingNav", "Selected mode: $selectedMode")
-                    
-                    // If coming from Personalize flow, we need to check if we should
-                    // reset the ConfirmationGallery state
                     val previousRoute = navController.previousBackStackEntry?.destination?.route
                     if (previousRoute == OnboardingRoutes.CONFIRMATION_GALLERY) {
-                        // Get the confirmation gallery entry and reset its finish state
-                        // Note: Cannot use try-catch around composable, so we handle NavController errors
                         val confirmEntry = runCatching { navController.getBackStackEntry(OnboardingRoutes.CONFIRMATION_GALLERY) }.getOrNull()
                         if (confirmEntry != null) {
-                            // Reset confirmation state via saved state handle since we can't use hiltViewModel in callback
                             confirmEntry.savedStateHandle["resetFinishState"] = true
-                            android.util.Log.d("OnboardingNav", "Signaled ConfirmationGallery to reset finish state")
                         }
                     }
-                    
-                    // Just pop - navController handles the backstack
-                    val popped = navController.popBackStack()
-                    android.util.Log.d("OnboardingNav", "Pop result: $popped")
+                    navController.popBackStack()
                 },
-                selectedMode = selectedMode
+                selectedMode = selectedMode,
+                currentStep = if (isAuto) 4 else 6,
+                totalSteps = totalNum
             )
         }
     }

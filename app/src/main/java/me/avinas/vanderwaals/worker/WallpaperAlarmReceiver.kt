@@ -11,20 +11,14 @@ import me.avinas.vanderwaals.service.WallpaperChangeService
 import java.util.Calendar
 
 /**
- * BroadcastReceiver that handles daily wallpaper change alarms.
- * 
- * When AlarmManager fires the daily alarm, this receiver:
- * 1. Starts a foreground service to handle the wallpaper change
- * 2. Reschedules the alarm for the next occurrence
- * 
- * **CRITICAL: Uses startForegroundService() instead of WorkManager**
- * 
- * This ensures reliable execution even when the app was killed by the user:
- * - When app is killed, process dies
- * - AlarmManager fires alarm, Android creates new process
- * - Receiver starts foreground service which properly initializes Hilt
- * - Service changes wallpaper and stops itself
- * 
+ * BroadcastReceiver that handles wallpaper change alarms.
+ *
+ * When AlarmManager fires, this receiver starts a foreground service
+ * to change the wallpaper, then reschedules the next alarm.
+ *
+ * Uses startForegroundService() instead of WorkManager for reliability
+ * when the app has been killed.
+ *
  * Inspired by Paperize's WallpaperReceiver implementation.
  */
 @AndroidEntryPoint
@@ -43,8 +37,7 @@ class WallpaperAlarmReceiver : BroadcastReceiver() {
         android.util.Log.d(TAG, "  Timestamp: ${System.currentTimeMillis()}")
         android.util.Log.d(TAG, "========================================")
         
-        // CRITICAL: Start foreground service instead of WorkManager
-        // This ensures reliable execution even when the app was killed
+        // Start foreground service for reliable execution
         val serviceIntent = Intent(context, WallpaperChangeService::class.java).apply {
             action = WallpaperChangeService.ACTION_CHANGE_WALLPAPER
             putExtra(WallpaperChangeService.EXTRA_TARGET_SCREEN, targetScreen)
@@ -65,8 +58,8 @@ class WallpaperAlarmReceiver : BroadcastReceiver() {
         // Check if this is a repeating alarm (15-min or hourly) or daily alarm
         val intervalMillis = intent.getLongExtra("intervalMillis", 0L)
         if (intervalMillis > 0) {
-            // CRITICAL FIX: setRepeating() is inexact on Android 5.1+
-            // Must manually reschedule using setExactAndAllowWhileIdle() for precise timing
+            // setRepeating() is inexact on Android 5.1+;
+            // use setExactAndAllowWhileIdle() with manual rescheduling instead
             android.util.Log.d(TAG, "Interval-based alarm - rescheduling for ${intervalMillis / 60000} minutes from now")
             rescheduleRepeatingAlarm(context, targetScreen, mode, intervalMillis)
         } else {
@@ -76,13 +69,10 @@ class WallpaperAlarmReceiver : BroadcastReceiver() {
     }
     
     /**
-     * Reschedules a repeating alarm (15-min or hourly) using exact timing.
-     * 
-     * CRITICAL FIX: On Android 5.1+ (API 22+), setRepeating() became inexact and 
-     * subject to batching, causing irregular intervals like 3min, 11min, 16min, etc.
-     * 
-     * Solution: Use setExactAndAllowWhileIdle() with manual rescheduling after each
-     * alarm fires, just like we do for daily alarms. This guarantees exact intervals.
+     * Reschedules a repeating alarm using exact timing.
+     *
+     * On Android 5.1+ (API 22+), setRepeating() is inexact and subject to batching.
+     * Uses setExactAndAllowWhileIdle() with manual rescheduling for precise intervals.
      */
     private fun rescheduleRepeatingAlarm(
         context: Context, 

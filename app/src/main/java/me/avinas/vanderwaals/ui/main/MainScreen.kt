@@ -186,9 +186,9 @@ fun MainScreen(
                 ) { wallpaper ->
                     if (wallpaper != null) {
                         // Check for pre-cropped file (created by WallpaperChangeWorker)
-                        // Path format: cache/wallpapers/{wallpaperId}_cropped.png
-                        val croppedFile = java.io.File(context.cacheDir, "wallpapers/${wallpaper.id}_cropped.png")
-                        val originalFile = java.io.File(context.cacheDir, "wallpapers/${wallpaper.id}.jpg")
+                        // Path format: cache/wallpapers/{wallpaperId}_cropped.jpg
+                        val croppedFile = java.io.File(context.cacheDir, "wallpapers/${wallpaper.id}_cropped.jpg")
+                        val originalFile = me.avinas.vanderwaals.core.resolveWallpaperFile(context, wallpaper.id)
                         
                         // Determine image source with priority:
                         // 1. Cropped file (fastest - no processing needed)
@@ -198,7 +198,7 @@ fun MainScreen(
                             croppedFile.exists() -> {
                                 croppedFile.absolutePath to false
                             }
-                            originalFile.exists() -> {
+                            originalFile != null -> {
                                 // Use local original file instead of downloading from URL
                                 originalFile.absolutePath to true
                             }
@@ -629,8 +629,7 @@ fun MainScreen(
                             }
                         }
                         
-                        // Manual bottom padding for navigation bar
-                        Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
             }

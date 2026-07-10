@@ -8,34 +8,8 @@ import java.io.File
 import java.io.InputStream
 
 /**
- * Centralized bitmap lifecycle management to prevent memory leaks.
- * 
- * Provides:
- * - Safe bitmap loading with OOM protection
- * - Automatic size optimization
- * - Proper cleanup and recycling
- * - Memory pressure monitoring
- * 
- * **Usage:**
- * ```kotlin
- * // Load from file
- * val bitmap = BitmapManager.loadBitmap(wallpaperFile)
- * if (bitmap != null) {
- *     try {
- *         // Use bitmap
- *         processWallpaper(bitmap)
- *     } finally {
- *         BitmapManager.recycleSafely(bitmap)
- *     }
- * }
- * 
- * // Or use auto-cleanup wrapper
- * BitmapManager.AutoRecycleBitmap(wallpaperFile).use { wrapper ->
- *     wrapper.bitmap?.let { bitmap ->
- *         processWallpaper(bitmap)
- *     }
- * }
- * ```
+ * Safe bitmap loading with OOM protection, size optimization,
+ * and proper recycling. Use [AutoRecycleBitmap] for scoped cleanup.
  */
 object BitmapManager {
     
@@ -62,7 +36,7 @@ object BitmapManager {
     ): Bitmap? {
         return try {
             if (!file.exists() || file.length() == 0L) {
-                Log.w(TAG, "File does not exist or is empty: ${file.absolutePath}")
+                Log.w(TAG, "File does not exist or is empty: ${file.name}")
                 return null
             }
             
@@ -98,7 +72,7 @@ object BitmapManager {
                 Log.d(TAG, "Loaded bitmap: ${bitmap.width}x${bitmap.height}, " +
                         "sample size: $sampleSize, file: ${file.name}")
             } else {
-                Log.e(TAG, "Failed to decode bitmap from file: ${file.absolutePath}")
+                Log.e(TAG, "Failed to decode bitmap from file: ${file.name}")
             }
             
             bitmap

@@ -4,33 +4,8 @@ import java.net.URL
 import java.net.URLEncoder
 
 /**
- * Centralized input validation utility for the Vanderwaals application.
- * 
- * Provides type-safe validation for all critical inputs including:
- * - Wallpaper identifiers and URLs
- * - Color values and numeric ranges
- * - Embedding dimensions
- * - Worker and service parameters
- * 
- * All validation methods return a sealed [ValidationResult] to enable
- * exhaustive when-expressions and type-safe error handling.
- * 
- * **Usage:**
- * ```kotlin
- * when (val result = InputValidator.validateWallpaperId(id)) {
- *     is ValidationResult.Valid -> {
- *         // Proceed with valid ID
- *         useWallpaper(result.value)
- *     }
- *     is ValidationResult.Invalid -> {
- *         // Handle error
- *         Log.e(TAG, "Invalid wallpaper ID: ${result.reason}")
- *         return Result.failure(IllegalArgumentException(result.reason))
- *     }
- * }
- * ```
- * 
- * @see ValidationResult
+ * Validates wallpaper IDs, URLs, colors, embedding dimensions, and worker
+ * parameters. Returns [ValidationResult] (Valid/Invalid) for exhaustive handling.
  */
 object InputValidator {
     
@@ -68,7 +43,7 @@ object InputValidator {
      * 
      * Requirements:
      * - Non-null and non-empty
-     * - Valid HTTP or HTTPS URL format
+    * - Valid HTTPS URL format
      * - Has valid host component
      * 
      * Handles URLs with unencoded characters (like spaces) by encoding them
@@ -88,13 +63,13 @@ object InputValidator {
             val parsedUrl = URL(url)
             
             // Validate protocol
-            if (parsedUrl.protocol !in listOf("http", "https")) {
-                return ValidationResult.Invalid("URL must use HTTP or HTTPS protocol: $url")
+            if (parsedUrl.protocol != "https") {
+                return ValidationResult.Invalid("URL must use HTTPS")
             }
             
             // Validate host
             if (parsedUrl.host.isNullOrBlank()) {
-                return ValidationResult.Invalid("URL must have a valid host: $url")
+                return ValidationResult.Invalid("URL must have a valid host")
             }
             
             // URL is structurally valid - return the ENCODED version for safe use
@@ -107,17 +82,17 @@ object InputValidator {
                 val encodedUrl = encodeUrlPath(url)
                 val reParsedUrl = URL(encodedUrl)
                 
-                if (reParsedUrl.protocol !in listOf("http", "https")) {
-                    return ValidationResult.Invalid("URL must use HTTP or HTTPS protocol: $url")
+                if (reParsedUrl.protocol != "https") {
+                    return ValidationResult.Invalid("URL must use HTTPS")
                 }
                 
                 if (reParsedUrl.host.isNullOrBlank()) {
-                    return ValidationResult.Invalid("URL must have a valid host: $url")
+                    return ValidationResult.Invalid("URL must have a valid host")
                 }
                 
                 return ValidationResult.Valid(encodedUrl)
             } catch (e2: Exception) {
-                return ValidationResult.Invalid("Failed to parse URL: $url - ${e.message}")
+                return ValidationResult.Invalid("Failed to parse URL")
             }
         }
     }

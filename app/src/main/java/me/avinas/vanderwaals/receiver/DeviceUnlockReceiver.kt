@@ -15,42 +15,8 @@ import me.avinas.vanderwaals.worker.WorkScheduler
 import javax.inject.Inject
 
 /**
- * BroadcastReceiver for device unlock events to trigger wallpaper changes.
- * 
- * Listens for ACTION_USER_PRESENT broadcast which is sent when the user
- * unlocks their device (after entering PIN/pattern/password).
- * 
- * **Usage:**
- * When user selects "Every unlock" as wallpaper change frequency,
- * this receiver is enabled in AndroidManifest and triggers wallpaper
- * change on each unlock.
- * 
- * **Registration:**
- * Must be registered in AndroidManifest.xml with:
- * ```xml
- * <receiver
- *     android:name=".receiver.DeviceUnlockReceiver"
- *     android:enabled="true"
- *     android:exported="false">
- *     <intent-filter>
- *         <action android:name="android.intent.action.USER_PRESENT" />
- *     </intent-filter>
- * </receiver>
- * ```
- * 
- * **Behavior:**
- * - Triggers WallpaperChangeWorker immediately
- * - Only active when "Every unlock" mode is enabled
- * - Uses goAsync() for asynchronous work
- * - Respects rate limiting (max once per minute)
- * 
- * **Notes:**
- * - ACTION_USER_PRESENT is only sent after user authentication
- * - ACTION_SCREEN_ON is sent on every screen wake (too frequent)
- * - This approach balances freshness with battery/data usage
- * 
- * @see me.avinas.vanderwaals.worker.WallpaperChangeWorker
- * @see me.avinas.vanderwaals.worker.WorkScheduler
+ * Triggers a wallpaper change on ACTION_USER_PRESENT when
+ * "Every unlock" mode is enabled. Rate-limited to once per minute.
  */
 @AndroidEntryPoint
 class DeviceUnlockReceiver : BroadcastReceiver() {
@@ -90,7 +56,7 @@ class DeviceUnlockReceiver : BroadcastReceiver() {
         
         scope.launch {
             try {
-                // CRITICAL: Check if user has "Every unlock" mode enabled
+                // Check if user has "Every unlock" mode enabled
                 val settings = settingsDataStore.settings.first()
                 val intervalSetting = settings.changeInterval
                 
@@ -107,7 +73,7 @@ class DeviceUnlockReceiver : BroadcastReceiver() {
                     return@launch
                 }
                 
-                // CRITICAL FIX: Load user's "Apply To" setting and pass to worker
+                // Load user's "Apply To" setting
                 val targetScreen = when (settings.applyTo) {
                     "lock_screen" -> "lock"
                     "home_screen" -> "home"

@@ -38,11 +38,17 @@ class SettingsDataStore @Inject constructor(
         private val DAILY_PLAYLIST_SIZE = androidx.datastore.preferences.core.intPreferencesKey("daily_playlist_size")
         private val LAST_PLAYLIST_UPDATE = androidx.datastore.preferences.core.longPreferencesKey("last_playlist_update")
         private val DAILY_PLAYLIST_ENABLED = booleanPreferencesKey("daily_playlist_enabled")
-        
+
         // Bing-specific preferences
         private val BING_LAST_SYNC_TIMESTAMP = androidx.datastore.preferences.core.longPreferencesKey("bing_last_sync_timestamp")
         private val BING_MANIFEST_LAST_MODIFIED = stringPreferencesKey("bing_manifest_last_modified")
         private val BING_MANIFEST_TYPE = stringPreferencesKey("bing_manifest_type") // "lite" or "full"
+
+        // Vanderwaals Collection-specific preferences
+        private val VANDERWAALS_COLLECTION_ENABLED = booleanPreferencesKey("vanderwaals_collection_enabled")
+        private val VANDERWAALS_COLLECTION_LAST_SYNC_TIMESTAMP = androidx.datastore.preferences.core.longPreferencesKey("vanderwaals_collection_last_sync_timestamp")
+        private val VANDERWAALS_COLLECTION_MANIFEST_LAST_MODIFIED = stringPreferencesKey("vanderwaals_collection_manifest_last_modified")
+        private val VANDERWAALS_COLLECTION_MANIFEST_TYPE = stringPreferencesKey("vanderwaals_collection_manifest_type") // "lite" or "full"
         
         // App version tracking for migrations
         private val LAST_KNOWN_VERSION_CODE = androidx.datastore.preferences.core.intPreferencesKey("last_known_version_code")
@@ -73,13 +79,20 @@ class SettingsDataStore @Inject constructor(
             }
         }
         .map { prefs ->
+            val githubEnabled = prefs[GITHUB_ENABLED] ?: false
+            val bingEnabled = prefs[BING_ENABLED] ?: false
+            val vanderwaalsCollectionEnabled = prefs[VANDERWAALS_COLLECTION_ENABLED] ?: false
+
             Settings(
                 mode = prefs[MODE] ?: "personalized",
                 changeInterval = prefs[CHANGE_INTERVAL] ?: "daily",
-                dailyTime = prefs[DAILY_TIME]?.let { LocalTime.parse(it) },
+                dailyTime = prefs[DAILY_TIME]?.let { timeStr ->
+                    try { LocalTime.parse(timeStr) } catch (e: Exception) { null }
+                },
                 applyTo = prefs[APPLY_TO] ?: "lock_screen",
-                githubEnabled = prefs[GITHUB_ENABLED] ?: true,
-                bingEnabled = prefs[BING_ENABLED] ?: false,
+                githubEnabled = githubEnabled,
+                bingEnabled = bingEnabled,
+                vanderwaalsCollectionEnabled = vanderwaalsCollectionEnabled,
                 lastKnownVersionCode = prefs[LAST_KNOWN_VERSION_CODE] ?: 0,
                 manifestVersion = prefs[MANIFEST_VERSION] ?: 1,
                 manifestMigrationPending = prefs[MANIFEST_MIGRATION_PENDING] ?: false,
@@ -94,7 +107,10 @@ class SettingsDataStore @Inject constructor(
                 lastPlaylistUpdate = prefs[LAST_PLAYLIST_UPDATE] ?: 0L,
                 bingLastSyncTimestamp = prefs[BING_LAST_SYNC_TIMESTAMP] ?: 0L,
                 bingManifestLastModified = prefs[BING_MANIFEST_LAST_MODIFIED],
-                bingManifestType = prefs[BING_MANIFEST_TYPE] ?: "lite"  // Default to lite
+                bingManifestType = prefs[BING_MANIFEST_TYPE] ?: "lite",  // Default to lite
+                vanderwaalsCollectionLastSyncTimestamp = prefs[VANDERWAALS_COLLECTION_LAST_SYNC_TIMESTAMP] ?: 0L,
+                vanderwaalsCollectionManifestLastModified = prefs[VANDERWAALS_COLLECTION_MANIFEST_LAST_MODIFIED],
+                vanderwaalsCollectionManifestType = prefs[VANDERWAALS_COLLECTION_MANIFEST_TYPE] ?: "lite"  // Default to lite
             )
         }
 
@@ -119,6 +135,7 @@ class SettingsDataStore @Inject constructor(
             when (source) {
                 "github" -> it[GITHUB_ENABLED] = enabled
                 "bing" -> it[BING_ENABLED] = enabled
+                "vanderwaals" -> it[VANDERWAALS_COLLECTION_ENABLED] = enabled
             }
         }
     }
@@ -170,7 +187,27 @@ class SettingsDataStore @Inject constructor(
     suspend fun updateBingManifestType(type: String) {
         context.dataStore.edit { it[BING_MANIFEST_TYPE] = type }
     }
-    
+
+    // Vanderwaals Collection-specific methods
+
+    suspend fun updateVanderwaalsCollectionLastSyncTimestamp(timestamp: Long) {
+        context.dataStore.edit { it[VANDERWAALS_COLLECTION_LAST_SYNC_TIMESTAMP] = timestamp }
+    }
+
+    suspend fun updateVanderwaalsCollectionManifestLastModified(lastModified: String?) {
+        context.dataStore.edit {
+            if (lastModified != null) {
+                it[VANDERWAALS_COLLECTION_MANIFEST_LAST_MODIFIED] = lastModified
+            } else {
+                it.remove(VANDERWAALS_COLLECTION_MANIFEST_LAST_MODIFIED)
+            }
+        }
+    }
+
+    suspend fun updateVanderwaalsCollectionManifestType(type: String) {
+        context.dataStore.edit { it[VANDERWAALS_COLLECTION_MANIFEST_TYPE] = type }
+    }
+
     // =========================================================================
     // VERSION TRACKING AND MIGRATION METHODS
     // =========================================================================
@@ -363,6 +400,7 @@ data class Settings(
     val applyTo: String,
     val githubEnabled: Boolean,
     val bingEnabled: Boolean,
+    val vanderwaalsCollectionEnabled: Boolean = false,
     val lastKnownVersionCode: Int = 0,
     val manifestVersion: Int = 1,
     val manifestMigrationPending: Boolean = false,
@@ -378,7 +416,10 @@ data class Settings(
     val lastPlaylistUpdate: Long,
     val bingLastSyncTimestamp: Long = 0L,
     val bingManifestLastModified: String? = null,
-    val bingManifestType: String = "lite"  // "lite" or "full"
+    val bingManifestType: String = "lite",  // "lite" or "full"
+    val vanderwaalsCollectionLastSyncTimestamp: Long = 0L,
+    val vanderwaalsCollectionManifestLastModified: String? = null,
+    val vanderwaalsCollectionManifestType: String = "lite"  // "lite" or "full"
 ) {
     /**
      * Returns true if user needs embedding migration (has legacy 576D preferences).

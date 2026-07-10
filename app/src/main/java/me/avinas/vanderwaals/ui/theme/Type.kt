@@ -2,8 +2,8 @@ package me.avinas.vanderwaals.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
@@ -180,4 +180,35 @@ val NumericTextStyle = TextStyle(
     fontSize = 48.sp,
     lineHeight = 56.sp,
     letterSpacing = (-1).sp
+)
+
+// ===== LUXE FONT FAMILIES - Onboarding & Premium UI =====
+val PlayfairDisplayFamily = FontFamily.Serif
+
+val HankenGroteskFamily = FontFamily.SansSerif
+
+// ===== LUXE TEXT STYLES - Onboarding & Premium UI =====
+val LuxeHeadlineStyle = TextStyle(
+    fontFamily = PlayfairDisplayFamily,
+    fontWeight = FontWeight.Bold,
+    fontSize = 34.sp,
+    lineHeight = 42.sp,
+    letterSpacing = (-0.5).sp,
+    fontStyle = FontStyle.Italic
+)
+
+val LuxeSubheadlineStyle = TextStyle(
+    fontFamily = HankenGroteskFamily,
+    fontWeight = FontWeight.Medium,
+    fontSize = 18.sp,
+    lineHeight = 26.sp,
+    letterSpacing = 0.3.sp
+)
+
+val LuxeBodyStyle = TextStyle(
+    fontFamily = HankenGroteskFamily,
+    fontWeight = FontWeight.Normal,
+    fontSize = 15.sp,
+    lineHeight = 22.sp,
+    letterSpacing = 0.4.sp
 )

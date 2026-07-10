@@ -5,35 +5,13 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Room entity representing the download queue for wallpapers.
- * 
- * Manages background downloading of wallpapers for offline availability.
- * The queue is automatically populated and prioritized based on:
- * - Similarity scores (personalized mode)
- * - Universal appeal scores (auto mode)
- * - User's preferred categories
- * 
- * **Queue Management:**
- * - Top 50 wallpapers are queued based on preference matching
- * - Downloaded in background using WorkManager
- * - Automatically refreshed when preferences update
- * - Failed downloads are retried with exponential backoff
- * 
- * **Priority Scoring:**
- * - Higher priority = more likely to be shown to user
- * - In personalized mode: cosine similarity to preference vector
- * - In auto mode: pre-computed universal appeal score
- * - Re-sorted after each feedback event
- * 
- * **Database Indexes:**
- * - `priority`: Enables fast sorting by priority (descending)
- * - `downloaded`: Allows filtering between downloaded and pending items
- * - `(downloaded, priority)`: Composite index for covering queries - added in v7
- * 
+ * Priority-ranked download queue entry. Top 50 wallpapers are queued
+ * by similarity/appeal score and downloaded via WorkManager.
+ *
  * @property wallpaperId Reference to WallpaperMetadata.id (primary key)
- * @property priority Similarity/appeal score (0.0 to 1.0, higher is better)
- * @property downloaded Whether the wallpaper file has been downloaded
- * @property retryCount Number of failed download attempts (for exponential backoff)
+ * @property priority Score 0.0–1.0 (higher = download first)
+ * @property downloaded Whether the file has been fetched
+ * @property retryCount Failed download attempts (for backoff)
  */
 @Entity(
     tableName = "download_queue",

@@ -96,9 +96,7 @@ class InitializePreferencesUseCase @Inject constructor(
             // Save to database
             preferenceRepository.insertUserPreferences(userPreferences)
             
-            // CRITICAL FIX: Verify the preferences were actually saved
-            // This ensures the database transaction is committed before returning
-            // Use direct database read to avoid Flow caching issues
+            // Verify the preferences were actually saved
             var savedPreferences: UserPreferences? = null
             var attempts = 0
             while (savedPreferences == null && attempts < 5) {
@@ -109,7 +107,7 @@ class InitializePreferencesUseCase @Inject constructor(
             }
             
             if (savedPreferences == null || savedPreferences.feedbackCount == 0) {
-                Log.e(TAG, "CRITICAL: Preferences were not properly saved! savedPreferences=$savedPreferences")
+                Log.e(TAG, "Preferences were not properly saved")
                 return Result.failure(Exception("Preferences not persisted to database"))
             }
             

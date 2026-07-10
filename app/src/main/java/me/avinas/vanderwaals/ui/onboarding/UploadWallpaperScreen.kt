@@ -6,52 +6,47 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Animation
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Eco
-import androidx.compose.material.icons.filled.FilterVintage
-import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
-import me.avinas.vanderwaals.ui.theme.components.*
-import me.avinas.vanderwaals.ui.theme.LiquidGlassBackground
+import me.avinas.vanderwaals.ui.theme.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UploadWallpaperScreen(
     onMatchesFound: () -> Unit,
     onBackPressed: () -> Unit = {},
-    viewModel: UploadWallpaperViewModel = hiltViewModel()
+    viewModel: UploadWallpaperViewModel = hiltViewModel(),
+    currentStep: Int = 2,
+    totalSteps: Int = 6
 ) {
     val uiState by viewModel.uploadState.collectAsState()
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalThemeIsDark.current
+    val metrics = rememberOnboardingLayoutMetrics()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -61,7 +56,6 @@ fun UploadWallpaperScreen(
         uri?.let { viewModel.uploadWallpaper(it) }
     }
 
-    // Handle side effects
     LaunchedEffect(uiState) {
         if (uiState is UploadState.Success) {
             onMatchesFound()
@@ -75,176 +69,215 @@ fun UploadWallpaperScreen(
         }
     }
 
-    LiquidGlassBackground {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            containerColor = Color.Transparent,
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // Premium Background
-            // Premium Background removed
-
-
-            Column(
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = Color.Transparent,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            // Transparent top navigation with back button only
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .height(metrics.topBarHeight),
+                contentAlignment = Alignment.Center
             ) {
-                OnboardingTopAppBar(
-                    onBack = onBackPressed,
-                    showBack = true // Allow back now
-                )
-
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
-                        .padding(horizontal = 24.dp)
+                        .widthIn(max = metrics.maxContentWidth)
+                        .padding(horizontal = metrics.horizontalPadding),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    Text(
-                        text = "Your Style",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDark) Color.White else Color(0xFF111827)
-                    )
-                    
-                    Text(
-                        text = "Upload a wallpaper you love, or pick a sample style below.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF4B5563),
-                        modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)
-                    )
-                    
-                    // Upload Area
-                    UploadSection(
-                        isDark = isDark,
-                        onClick = { launcher.launch("image/*") }
-                    )
-                    
-                    Spacer(modifier = Modifier.height(32.dp))
-                    
-                    // Style Samples
-                    LabelSectionHeader(title = "OR CHOOSE A STYLE")
-                    
-                    StylesGrid(
-                        styles = WallpaperStyle.values().toList(),
-                        onStyleSelected = { viewModel.selectSampleWallpaper(it) },
-                        isDark = isDark
-                    )
-                }
-            }
-            
-            // Loading Overlay
-            AnimatedVisibility(
-                visible = uiState is UploadState.Extracting || uiState is UploadState.FindingMatches,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .clickable(enabled = false) {}, // Block touches
-                    contentAlignment = Alignment.Center
-                ) {
-                    LiquidGlassCard(
-                        modifier = Modifier.size(160.dp),
-                        contentPadding = PaddingValues(24.dp)
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            CircularProgressIndicator(
-                                color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = if (uiState is UploadState.Extracting) "Analyzing..." else "Finding Matches...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isDark) Color.White else Color.Black
-                            )
-                        }
+                    IconButton(onClick = onBackPressed) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = getOnboardingTextPrimary(isDark)
+                        )
                     }
                 }
             }
         }
-    }
-    }
-}
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+        ) {
+            OnboardingBackdrop(
+                isDark = isDark,
+                modifier = Modifier.fillMaxSize()
+            )
 
-@Composable
-fun UploadSection(
-    isDark: Boolean,
-    onClick: () -> Unit
-) {
-    val borderColor = if (isDark) Color.White.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.2f)
-    
-    LiquidGlassCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        contentPadding = PaddingValues(0.dp)
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(metrics.styleColumns),
+                horizontalArrangement = Arrangement.spacedBy(metrics.cardSpacing),
+                verticalArrangement = Arrangement.spacedBy(metrics.cardSpacing),
+                contentPadding = PaddingValues(
+                    top = paddingValues.calculateTopPadding() + 12.dp,
+                    bottom = paddingValues.calculateBottomPadding() + 24.dp,
+                    start = metrics.horizontalPadding,
+                    end = metrics.horizontalPadding
+                ),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .widthIn(max = metrics.maxContentWidth)
+                    .align(Alignment.TopCenter)
+            ) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        OnboardingStepIndicator(
+                            currentStep = currentStep - 1,
+                            totalSteps = totalSteps,
+                            isDark = isDark,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+
+                        // Step number above title
+                        Text(
+                            text = "Step $currentStep of $totalSteps",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = BrandPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+
+                        // Title
+                        Text(
+                            text = "Show Us What You Love",
+                            style = LuxeHeadlineStyle,
+                            color = getOnboardingTextPrimary(isDark),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+
+                        // Subheadline below title
+                        Text(
+                            text = "Upload a wallpaper or pick a style you love",
+                            style = LuxeBodyStyle,
+                            color = getOnboardingTextSecondary(isDark)
+                        )
+                    }
+                }
+
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Spacer(modifier = Modifier.height(metrics.sectionSpacing))
+                }
+
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    UploadArea(
+                        isDark = isDark,
+                        metrics = metrics,
+                        onClick = { launcher.launch("image/*") }
+                    )
+                }
+
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Spacer(modifier = Modifier.height(metrics.sectionSpacing))
+                }
+
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text(
+                        text = "OR CHOOSE A STYLE",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = getOnboardingTextSecondary(isDark),
+                        letterSpacing = 1.4.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+
+                items(WallpaperStyle.values().toList()) { style ->
+                    StyleCard(
+                        style = style,
+                        onClick = { viewModel.selectSampleWallpaper(style) },
+                        isDark = isDark,
+                        metrics = metrics
+                    )
+                }
+            }
+        }
+    }
+
+    AnimatedVisibility(
+        visible = uiState is UploadState.Extracting || uiState is UploadState.FindingMatches,
+        enter = fadeIn(),
+        exit = fadeOut()
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(2.dp) // Gap for border inside glass
-                .drawBehind {
-                    drawRoundRect(
-                        color = borderColor,
-                        style = Stroke(
-                            width = 4.dp.toPx(),
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(20f, 20f), 0f)
-                        ),
-                        cornerRadius = CornerRadius(16.dp.toPx())
-                    )
-                }
-                .padding(32.dp),
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.75f)),
             contentAlignment = Alignment.Center
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(24.dp),
+                modifier = Modifier
+                    .widthIn(max = 320.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(getOnboardingCardBackground(isDark))
+                    .border(
+                        width = 1.dp,
+                        color = getOnboardingCardBorder(isDark),
+                        shape = RoundedCornerShape(28.dp)
+                    )
+                    .shadow(16.dp, RoundedCornerShape(28.dp))
+                    .padding(horizontal = 40.dp, vertical = 36.dp)
             ) {
+                // Premium animated loading indicator
                 Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark.copy(alpha = 0.2f) 
-                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                        ),
+                    modifier = Modifier.size(72.dp),
                     contentAlignment = Alignment.Center
                 ) {
+                    // Gradient ring
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(
+                                Brush.sweepGradient(
+                                    colors = listOf(
+                                        BrandPrimary.copy(alpha = 0.3f),
+                                        BrandAccent.copy(alpha = 0.3f),
+                                        BrandPrimary.copy(alpha = 0.1f)
+                                    )
+                                )
+                            )
+                    )
+
+                    CircularProgressIndicator(
+                        color = BrandPrimary,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(56.dp)
+                    )
+
                     Icon(
-                        imageVector = Icons.Default.CloudUpload,
+                        imageVector = Icons.Default.AutoAwesome,
                         contentDescription = null,
-                        modifier = Modifier.size(32.dp),
-                        tint = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary
+                        tint = BrandPrimary,
+                        modifier = Modifier.size(28.dp)
                     )
                 }
-                
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Text(
-                        text = "Upload Image",
+                        text = if (uiState is UploadState.Extracting) "Analyzing Wallpaper" else "Finding Matches",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDark) Color.White else Color(0xFF111827)
+                        fontWeight = FontWeight.SemiBold,
+                        color = getOnboardingTextPrimary(isDark)
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Tap to browse gallery",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF6B7280)
+                        text = if (uiState is UploadState.Extracting) "Extracting visual features..." else "Searching our collection...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = getOnboardingTextSecondary(isDark),
+                        textAlign = TextAlign.Center
                     )
                 }
             }
@@ -253,83 +286,159 @@ fun UploadSection(
 }
 
 @Composable
-fun StylesGrid(
-    styles: List<WallpaperStyle>,
-    onStyleSelected: (WallpaperStyle) -> Unit,
-    isDark: Boolean
+private fun UploadArea(
+    isDark: Boolean,
+    metrics: OnboardingLayoutMetrics,
+    onClick: () -> Unit
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(bottom = 32.dp)
+    val borderColor = getOnboardingCardBorder(isDark)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = if (metrics.compactHeight) 160.dp else 196.dp)
+            .shadow(
+                elevation = 6.dp,
+                shape = RoundedCornerShape(metrics.cardCornerRadius),
+                ambientColor = BrandPrimary.copy(alpha = 0.1f),
+                spotColor = Color.Transparent
+            )
+            .clip(RoundedCornerShape(metrics.cardCornerRadius))
+            .background(getOnboardingCardBackground(isDark))
+            .border(
+                width = 1.5.dp,
+                color = borderColor,
+                shape = RoundedCornerShape(metrics.cardCornerRadius)
+            )
+            .bounceClick { onClick() }
+            .padding(if (metrics.compactWidth) 20.dp else 28.dp),
+        contentAlignment = Alignment.Center
     ) {
-        items(styles) { style ->
-            StyleSampleCard(
-                style = style,
-                onClick = { onStyleSelected(style) },
-                isDark = isDark
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // Premium upload icon with gradient background
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                BrandPrimary.copy(alpha = 0.15f),
+                                BrandAccent.copy(alpha = 0.1f)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CloudUpload,
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp),
+                    tint = BrandPrimary
+                )
+            }
+
+            Text(
+                text = "Upload Wallpaper",
+                style = if (metrics.compactWidth) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = getOnboardingTextPrimary(isDark)
+            )
+
+            Text(
+                text = "Tap to browse your gallery",
+                style = MaterialTheme.typography.bodySmall,
+                color = getOnboardingTextSecondary(isDark)
             )
         }
     }
 }
 
 @Composable
-fun StyleSampleCard(
+private fun StyleCard(
     style: WallpaperStyle,
     onClick: () -> Unit,
-    isDark: Boolean
+    isDark: Boolean,
+    metrics: OnboardingLayoutMetrics
 ) {
-    LiquidGlassCard(
+    val styleColor = when(style) {
+        WallpaperStyle.NATURE -> Color(0xFF22C55E)
+        WallpaperStyle.MINIMAL -> Color(0xFF9CA3AF)
+        WallpaperStyle.DARK -> Color(0xFF3F3F46)
+        WallpaperStyle.ABSTRACT -> Color(0xFF8B5CF6)
+        WallpaperStyle.COLORFUL -> Color(0xFFF59E0B)
+        WallpaperStyle.ANIME -> Color(0xFFEC4899)
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f)
-            .clickable { onClick() },
-        contentPadding = PaddingValues(0.dp)
+            .aspectRatio(if (metrics.compactWidth) 1.05f else 1f)
+            .shadow(
+                elevation = 6.dp,
+                shape = RoundedCornerShape(metrics.cardCornerRadius),
+                ambientColor = styleColor.copy(alpha = 0.15f),
+                spotColor = Color.Transparent
+            )
+            .clip(RoundedCornerShape(metrics.cardCornerRadius))
+            .background(getOnboardingCardBackground(isDark))
+            .border(
+                width = 1.dp,
+                color = getOnboardingCardBorder(isDark),
+                shape = RoundedCornerShape(metrics.cardCornerRadius)
+            )
+            .bounceClick { onClick() }
     ) {
+        // Premium gradient overlay
         Box(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            styleColor.copy(alpha = 0.08f),
+                            styleColor.copy(alpha = 0.02f)
+                        )
+                    )
+                ),
+            contentAlignment = Alignment.Center
         ) {
-             // We don't have images for styles readily available in the enum, 
-             // but we can use Icons or just colors/gradients.
-             // Using Icons for now as in the original design.
-             
-             Box(
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .size(if (metrics.compactWidth) 44.dp else 54.dp)
+                    .clip(RoundedCornerShape(15.dp))
                     .background(
                         Brush.linearGradient(
                             colors = listOf(
-                                when(style) {
-                                    WallpaperStyle.NATURE -> Color(0xFF4CAF50)
-                                    WallpaperStyle.MINIMAL -> Color(0xFF9E9E9E)
-                                    WallpaperStyle.DARK -> Color(0xFF212121)
-                                    WallpaperStyle.ABSTRACT -> Color(0xFF9C27B0)
-                                    WallpaperStyle.COLORFUL -> Color(0xFFFF9800)
-                                    WallpaperStyle.ANIME -> Color(0xFFE91E63)
-                                }.copy(alpha = 0.3f),
-                                Color.Transparent
+                                styleColor.copy(alpha = 0.15f),
+                                styleColor.copy(alpha = 0.08f)
                             )
                         )
                     ),
                 contentAlignment = Alignment.Center
-             ) {
-                 Icon(
-                     imageVector = style.icon,
-                     contentDescription = null,
-                     modifier = Modifier.size(48.dp),
-                     tint = if (isDark) Color.White else Color.Black.copy(alpha = 0.7f)
-                 )
-             }
-            
+            ) {
+                Icon(
+                    imageVector = style.icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(if (metrics.compactWidth) 20.dp else 26.dp),
+                    tint = styleColor
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(if (metrics.compactWidth) 12.dp else 14.dp)
+        ) {
             Text(
                 text = style.displayName,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = if (isDark) Color.White else Color.Black,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(12.dp)
+                style = if (metrics.compactWidth) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = getOnboardingTextPrimary(isDark)
             )
         }
     }
@@ -338,7 +447,7 @@ fun StyleSampleCard(
 private val WallpaperStyle.icon: ImageVector
     get() = when (this) {
         WallpaperStyle.NATURE -> Icons.Default.Eco
-        WallpaperStyle.MINIMAL -> Icons.Default.FilterVintage // Approximations
+        WallpaperStyle.MINIMAL -> Icons.Default.FilterVintage
         WallpaperStyle.DARK -> Icons.Default.DarkMode
         WallpaperStyle.ABSTRACT -> Icons.Default.AutoAwesome
         WallpaperStyle.COLORFUL -> Icons.Default.Palette

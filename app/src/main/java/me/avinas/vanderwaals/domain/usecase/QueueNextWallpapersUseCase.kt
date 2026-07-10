@@ -13,41 +13,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Use case for smart pre-downloading of upcoming wallpapers.
- * 
- * Implements intelligent pre-downloading strategy that anticipates which wallpapers
- * the user is likely to see next and downloads them in advance to eliminate delays.
- * 
- * **Strategy:**
- * - Every Unlock: Pre-download next 5 wallpapers (high frequency)
- * - Hourly: Pre-download next 3 wallpapers (medium frequency)
- * - Daily: Pre-download next 2 wallpapers (low frequency)
- * - Never: Skip pre-downloading
- * 
- * **Selection Logic:**
- * 1. Get user preference vector
- * 2. Calculate similarity scores for all wallpapers in catalog
- * 3. Filter out:
- *    - Already downloaded wallpapers
- *    - Recently shown wallpapers (last 20)
- * 4. Sort by similarity score (descending)
- * 5. Take top N based on frequency
- * 6. Add to download queue with priority scores
- * 
- * **Queue Management:**
- * - Existing queue items are preserved
- * - New items are added with priority = similarity score
- * - Queue is automatically processed by BatchDownloadWorker
- * - Failed downloads are retried with exponential backoff
- * 
- * **Benefits:**
- * - ✅ Eliminates wallpaper change delays
- * - ✅ Smooth user experience
- * - ✅ Intelligent based on preferences
- * - ✅ Respects user's change frequency
- * - ✅ Network-efficient (WiFi only, when battery not low)
- * 
- * **Usage:**
+ * Pre-downloads upcoming wallpapers based on user preferences to eliminate change delays.
+ *
+ * Download count scales with change frequency:
+ * - Every Unlock: 5, Hourly: 3, Daily: 2, Never: skip
+ *
+ * Selects top-scoring undownloaded wallpapers and adds them to the queue
+ * for BatchDownloadWorker to process.
+ *
  * Called automatically after each wallpaper change by WallpaperChangeWorker.
  * 
  * Example:
@@ -111,6 +84,8 @@ class QueueNextWallpapersUseCase @Inject constructor(
                 "6hours" -> PREDOWNLOAD_COUNT_DAILY    // 6-hour interval - low-medium frequency
                 "12hours" -> PREDOWNLOAD_COUNT_DAILY   // 12-hour interval - low frequency
                 "daily" -> PREDOWNLOAD_COUNT_DAILY
+                "3days" -> PREDOWNLOAD_COUNT_DAILY     // 3-day interval - low frequency
+                "7days" -> PREDOWNLOAD_COUNT_DAILY     // 7-day interval - low frequency
                 "never" -> {
                     Log.d(TAG, "User has 'Never' interval, skipping pre-download")
                     return Result.success(0)
@@ -148,6 +123,7 @@ class QueueNextWallpapersUseCase @Inject constructor(
             val enabledSources = mutableListOf<String>()
             if (settings.githubEnabled) enabledSources.add("github")
             if (settings.bingEnabled) enabledSources.add("bing")
+            if (settings.vanderwaalsCollectionEnabled) enabledSources.add("vanderwaals")
             
             val sourceFilteredWallpapers = if (enabledSources.isEmpty()) {
                 allWallpapers

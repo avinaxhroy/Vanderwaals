@@ -1,194 +1,69 @@
 package me.avinas.vanderwaals.core
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.Rect
 import android.graphics.RectF
 import android.util.Log
-import androidx.core.graphics.createBitmap
+import me.avinas.vanderwaals.core.crop.CropEngine
+import me.avinas.vanderwaals.core.crop.CropEngine.CropOptions
+import me.avinas.vanderwaals.core.crop.CropEngine.CropRect
+import me.avinas.vanderwaals.core.crop.CropEngine.FocalType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
- * Smart cropping system that ensures preview and applied wallpaper match
- * by using intelligent focal point detection and consistent cropping logic.
- * 
- * **Version 3.0 - Advanced Algorithm (November 2025 - Enhanced)**
- * 
- * **Core Improvements Made:**
- * 
- * 1. **Enhanced Saliency Detection**
- *    - Increased grid resolution from 8x8 to 12x12 for better detail
- *    - Added Gaussian-like smoothing to reduce noise in saliency map
- *    - Improved percentile-based thresholding for better separation
- *    - Multi-directional edge detection (Sobel-like) instead of simple gradient
- * 
- * 2. **Advanced Saliency Scoring**
- *    - Combines three factors with optimized weights:
- *      * Edge/Gradient detection (40%) - Detects boundaries and transitions
- *      * Color saturation and chroma (40%) - Detects colorful/varied regions
- *      * Texture variance (20%) - Detects rich texture areas
- *    - Handles both bright and dark subjects effectively
- * 
- * 3. **Better Focal Point Alignment**
- *    - Weighted center of mass calculation for multiple focal points
- *    - Margin preservation (10%) to avoid cutting off content at edges
- *    - Prevents focal points from being placed too close to crop boundaries
- * 
- * 4. **Improved Aspect Ratio Handling**
- *    - Better preservation of content when extreme aspect ratio mismatches
- *    - Consistent application for phone wallpaper preview (9:16 aspect ratio)
- * 
- * **NEW ADVANCED FEATURES (v3.0):**
- * 
- * 5. **Intelligent Aspect Ratio Analysis**
- *    - Detects if image is landscape, portrait, or square
- *    - Chooses optimal crop strategy based on detected aspect ratio
- *    - Adapts focal point weighting for landscape/portrait content
- * 
- * 6. **Entropy-Based Content Detection**
- *    - Identifies high-information regions (edges, details, patterns)
- *    - Avoids cropping valuable content with high entropy
- *    - Protects complex patterns and text regions
- * 
- * 7. **Local Maxima Detection**
- *    - Finds multiple peaks in saliency map (not just threshold)
- *    - Better for images with multiple subjects
- *    - Clusters nearby maxima into meaningful focal points
- * 
- * 8. **Multi-Scale Saliency Analysis**
- *    - Detects salient regions at multiple scales
- *    - Distinguishes between fine details and large objects
- *    - Combines scale information for robust detection
- * 
- * 9. **Adaptive Factor Weighting**
- *    - Analyzes image content type (bright, dark, colorful, minimal)
- *    - Dynamically adjusts factor weights (edge/color/texture)
- *    - Optimizes for specific image characteristics
- * 
- * 10. **Smart Focal Point Clustering**
- *     - Groups nearby salient regions into coherent focal points
- *     - Reduces noise from small scattered high-salience areas
- *     - Produces cleaner, more meaningful focal point distribution
- * 
- * **Algorithm Flow (v3.0):**
- * 1. Analyze image aspect ratio and content characteristics
- * 2. Calculate adaptive saliency weights based on content type
- * 3. Detect crop dimensions based on aspect ratio
- * 4. Build multi-scale saliency maps
- * 5. Calculate entropy for content preservation
- * 6. Find local maxima in saliency map
- * 7. Cluster focal points for cleaner distribution
- * 8. Calculate weighted center of mass
- * 9. Position crop around focal points with margin preservation
- * 10. Apply crop and scale to target dimensions
- * 
- * **Performance:**
- * - Grid-based analysis is fast and memory-efficient
- * - Multi-scale analysis adds minimal overhead
- * - Caching support for identical images
- * - Suitable for real-time preview rendering
- * - Works on all device types and image sizes
- * 
- * **Image Type Support:**
- * ✓ Landscape/Nature photos - Preserves horizon and scenic elements
- * ✓ Portrait photos - Focuses on subjects with margin preservation
- * ✓ Colorful images - Enhanced saturation-based detection
- * ✓ Minimalist designs - Works with low-color images via texture analysis
- * ✓ Text/Typography - Entropy-based detection protects text
- * ✓ Complex scenes - Multi-scale analysis handles varying content
- * ✓ Dark/Night images - Adaptive weighting for low-light conditions
- * ✓ Bright/High-key images - Adaptive weighting for high-light conditions
+ * Content-aware wallpaper cropping.
+ *
+ * This is the Android entry point; all crop *mathematics* (multi-scale saliency,
+ * focal extraction, balanced scoring, zoom-bounded rectangle search, bounds
+ * clamping) live in the pure, unit-tested [CropEngine]. This class:
+ *  - Reads focal points via [SaliencyDetector] (bulk [Bitmap.getPixels], cached
+ *    by image content).
+ *  - Asks [CropEngine.optimalCrop] for the best rectangle — which can now *zoom*
+ *    (tighten) within a quality budget instead of only panning a cover crop.
+ *  - Cuts the bitmap out with [applyCrop], which clamps every coordinate to safe
+ *    integer bounds so [Bitmap.createBitmap] can never throw (the old code
+ *    truncated floats and silently fell back to a centre crop).
+ *  - Caches the resulting rectangle per (image content + target + mode) so the
+ *    four wallpaper-apply call sites and the Glide preview never recompute.
+ *
+ * Face awareness is provided by the suspend overload [smartCropBitmapAsync],
+ * which merges [FaceCropDetector] face boxes (as FACE-typed focal points that
+ * [CropEngine] biases 1000x) into the candidate set. The synchronous
+ * [smartCropBitmap] stays saliency-only so the Glide transformation (which must
+ * be synchronous) still works; faces are detected on the real apply path.
  */
 object SmartCrop {
     private const val TAG = "SmartCrop"
 
-    // Caching for saliency maps to avoid recalculation
-    private val saliencyCache = mutableMapOf<String, Array<FloatArray>>()
-    private const val MAX_SALIENCY_CACHE_SIZE = 25  // Increased from 10 for better hit rate
-
-    // NEW: Cache for final crop regions - avoids re-computing crop for same source+target dimensions
-    // Key format: "${sourceWidth}x${sourceHeight}_${targetWidth}x${targetHeight}"
-    private val cropRegionCache = mutableMapOf<String, RectF>()
-    private const val MAX_CROP_CACHE_SIZE = 50  // Small memory footprint (RectF is just 4 floats)
-
-    // ========================================
-    // SALIENCY DETECTION EXTRACTED TO SaliencyDetector
-    // ========================================
-    // The following methods have been moved to me.avinas.vanderwaals.core.SaliencyDetector:
-    // - detectSalientRegions(), calculateCellSaliency()
-    // - findLocalMaxima(), clusterFocalPoints()
-    // - analyzeImageCharacteristics(), calculateAdaptiveWeights()
-    // - calculateImageEntropy()
-    //
-    // This improves:
-    // - Testability: Saliency detection can be unit tested
-    // - Reusability: Can be used for similar wallpapers, search ranking
-    // - Maintainability: ~450 lines removed from this file
-    // ========================================
-
-    /**
-     * Represents a point of interest in an image with a weight
-     */
-    data class FocalPoint(
-        val x: Float,
-        val y: Float,
-        val weight: Float = 1.0f
-    ) {
-        companion object {
-            fun fromSaliencyFocalPoint(fp: SaliencyDetector.FocalPoint): FocalPoint {
-                return FocalPoint(fp.x, fp.y, fp.weight)
-            }
-        }
-    }
-
-    /**
-     * Represents a crop region with its score
-     */
-    data class CropRegion(
-        val rect: RectF,
-        val score: Float
-    )
-
-    /**
-     * Smart crop mode that defines the cropping strategy
-     */
+    /** Crop strategy. Preserved for call-site compatibility. */
     enum class CropMode {
-        CENTER,           // Simple center crop (fallback)
-        RULE_OF_THIRDS,   // Align with rule of thirds
-        SALIENCY,         // Detect salient regions
-        FACE_AWARE,       // Prioritize face regions (when ML Kit is available)
-        FILL,             // Fit image and blur background (no cropping)
-        AUTO              // Automatically choose best mode
+        CENTER,
+        RULE_OF_THIRDS,
+        SALIENCY,
+        FACE_AWARE,
+        FILL,
+        AUTO
     }
 
-    /**
-     * Analyze image characteristics using SaliencyDetector.
-     */
-    private fun analyzeImageCharacteristics(bitmap: Bitmap): SaliencyDetector.ImageCharacteristics {
-        return SaliencyDetector.analyzeImageCharacteristics(bitmap)
+    /** Cache of final crop rectangles keyed by image content + target + mode. */
+    private val cropRectCache = object : LinkedHashMap<String, CropRect>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CropRect>): Boolean = size > 64
     }
 
-    /**
-     * Calculate image entropy using SaliencyDetector.
-     */
-    private fun calculateImageEntropy(bitmap: Bitmap): Float {
-        return SaliencyDetector.calculateImageEntropy(bitmap)
-    }
+    // =====================================================================================
+    // Public entry points
+    // =====================================================================================
 
     /**
-     * Apply smart crop to a bitmap to match target dimensions
-     * This is the main entry point for smart cropping
-     * 
-     * IMPROVED LOGIC (Nov 2025):
-     * - Detects if image is suitable for smart crop (desktop/landscape images)
-     * - Only applies smart crop when aspect ratio mismatch is significant
-     * - Uses intelligent scaling to minimize content loss
-     * - Preserves important content without over-zooming
+     * Synchronous smart crop (saliency-only). Used by the Glide preview
+     * transformation and as the fallback for the async face-aware path.
      */
     fun smartCropBitmap(
         source: Bitmap,
@@ -196,574 +71,403 @@ object SmartCrop {
         targetHeight: Int,
         mode: CropMode = CropMode.AUTO,
         preserveQuality: Boolean = true
-    ): Bitmap {
-        if (source.width == targetWidth && source.height == targetHeight) {
-            return source
-        }
+    ): Bitmap = smartCropInternal(source, targetWidth, targetHeight, mode, preserveQuality, faces = null)
 
+    /**
+     * Suspending smart crop with face awareness. The four wallpaper-apply
+     * call sites (all `suspend`) should use this so FACE_AWARE/AUTO actually
+     * prioritise faces via skin-tone detection instead of the old stub.
+     */
+    suspend fun smartCropBitmapAsync(
+        source: Bitmap,
+        targetWidth: Int,
+        targetHeight: Int,
+        mode: CropMode = CropMode.AUTO,
+        preserveQuality: Boolean = true
+    ): Bitmap = withContext(Dispatchers.Default) {
+        val faces = if (mode == CropMode.FACE_AWARE || mode == CropMode.AUTO) {
+            try { FaceCropDetector.detectFaces(source) } catch (e: Exception) { null }
+        } else null
+        smartCropInternal(source, targetWidth, targetHeight, mode, preserveQuality, faces)
+    }
+
+    // =====================================================================================
+    // Core
+    // =====================================================================================
+
+    private fun smartCropInternal(
+        source: Bitmap,
+        targetWidth: Int,
+        targetHeight: Int,
+        mode: CropMode,
+        preserveQuality: Boolean,
+        faces: List<FaceCropDetector.Face>?
+    ): Bitmap {
+        if (source.width == targetWidth && source.height == targetHeight) return source
         if (source.width <= 0 || source.height <= 0 || targetWidth <= 0 || targetHeight <= 0) {
             Log.w(TAG, "Invalid dimensions for smartCropBitmap")
             return source
         }
-
         return try {
             val sourceAspect = source.width.toFloat() / source.height.toFloat()
             val targetAspect = targetWidth.toFloat() / targetHeight.toFloat()
             val aspectDifference = abs(sourceAspect - targetAspect)
 
-            // Quality Preservation: Calculate optimal output dimensions
-            // If source is significantly larger than target, preserve extra resolution
-            val qualityScaleFactor = when {
-                preserveQuality && 
-                source.width >= targetWidth * 1.5f && 
-                source.height >= targetHeight * 1.5f -> 1.25f
-                else -> 1.0f
-            }
-            val outputWidth = (targetWidth * qualityScaleFactor).toInt()
-            val outputHeight = (targetHeight * qualityScaleFactor).toInt()
-            
-            if (qualityScaleFactor > 1.0f) {
-                Log.d(TAG, "Quality preservation: scaling output to ${outputWidth}x${outputHeight} (${qualityScaleFactor}x)")
-            }
+            // Optional quality headroom when the source has plenty of resolution.
+            val qualityScale = if (preserveQuality &&
+                source.width >= targetWidth * 1.5f && source.height >= targetHeight * 1.5f
+            ) 1.25f else 1.0f
+            val outputWidth = (targetWidth * qualityScale).roundToInt()
+            val outputHeight = (targetHeight * qualityScale).roundToInt()
 
-            // If aspects are very similar (< 1% difference), just scale
-            if (aspectDifference < 0.01f) {
-                Log.d(TAG, "Aspect ratios are very similar, using simple scaling")
-                return scaleBitmap(source, outputWidth, outputHeight)
-            }
+            // Nearly identical aspect → just scale.
+            if (aspectDifference < 0.01f) return scaleBitmap(source, outputWidth, outputHeight)
 
-            // Check if user explicitly requested FILL
-            if (mode == CropMode.FILL) {
+            // Explicit FILL.
+            if (mode == CropMode.FILL) return fillBitmap(source, outputWidth, outputHeight)
+
+            // AUTO: fill for extreme mismatches where content would be destroyed.
+            if (mode == CropMode.AUTO && shouldFill(sourceAspect, targetAspect)) {
                 return fillBitmap(source, outputWidth, outputHeight)
             }
 
-            val sourceIsLandscape = source.width > source.height
-            val targetIsPortrait = targetHeight > targetWidth
-            
-            // AUTO MODE LOGIC: Check if we should FILL instead of CROP
-            if (mode == CropMode.AUTO) {
-                // If extreme aspect ratio mismatch (e.g. landscape to portrait), consider FILL
-                // Threshold: aspect difference > 0.8 (e.g. 1.77 vs 0.56 is 1.2 diff)
-                val isExtremeMismatch = aspectDifference > 0.8f
-                
-                // If it's a very wide panorama (21:9 or wider) going to portrait
-                if (sourceAspect > 2.0f && targetIsPortrait) {
-                     Log.d(TAG, "Auto-detected FILL mode: Wide panorama")
-                     return fillBitmap(source, targetWidth, targetHeight)
+            // CENTER is a plain centre crop.
+            if (mode == CropMode.CENTER) return centerCropBitmap(source, outputWidth, outputHeight)
+
+            // Content-aware path: build focal points, choose rectangle, cut.
+            val focals = buildFocalPoints(source, mode, faces)
+            val cacheKey = cropCacheKey(source, outputWidth, outputHeight, mode, faces)
+            val rect = cropRectCache.getOrPut(cacheKey) {
+                val horizonY = detectHorizon(source)
+                val engineFocals = focals.map {
+                    CropEngine.FocalPoint(it.x, it.y, it.weight, it.type)
                 }
-
-                // Analyze image to see if we should preserve it all
-                // Only do this expensive analysis if we are considering FILL
-                if (isExtremeMismatch) {
-                    val characteristics = analyzeImageCharacteristics(source)
-                    // If high entropy (lots of detail) and extreme mismatch, use FILL
-                    if (characteristics.entropy > 0.65f) {
-                        Log.d(TAG, "Auto-detected FILL mode: Extreme mismatch with high entropy")
-                        return fillBitmap(source, targetWidth, targetHeight)
-                    }
-                }
+                CropEngine.optimalCrop(
+                    sourceWidth = source.width,
+                    sourceHeight = source.height,
+                    targetWidth = outputWidth,
+                    targetHeight = outputHeight,
+                    focalPoints = engineFocals,
+                    horizonY = horizonY,
+                    options = CropOptions()
+                )
             }
-
-            // CRITICAL FIX: Check if image is already well-suited for target dimensions
-            // Desktop/landscape images for portrait screens need smart crop
-            // But portrait images for portrait screens should just scale
-            
-            // If both are similar orientation and aspect difference is small (< 15%), prefer scaling
-            if (aspectDifference < 0.15f && (sourceIsLandscape == !targetIsPortrait)) {
-                Log.d(TAG, "Similar orientations with minor aspect difference, using gentle scaling")
-                return scaleBitmap(source, outputWidth, outputHeight)
-            }
-
-            // For desktop wallpapers (typically 16:9 or wider) going to phone screens (9:16),
-            // smart crop is beneficial. For portrait images going to portrait screens, not so much.
-            val needsSmartCrop = (sourceIsLandscape && targetIsPortrait) || aspectDifference > 0.25f
-            
-            if (!needsSmartCrop && mode == CropMode.AUTO) {
-                Log.d(TAG, "Image doesn't need smart crop, using content-preserving scale")
-                return scaleBitmap(source, outputWidth, outputHeight)
-            }
-
-            Log.d(TAG, "Applying smart crop: source ${source.width}x${source.height} (%.2f vs %.2f)".format(sourceAspect, targetAspect) + " -> target ${outputWidth}x${outputHeight}")
-
-            // Determine crop mode
-            val actualMode = when (mode) {
-                CropMode.AUTO -> determineBestMode(source)
-                else -> mode
-            }
-
-            // Get focal points based on mode
-            val focalPoints = detectFocalPoints(source, actualMode)
-
-            // Calculate optimal crop region
-            val cropRegion = calculateOptimalCrop(
-                sourceWidth = source.width,
-                sourceHeight = source.height,
-                targetWidth = outputWidth,
-                targetHeight = outputHeight,
-                focalPoints = focalPoints,
-                horizonY = detectHorizon(source)
-            )
-
-            // Apply the crop
-            applyCrop(source, cropRegion, outputWidth, outputHeight)
+            applyCrop(source, rect, outputWidth, outputHeight)
         } catch (e: Exception) {
             Log.e(TAG, "Error in smartCropBitmap", e)
-            // Fallback to center crop
             centerCropBitmap(source, targetWidth, targetHeight)
         }
     }
 
     /**
-     * Determine the best crop mode for an image based on analysis.
-     * Uses image characteristics to choose optimal strategy.
+     * AUTO heuristic for switching to FILL (no content loss) on brutal mismatches.
+     *
+     * Only genuine ultra-wide panoramas (source aspect > 2.0) aimed at a portrait
+     * screen trigger FILL — there, a cover crop would discard almost the entire
+     * image. Regular landscape wallpapers (16:9, 16:10, 4:3 ...) must be cropped
+     * to the target aspect like every other wallpaper; the previous
+     * `aspectDifference > 0.8 && entropy > 0.65` branch incorrectly routed busy
+     * 16:9 desktop wallpapers through FILL, leaving large blurred gaps above and
+     * below the fitted image.
      */
-    private fun determineBestMode(bitmap: Bitmap): CropMode {
-        // Analyze image to choose best mode
-        val characteristics = analyzeImageCharacteristics(bitmap)
-        
-        // For high-entropy images (text, patterns), use rule of thirds to preserve structure
-        if (characteristics.entropy > 0.6f) {
-            Log.d(TAG, "High entropy detected - using rule of thirds")
-            return CropMode.RULE_OF_THIRDS
-        }
-        
-        // Use saliency as default for general images
-        Log.d(TAG, "Using saliency detection (brightness=${characteristics.averageBrightness}, colorful=${characteristics.isColorful})")
-        return CropMode.SALIENCY
+    private fun shouldFill(
+        sourceAspect: Float,
+        targetAspect: Float
+    ): Boolean {
+        val targetIsPortrait = targetAspect < 1f
+        // Very wide panorama → portrait: cropping would discard almost everything.
+        if (sourceAspect > 2.0f && targetIsPortrait) return true
+        return false
     }
 
-    // calculateAdaptiveWeights - REMOVED (now in SaliencyDetector)
-
-    /**
-     * Detect focal points in the image based on the mode
-     */
-    private fun detectFocalPoints(bitmap: Bitmap, mode: CropMode): List<FocalPoint> {
-        return when (mode) {
-            CropMode.CENTER -> listOf(
-                FocalPoint(
-                    x = bitmap.width / 2f,
-                    y = bitmap.height / 2f,
-                    weight = 1.0f
-                )
-            )
-            CropMode.RULE_OF_THIRDS -> getRuleOfThirdsFocalPoints(bitmap)
-            CropMode.SALIENCY -> detectSalientRegions(bitmap)
-            CropMode.FACE_AWARE -> detectFaces(bitmap)
-            CropMode.FILL -> listOf(
-                FocalPoint(
-                    x = bitmap.width / 2f,
-                    y = bitmap.height / 2f,
-                    weight = 1.0f
-                )
-            )
-            CropMode.AUTO -> detectSalientRegions(bitmap)
-        }
-    }
-
-    /**
-     * Get focal points based on rule of thirds
-     */
-    private fun getRuleOfThirdsFocalPoints(bitmap: Bitmap): List<FocalPoint> {
-        val w = bitmap.width.toFloat()
-        val h = bitmap.height.toFloat()
-        
-        return listOf(
-            // Four power points at rule of thirds intersections
-            FocalPoint(w * 1f / 3f, h * 1f / 3f, 1.5f),
-            FocalPoint(w * 2f / 3f, h * 1f / 3f, 1.5f),
-            FocalPoint(w * 1f / 3f, h * 2f / 3f, 1.5f),
-            FocalPoint(w * 2f / 3f, h * 2f / 3f, 1.5f),
-            // Center as backup
-            FocalPoint(w / 2f, h / 2f, 0.8f)
-        )
-    }
-
-    // findLocalMaxima, clusterFocalPoints - REMOVED (now in SaliencyDetector)
-
-    private fun detectHorizon(bitmap: Bitmap): Int? {
-        val height = bitmap.height
-        val width = bitmap.width
-        if (height < 4 || width < 4) return null
-        var maxGrad = 0f
-        var maxY = -1
-        var sumGrad = 0f
-        var count = 0
-        val stepY = max(2, height / 60)
-        val stepX = max(2, width / 60)
-        for (y in 0 until height - 1 step stepY) {
-            var rowGrad = 0f
-            var samples = 0
-            for (x in 0 until width step stepX) {
-                try {
-                    val p1 = bitmap.getPixel(x, y)
-                    val p2 = bitmap.getPixel(x, y + 1)
-                    val b1 = ((p1 shr 16) and 0xff) + ((p1 shr 8) and 0xff) + (p1 and 0xff)
-                    val b2 = ((p2 shr 16) and 0xff) + ((p2 shr 8) and 0xff) + (p2 and 0xff)
-                    rowGrad += abs(b2 - b1).toFloat()
-                    samples++
-                } catch (_: Exception) {}
-            }
-            if (samples > 0) {
-                val avg = rowGrad / samples
-                sumGrad += avg
-                count++
-                if (avg > maxGrad) {
-                    maxGrad = avg
-                    maxY = y
-                }
-            }
-        }
-        if (count == 0) return null
-        val mean = sumGrad / count
-        return if (maxGrad > mean * 1.8f) maxY else null
-    }
-
-    /**
-     * Detect salient regions using SaliencyDetector.
-     * Delegates to centralized saliency detection for better testability.
-     */
-    private fun detectSalientRegions(bitmap: Bitmap): List<FocalPoint> {
-        return SaliencyDetector.detectSalientRegions(bitmap).map { 
-            FocalPoint.fromSaliencyFocalPoint(it) 
-        }
-    }
-
-    // calculateCellSaliency - REMOVED (now in SaliencyDetector)
-
-    /**
-     * Detect faces in the image using ML Kit Face Detection.
-     * 
-     * To enable face detection, add the ML Kit dependency to build.gradle:
-     * implementation("com.google.mlkit:face-detection:16.1.6")
-     * 
-     * Then implement face detection as follows:
-     * ```
-     * val options = FaceDetectorOptions.Builder()
-     *     .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-     *     .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
-     *     .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
-     *     .build()
-     * val detector = FaceDetection.getClient(options)
-     * val inputImage = InputImage.fromBitmap(bitmap, 0)
-     * detector.process(inputImage)
-     *     .addOnSuccessListener { faces ->
-     *         faces.map { face ->
-     *             FocalPoint(
-     *                 x = face.boundingBox.centerX().toFloat(),
-     *                 y = face.boundingBox.centerY().toFloat(),
-     *                 weight = 1.5f,
-     *                 type = FocalPointType.FACE
-     *             )
-     *         }
-     *     }
-     * ```
-     * 
-     * For now, use rule of thirds as fallback for robust operation.
-     */
-    private fun detectFaces(bitmap: Bitmap): List<FocalPoint> {
-        // Use rule of thirds as fallback (no ML Kit dependency yet)
-        Log.d(TAG, "Face detection not enabled, using rule of thirds")
-        return getRuleOfThirdsFocalPoints(bitmap)
-    }
-
-    /**
-     * Calculate optimal crop region based on focal points with improved alignment.
-     * 
-     * Improvements:
-     * - Weighted center of mass calculation for multiple focal points
-     * - Bias towards keeping content away from edges with margin preservation
-     * - Fallback to rule of thirds if focal points are too close to edges
-     * - Better handling of extreme aspect ratios
-     */
-    private fun calculateOptimalCrop(
-        sourceWidth: Int,
-        sourceHeight: Int,
-        targetWidth: Int,
-        targetHeight: Int,
-        focalPoints: List<FocalPoint>,
-        horizonY: Int?
-    ): RectF {
-        val sourceAspect = sourceWidth.toFloat() / sourceHeight.toFloat()
-        val targetAspect = targetWidth.toFloat() / targetHeight.toFloat()
-        val cropWidth: Float
-        val cropHeight: Float
-        if (sourceAspect > targetAspect) {
-            cropHeight = sourceHeight.toFloat()
-            cropWidth = cropHeight * targetAspect
-        } else {
-            cropWidth = sourceWidth.toFloat()
-            cropHeight = cropWidth / targetAspect
-        }
-        val totalWeight = focalPoints.sumOf { it.weight.toDouble() }.toFloat().coerceAtLeast(0.0001f)
-        val comX = focalPoints.sumOf { (it.x * it.weight).toDouble() }.toFloat() / totalWeight
-        val comY = focalPoints.sumOf { (it.y * it.weight).toDouble() }.toFloat() / totalWeight
-        // Reduced margin from 10% to 5% to allow content closer to edges without penalty
-        val margin = minOf(cropWidth, cropHeight) * 0.05f
-        val minX = cropWidth / 2f + margin
-        val maxX = sourceWidth - cropWidth / 2f - margin
-        val minY = cropHeight / 2f + margin
-        val maxY = sourceHeight - cropHeight / 2f - margin
-        val candidates = mutableListOf<Pair<Float, Float>>()
-        candidates.add(Pair(comX, comY))
-        for (p in focalPoints) {
-            candidates.add(Pair(p.x, p.y))
-        }
-        val thirdsX1 = sourceWidth / 3f
-        val thirdsX2 = sourceWidth * 2f / 3f
-        val thirdsY1 = sourceHeight / 3f
-        val thirdsY2 = sourceHeight * 2f / 3f
-        candidates.add(Pair(thirdsX1, thirdsY1))
-        candidates.add(Pair(thirdsX2, thirdsY1))
-        candidates.add(Pair(thirdsX1, thirdsY2))
-        candidates.add(Pair(thirdsX2, thirdsY2))
-        if (horizonY != null) {
-            val pos1 = cropHeight / 3f
-            val pos2 = cropHeight * 2f / 3f
-            val cY1 = horizonY + cropHeight / 2f - pos1
-            val cY2 = horizonY + cropHeight / 2f - pos2
-            candidates.add(Pair(comX, cY1))
-            candidates.add(Pair(comX, cY2))
-        }
-        var bestRect = RectF(0f, 0f, cropWidth, cropHeight)
-        var bestScore = Float.NEGATIVE_INFINITY
-        for (c in candidates) {
-            var cx = c.first
-            var cy = c.second
-            cx = if (minX <= maxX) cx.coerceIn(minX, maxX) else sourceWidth / 2f
-            cy = if (minY <= maxY) cy.coerceIn(minY, maxY) else sourceHeight / 2f
-            var left = cx - cropWidth / 2f
-            var top = cy - cropHeight / 2f
-            if (left < 0) left = 0f
-            if (top < 0) top = 0f
-            if (left + cropWidth > sourceWidth) left = sourceWidth - cropWidth
-            if (top + cropHeight > sourceHeight) top = sourceHeight - cropHeight
-            val rect = RectF(left, top, left + cropWidth, top + cropHeight)
-            val score = scoreCropRect(rect, focalPoints, margin)
-            if (score > bestScore) {
-                bestScore = score
-                bestRect = rect
-            }
-        }
-        return bestRect
-    }
-
-    
-
-    private fun scoreCropRect(rect: RectF, focalPoints: List<FocalPoint>, margin: Float): Float {
-        var coverage = 0f
-        var edgePenalty = 0f
-        var maxWeightPoint: FocalPoint? = null
-        var maxWeight = Float.NEGATIVE_INFINITY
-        for (p in focalPoints) {
-            if (p.x >= rect.left && p.x <= rect.right && p.y >= rect.top && p.y <= rect.bottom) {
-                coverage += p.weight
-                val dx = min(p.x - rect.left, rect.right - p.x)
-                val dy = min(p.y - rect.top, rect.bottom - p.y)
-                val d = min(dx, dy)
-                if (d < margin) {
-                    edgePenalty += (margin - d) / margin
-                }
-                if (p.weight > maxWeight) {
-                    maxWeight = p.weight
-                    maxWeightPoint = p
-                }
-            }
-        }
-        var thirdsScore = 0f
-        if (maxWeightPoint != null) {
-            val rx = maxWeightPoint!!.x - rect.left
-            val ry = maxWeightPoint!!.y - rect.top
-            val w = rect.width()
-            val h = rect.height()
-            val x1 = w / 3f
-            val x2 = 2f * w / 3f
-            val y1 = h / 3f
-            val y2 = 2f * h / 3f
-            val d1 = kotlin.math.abs(rx - x1) + kotlin.math.abs(ry - y1)
-            val d2 = kotlin.math.abs(rx - x2) + kotlin.math.abs(ry - y1)
-            val d3 = kotlin.math.abs(rx - x1) + kotlin.math.abs(ry - y2)
-            val d4 = kotlin.math.abs(rx - x2) + kotlin.math.abs(ry - y2)
-            val bestD = min(min(d1, d2), min(d3, d4))
-            thirdsScore = 1f / (1f + bestD / ((w + h) * 0.1f))
-        }
-        return coverage * 0.8f + thirdsScore * 0.25f - edgePenalty * 0.2f
-    }
-
-    /**
-     * Apply the crop to the bitmap
-     */
-    private fun applyCrop(
+    /** Build focal points in source coordinates for [mode], merging [faces] when present. */
+    private fun buildFocalPoints(
         source: Bitmap,
-        cropRegion: RectF,
-        targetWidth: Int,
-        targetHeight: Int
-    ): Bitmap {
-        val croppedBitmap = Bitmap.createBitmap(
-            source,
-            cropRegion.left.toInt(),
-            cropRegion.top.toInt(),
-            cropRegion.width().toInt(),
-            cropRegion.height().toInt()
-        )
-        
-        // Scale to target size
-        return if (croppedBitmap.width != targetWidth || croppedBitmap.height != targetHeight) {
-            val scaled = scaleBitmap(croppedBitmap, targetWidth, targetHeight)
-            if (scaled != croppedBitmap) {
-                croppedBitmap.recycle()
+        mode: CropMode,
+        faces: List<FaceCropDetector.Face>?
+    ): List<Focal> {
+        if (mode == CropMode.CENTER) return listOf(Focal(source.width / 2f, source.height / 2f, 1f, FocalType.COMPOSITION))
+
+        val points = ArrayList<Focal>()
+
+        // Faces dominate when available; CropEngine scores them 1000x so a face
+        // always becomes the "strongest" point driving thirds/centroid terms.
+        if (faces != null && faces.isNotEmpty()) {
+            for (f in faces) {
+                val cx = f.centerX
+                val cy = f.centerY
+                // Weight larger, central, upright faces higher.
+                val area = f.width * f.height
+                val sizeBoost = (area / (source.width * source.height * 0.05f)).coerceIn(0.5f, 2f)
+                val centerness = 1f - abs(cx - source.width / 2f) / (source.width / 2f)
+                points.add(Focal(cx, cy, 2.5f * sizeBoost * (0.6f + 0.4f * centerness), FocalType.FACE))
             }
-            scaled
-        } else {
-            croppedBitmap
         }
+
+        // Always include saliency so non-face subjects (landmarks, text, objects)
+        // still factor in, unless the caller explicitly asked for FACE_AWARE only.
+        if (mode != CropMode.FACE_AWARE || faces.isNullOrEmpty()) {
+            for (p in SaliencyDetector.detectSalientRegions(source)) {
+                points.add(Focal(p.x, p.y, p.weight, FocalType.SALIENCY))
+            }
+        }
+        if (points.isEmpty()) points.add(Focal(source.width / 2f, source.height / 2f, 1f, FocalType.COMPOSITION))
+        return points
     }
 
+    /** Internal focal point carrying the engine [FocalType]. */
+    private data class Focal(val x: Float, val y: Float, val weight: Float, val type: FocalType)
+
+    // =====================================================================================
+    // Bitmap operations
+    // =====================================================================================
+
     /**
-     * Simple scale without cropping
+     * Cut [rect] out of [source] and scale to [targetWidth]*[targetHeight].
+     *
+     * Every coordinate is rounded and clamped so the crop lies fully within the
+     * source and is at least 1px on each side — the guard the old code lacked,
+     * which made [Bitmap.createBitmap] throw and silently drop to centre crop.
      */
-    private fun scaleBitmap(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap {
-        return try {
+    private fun applyCrop(source: Bitmap, rect: CropRect, targetWidth: Int, targetHeight: Int): Bitmap {
+        val sw = source.width
+        val sh = source.height
+        var w = rect.width.roundToInt()
+        var h = rect.height.roundToInt()
+        if (w < 1) w = 1
+        if (h < 1) h = 1
+        if (w > sw) w = sw
+        if (h > sh) h = sh
+        var x = rect.left.roundToInt()
+        var y = rect.top.roundToInt()
+        if (x < 0) x = 0
+        if (y < 0) y = 0
+        if (x > sw - w) x = sw - w
+        if (y > sh - h) y = sh - h
+        if (x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > sw || y + h > sh) {
+            Log.w(TAG, "applyCrop bounds still invalid after clamp; centre-cropping")
+            return centerCropBitmap(source, targetWidth, targetHeight)
+        }
+        val cropped = try {
+            Bitmap.createBitmap(source, x, y, w, h)
+        } catch (e: Exception) {
+            Log.e(TAG, "createBitmap failed; centre-cropping", e)
+            return centerCropBitmap(source, targetWidth, targetHeight)
+        }
+        return if (cropped.width != targetWidth || cropped.height != targetHeight) {
+            val scaled = scaleBitmap(cropped, targetWidth, targetHeight)
+            if (scaled != cropped) cropped.recycle()
+            scaled
+        } else cropped
+    }
+
+    /** Simple bilinear scale. */
+    private fun scaleBitmap(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap =
+        try {
             Bitmap.createScaledBitmap(source, targetWidth, targetHeight, true)
         } catch (e: Exception) {
-            Log.e(TAG, "Error scaling bitmap", e)
-            source
+            Log.e(TAG, "Error scaling bitmap", e); source
         }
-    }
 
-    /**
-     * Fallback center crop implementation
-     */
-    private fun centerCropBitmap(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap {
-        return try {
-            val sourceAspect = source.width.toFloat() / source.height.toFloat()
-            val targetAspect = targetWidth.toFloat() / targetHeight.toFloat()
-            
-            val cropWidth: Float
-            val cropHeight: Float
-            
-            if (sourceAspect > targetAspect) {
-                cropHeight = source.height.toFloat()
-                cropWidth = cropHeight * targetAspect
-            } else {
-                cropWidth = source.width.toFloat()
-                cropHeight = cropWidth / targetAspect
-            }
-            
-            val left = (source.width - cropWidth) / 2f
-            val top = (source.height - cropHeight) / 2f
-            
-            val cropped = Bitmap.createBitmap(
-                source,
-                left.toInt(),
-                top.toInt(),
-                cropWidth.toInt(),
-                cropHeight.toInt()
-            )
-            
-            val scaled = Bitmap.createScaledBitmap(cropped, targetWidth, targetHeight, true)
-            if (scaled != cropped) {
-                cropped.recycle()
-            }
+    /** Centre crop fallback matching the target aspect. */
+    private fun centerCropBitmap(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap = try {
+        val sourceAspect = source.width.toFloat() / source.height.toFloat()
+        val targetAspect = targetWidth.toFloat() / targetHeight.toFloat()
+        val cropW: Float; val cropH: Float
+        if (sourceAspect > targetAspect) {
+            cropH = source.height.toFloat(); cropW = cropH * targetAspect
+        } else {
+            cropW = source.width.toFloat(); cropH = cropW / targetAspect
+        }
+        val x = ((source.width - cropW) / 2f).roundToInt().coerceAtLeast(0)
+        val y = ((source.height - cropH) / 2f).roundToInt().coerceAtLeast(0)
+        val w = cropW.roundToInt().coerceAtMost(source.width - x)
+        val h = cropH.roundToInt().coerceAtMost(source.height - y)
+        val cropped = Bitmap.createBitmap(source, x, y, w, h)
+        if (cropped.width != targetWidth || cropped.height != targetHeight) {
+            val scaled = scaleBitmap(cropped, targetWidth, targetHeight)
+            if (scaled != cropped) cropped.recycle()
             scaled
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in centerCropBitmap", e)
-            source
-        }
+        } else cropped
+    } catch (e: Exception) {
+        Log.e(TAG, "Error in centerCropBitmap", e); source
     }
 
     /**
-     * Calculate crop rect for given dimensions - useful for preview
-     * Returns the crop region in source bitmap coordinates
+     * Fill the target by drawing a genuinely blurred version of the source
+     * covering the canvas, then compositing the sharp source fitted inside.
+     *
+     * Replaces the old 1/40th blocky upscale + 67% black crush with an
+     * integral-image box blur on a 1/16th downscale (a real low-pass), a light
+     * scrim for separation, and a soft shadow rect behind the fitted image.
      */
-    fun calculateCropRect(
-        sourceWidth: Int,
-        sourceHeight: Int,
-        targetWidth: Int,
-        targetHeight: Int,
-        focalPoints: List<FocalPoint>? = null
-    ): RectF {
-        val points = focalPoints ?: listOf(
-            FocalPoint(sourceWidth / 2f, sourceHeight / 2f, 1.0f)
-        )
-        
-        return calculateOptimalCrop(
-            sourceWidth,
-            sourceHeight,
-            targetWidth,
-            targetHeight,
-            points,
+    private fun fillBitmap(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap = try {
+        val out = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(out)
+
+        // --- Blurred background: downscale, box-blur, upscale-to-cover ---
+        val bgLongMax = 128
+        val bgScale = bgLongMax.toFloat() / max(source.width, source.height)
+        val bgW = max(1, (source.width * bgScale).roundToInt())
+        val bgH = max(1, (source.height * bgScale).roundToInt())
+        val down = Bitmap.createScaledBitmap(source, bgW, bgH, true)
+        val blurred = blurBitmap(down, radius = max(3, min(bgW, bgH) / 6))
+        if (down !== blurred) down.recycle()
+
+        val coverScale = max(targetWidth.toFloat() / bgW, targetHeight.toFloat() / bgH)
+        val drawW = bgW * coverScale
+        val drawH = bgH * coverScale
+        val drawLeft = (targetWidth - drawW) / 2f
+        val drawTop = (targetHeight - drawH) / 2f
+        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        canvas.drawBitmap(blurred, null, RectF(drawLeft, drawTop, drawLeft + drawW, drawTop + drawH), bgPaint)
+        blurred.recycle()
+
+        // Light scrim for subject separation (was 67% black — far too heavy).
+        val scrim = Paint().apply { color = 0x33000000 }
+        canvas.drawRect(0f, 0f, targetWidth.toFloat(), targetHeight.toFloat(), scrim)
+
+        // --- Sharp foreground: fit inside the target, centred ---
+        val fitScale = min(targetWidth.toFloat() / source.width, targetHeight.toFloat() / source.height)
+        val fitW = source.width * fitScale
+        val fitH = source.height * fitScale
+        val fitLeft = (targetWidth - fitW) / 2f
+        val fitTop = (targetHeight - fitH) / 2f
+
+        // Soft shadow rect behind the fitted image.
+        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0x55000000
+            setShadowLayer(24f, 0f, 0f, 0x99000000.toInt())
+        }
+        canvas.drawRect(RectF(fitLeft, fitTop, fitLeft + fitW, fitTop + fitH), shadowPaint)
+        canvas.drawRect(RectF(fitLeft, fitTop, fitLeft + fitW, fitTop + fitH),
+            Paint().apply { color = 0x00000000 })
+
+        val fitMatrix = Matrix().apply {
+            postScale(fitScale, fitScale)
+            postTranslate(fitLeft, fitTop)
+        }
+        canvas.drawBitmap(source, fitMatrix, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        out
+    } catch (e: Exception) {
+        Log.e(TAG, "Error in fillBitmap", e); scaleBitmap(source, targetWidth, targetHeight)
+    }
+
+    /**
+     * Integral-image box blur over ARGB channels. One pass with a square kernel
+     * of half-extent [radius]; a genuine low-pass, unlike the old nearest-1/40th.
+     */
+    private fun blurBitmap(src: Bitmap, radius: Int): Bitmap {
+        if (radius < 1 || src.width < 3 || src.height < 3) return src
+        val w = src.width
+        val h = src.height
+        val px = IntArray(w * h)
+        src.getPixels(px, 0, w, 0, 0, w, h)
+        val out = boxBlurArgb(px, w, h, radius)
+        return Bitmap.createBitmap(out, 0, w, w, h, Bitmap.Config.ARGB_8888)
+    }
+
+    private fun boxBlurArgb(pixels: IntArray, w: Int, h: Int, radius: Int): IntArray {
+        val n = w * h
+        // Per-channel summed-area tables.
+        val iiR = LongArray((w + 1) * (h + 1))
+        val iiG = LongArray((w + 1) * (h + 1))
+        val iiB = LongArray((w + 1) * (h + 1))
+        for (y in 1..h) {
+            var sr = 0L; var sg = 0L; var sb = 0L
+            val row = (y - 1) * w
+            for (x in 1..w) {
+                val c = pixels[row + x - 1]
+                sr += (c shr 16) and 0xff
+                sg += (c shr 8) and 0xff
+                sb += c and 0xff
+                val idx = y * (w + 1) + x
+                val prev = (y - 1) * (w + 1) + x
+                iiR[idx] = iiR[prev] + sr
+                iiG[idx] = iiG[prev] + sg
+                iiB[idx] = iiB[prev] + sb
+            }
+        }
+        val out = IntArray(n)
+        val r = radius
+        for (y in 0 until h) {
+            val y0 = max(0, y - r)
+            val y1 = min(h - 1, y + r)
+            val rows = (y1 - y0 + 1)
+            for (x in 0 until w) {
+                val x0 = max(0, x - r)
+                val x1 = min(w - 1, x + r)
+                val cols = (x1 - x0 + 1)
+                val area = rows * cols
+                val a = y0 * (w + 1) + x0
+                val b = y0 * (w + 1) + x1 + 1
+                val c = (y1 + 1) * (w + 1) + x0
+                val d = (y1 + 1) * (w + 1) + x1 + 1
+                val rr = ((iiR[d] - iiR[b] - iiR[c] + iiR[a]) / area).toInt().coerceIn(0, 255)
+                val gg = ((iiG[d] - iiG[b] - iiG[c] + iiG[a]) / area).toInt().coerceIn(0, 255)
+                val bb = ((iiB[d] - iiB[b] - iiB[c] + iiB[a]) / area).toInt().coerceIn(0, 255)
+                out[y * w + x] = (0xff shl 24) or (rr shl 16) or (gg shl 8) or bb
+            }
+        }
+        return out
+    }
+
+    // =====================================================================================
+    // Horizon detection — strongest horizontal luminance edge, cheap on a downscale
+    // =====================================================================================
+
+    /** Return the source-space y of a dominant horizon, or null if none is found. */
+    private fun detectHorizon(source: Bitmap): Float? {
+        if (source.width < 8 || source.height < 8) return null
+        return try {
+            val targetW = 64
+            val scale = targetW.toFloat() / source.width
+            val th = max(4, (source.height * scale).toInt())
+            val small = Bitmap.createScaledBitmap(source, targetW, th, true)
+            val px = IntArray(targetW * th)
+            small.getPixels(px, 0, targetW, 0, 0, targetW, th)
+            small.recycle()
+            // Row luminance means.
+            val rowLum = FloatArray(th) { 0f }
+            for (y in 0 until th) {
+                var s = 0f
+                val row = y * targetW
+                for (x in 0 until targetW) {
+                    val c = px[row + x]
+                    s += 0.299f * ((c shr 16) and 0xff) + 0.587f * ((c shr 8) and 0xff) + 0.114f * (c and 0xff)
+                }
+                rowLum[y] = s / targetW
+            }
+            // Find the row with the largest neighbour gradient (strong horizontal edge).
+            var bestY = -1
+            var bestGrad = 0f
+            for (y in 1 until th) {
+                val g = abs(rowLum[y] - rowLum[y - 1])
+                if (g > bestGrad) { bestGrad = g; bestY = y }
+            }
+            // Only accept a clear horizon: gradient must be a meaningful fraction of range.
+            val range = (rowLum.maxOrNull() ?: 0f) - (rowLum.minOrNull() ?: 0f)
+            if (bestY < 0 || bestGrad < range * 0.25f) null else bestY / scale
+        } catch (e: Exception) {
             null
-        )
+        }
     }
 
-    /**
-     * Create a filled bitmap with blurred background.
-     * Preserves the entire source image by fitting it within target dimensions
-     * and filling the empty space with a blurred version of the image.
-     */
-    private fun fillBitmap(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap {
-        try {
-            val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
-            
-            // 1. Draw blurred background
-            // Scale source to cover target (center crop style for background)
-            val scaleX = targetWidth.toFloat() / source.width
-            val scaleY = targetHeight.toFloat() / source.height
-            val scale = max(scaleX, scaleY)
-            
-            val scaledWidth = source.width * scale
-            val scaledHeight = source.height * scale
-            val left = (targetWidth - scaledWidth) / 2f
-            val top = (targetHeight - scaledHeight) / 2f
-            
-            // Create a low-res version for blurring (1/40th size)
-            val lowResW = max(1, source.width / 40)
-            val lowResH = max(1, source.height / 40)
-            val lowRes = Bitmap.createScaledBitmap(source, lowResW, lowResH, true)
-            
-            val paint = Paint()
-            paint.isAntiAlias = true
-            paint.isFilterBitmap = true
-            
-            // Draw scaled up low-res image (effectively blurred)
-            canvas.drawBitmap(lowRes, null, RectF(left, top, left + scaledWidth, top + scaledHeight), paint)
-            
-            // Add a dark overlay to make the foreground pop
-            canvas.drawColor(0xAA000000.toInt()) // 67% black overlay
-            
-            // 2. Draw fitted foreground image
-            val fitScaleX = targetWidth.toFloat() / source.width
-            val fitScaleY = targetHeight.toFloat() / source.height
-            val fitScale = min(fitScaleX, fitScaleY)
-            
-            val fitWidth = source.width * fitScale
-            val fitHeight = source.height * fitScale
-            val fitLeft = (targetWidth - fitWidth) / 2f
-            val fitTop = (targetHeight - fitHeight) / 2f
-            
-            val fitMatrix = Matrix()
-            fitMatrix.postScale(fitScale, fitScale)
-            fitMatrix.postTranslate(fitLeft, fitTop)
-            
-            // Draw shadow/glow behind the image
-            val shadowPaint = Paint()
-            shadowPaint.setShadowLayer(20f, 0f, 0f, 0xFF000000.toInt())
-            // Note: setShadowLayer only works on text or shapes, not bitmaps directly in hardware accel
-            // So we draw a rect behind it
-            val shadowRect = RectF(fitLeft, fitTop, fitLeft + fitWidth, fitTop + fitHeight)
-            val rectPaint = Paint()
-            rectPaint.color = 0xFF000000.toInt()
-            rectPaint.alpha = 100
-            canvas.drawRect(shadowRect, rectPaint)
-            
-            canvas.drawBitmap(source, fitMatrix, paint)
-            
-            lowRes.recycle()
-            return bitmap
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in fillBitmap", e)
-            return scaleBitmap(source, targetWidth, targetHeight)
+    // =====================================================================================
+    // Cache key
+    // =====================================================================================
+
+    private fun cropCacheKey(
+        source: Bitmap,
+        outputWidth: Int,
+        outputHeight: Int,
+        mode: CropMode,
+        faces: List<FaceCropDetector.Face>?
+    ): String {
+        val sig = SaliencyDetector.contentSignature(source)
+        val faceSig = if (faces.isNullOrEmpty()) "none" else faces.joinToString(",") {
+            "${it.centerX.toInt()},${it.centerY.toInt()},${it.width.toInt()}"
         }
+        return "$sig|${outputWidth}x${outputHeight}|${mode.name}|$faceSig"
     }
 }

@@ -12,24 +12,8 @@ import okio.buffer
 import java.io.IOException
 
 /**
- * OkHttp interceptor that tracks download progress in real-time.
- * 
- * Wraps the response body to monitor bytes read during download.
- * Calculates progress as: bytesRead / totalBytes
- * 
- * **Usage:**
- * ```kotlin
- * val progressInterceptor = DownloadProgressInterceptor { bytesRead, totalBytes, isDone ->
- *     val progress = if (totalBytes > 0) (bytesRead.toFloat() / totalBytes) else 0f
- *     Log.d("Download", "Progress: ${(progress * 100).toInt()}% ($bytesRead / $totalBytes bytes)")
- * }
- * 
- * val client = OkHttpClient.Builder()
- *     .addNetworkInterceptor(progressInterceptor)
- *     .build()
- * ```
- * 
- * @param progressListener Callback invoked as bytes are read (bytesRead, totalBytes, isDone)
+ * OkHttp network interceptor that wraps the response body to report
+ * download progress via [progressListener].
  */
 class DownloadProgressInterceptor(
     private val progressListener: (bytesRead: Long, totalBytes: Long, isDone: Boolean) -> Unit

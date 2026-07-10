@@ -27,32 +27,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Default implementation of WallpaperRepository.
- * 
- * Manages wallpaper metadata, download queue, and file storage with proper
- * cache management and error handling.
- * 
- * **Cache Strategy:**
- * - Maximum cache size: 450 MB (~150 wallpapers at 3MB each)
- * - LRU eviction: Remove least recently used when cache full
- * - Keep top 100 wallpapers by priority
- * - Automatic cleanup on low storage
- * 
- * **Download Strategy:**
- * - WiFi preferred (skip on cellular to save data)
- * - Battery optimization (skip on low battery)
- * - Exponential backoff retry (3 attempts max)
- * - Parallel downloads (up to 3 concurrent)
- * 
- * **Thread Safety:**
- * All database operations use Room's suspend functions.
- * File I/O uses Dispatchers.IO for proper thread management.
- * 
- * @property context Application context for file storage access
- * @property wallpaperMetadataDao DAO for wallpaper metadata
- * @property downloadQueueDao DAO for download queue management
- * @property wallpaperHistoryDao DAO for application history
- * @property okHttpClient HTTP client for downloading images
+ * Default [WallpaperRepository] implementation.
+ *
+ * Manages wallpaper metadata, download queue, and cached image files.
+ * Cache is capped at 450 MB with LRU eviction. Downloads prefer Wi-Fi
+ * and use exponential backoff (3 retries max, up to 3 concurrent).
  */
 @Singleton
 class WallpaperRepositoryImpl @Inject constructor(
@@ -150,6 +129,10 @@ class WallpaperRepositoryImpl @Inject constructor(
     
     override suspend fun recordWallpaperApplied(wallpaper: WallpaperMetadata): Long {
         return withContext(Dispatchers.IO) {
+// Ensure wallpaper metadata is persisted so the UI can resolve it from
+            // getAllWallpaperSummaries().
+            wallpaperMetadataDao.insert(wallpaper)
+
             // Use transaction to ensure history insert is atomic
             me.avinas.vanderwaals.data.TransactionHelper.withTransaction(database) {
                 val historyEntry = WallpaperHistory(
@@ -370,7 +353,7 @@ class WallpaperRepositoryImpl @Inject constructor(
     }
 
     override fun getCroppedWallpaperFile(wallpaper: WallpaperMetadata): File {
-        return File(wallpaperCacheDir, "${wallpaper.id}_cropped.png")
+        return File(wallpaperCacheDir, "${wallpaper.id}_cropped.jpg")
     }
     
     override suspend fun getWallpaperById(id: String): WallpaperMetadata? {
@@ -390,7 +373,7 @@ class WallpaperRepositoryImpl @Inject constructor(
             // Count files in wallpaper cache directory
             val cacheDir = wallpaperCacheDir
             if (cacheDir.exists()) {
-                cacheDir.listFiles()?.count { it.isFile && !it.name.endsWith("_cropped.png") } ?: 0
+                cacheDir.listFiles()?.count { it.isFile && !it.name.endsWith("_cropped.jpg") } ?: 0
             } else {
                 0
             }

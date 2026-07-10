@@ -8,39 +8,25 @@ import kotlin.math.sqrt
 import kotlin.random.Random
 
 /**
- * YouTube-like recommendation algorithm for wallpaper selection.
- * 
- * Inspired by YouTube's recommendation system, this algorithm balances:
- * 
- * 1. **Exploitation** - Show wallpapers similar to what user likes
- * 2. **Exploration** - Occasionally show new/different content to discover preferences
- * 3. **Serendipity** - Inject unexpected but potentially interesting content
- * 4. **Freshness** - Boost newer content to prevent staleness
- * 5. **Diversity** - Prevent filter bubbles by varying categories/styles
- * 6. **Diminishing Returns** - Reduce score for over-exposed categories
- * 
- * **Key Differences from Simple Similarity:**
- * - Not just "what's most similar" but "what will user ENGAGE with"
- * - Predicts positive reaction, not just match
- * - Keeps recommendations fresh and surprising
- * - Learns from implicit signals (viewing duration, skip rate)
- * 
- * @see SelectNextWallpaperUseCase
+ * Recommendation algorithm that balances exploitation (show what user likes),
+ * exploration (discover new preferences), serendipity, freshness, diversity,
+ * and diminishing returns per category.
  */
 class YouTubeLikeRecommender {
     
     companion object {
         /**
-         * Base exploration rate (probability of exploring vs exploiting)
-         * YouTube typically uses 5-20% exploration
+         * Base exploration rate (probability of exploring vs exploiting).
+         * Kept low so exploitation (similarity) dominates; the adaptive rate
+         * adds more exploration only when the user is actively dissatisfied.
          */
-        private const val BASE_EXPLORATION_RATE = 0.15f
+        private const val BASE_EXPLORATION_RATE = 0.08f
         
         /**
-         * Serendipity rate - probability of showing completely unexpected content
-         * This is what makes YouTube feel "magical" - occasional surprises
+         * Serendipity rate - probability of showing something unexpected.
+         * Values above 3% make the feed feel random to users.
          */
-        private const val SERENDIPITY_RATE = 0.05f
+        private const val SERENDIPITY_RATE = 0.02f
         
         /**
          * Maximum diminishing returns penalty for overexposed categories
@@ -54,20 +40,30 @@ class YouTubeLikeRecommender {
         private const val SATURATION_WINDOW = 5
         
         /**
-         * Freshness boost for newly added wallpapers (within last week)
+         * Temperature for softmax-weighted random selection from the diversity pool.
+         * Lower value → more deterministic (top score dominates); higher → more uniform.
+         * Range: typically 0.2 (greedy) to 1.5 (near-random).
          */
-        private const val FRESHNESS_BOOST = 0.1f
-        
+        private const val SOFTMAX_TEMPERATURE = 0.4f
+
         /**
-         * Days to consider a wallpaper "fresh"
+         * Lambda (relevance trade-off) for Maximal Marginal Relevance.
+         * Higher → lean toward relevance; lower → lean toward diversity.
          */
-        private const val FRESHNESS_WINDOW_DAYS = 7
-        
+        private const val MMR_LAMBDA = 0.7f
+
         /**
-         * Diversity pool size - take top N candidates then pick randomly
-         * This ensures variety even when exploiting
+         * Size of the candidate pool fed into MMR selection.
+         * Must be >= DIVERSITY_POOL_SIZE.
          */
-        private const val DIVERSITY_POOL_SIZE = 15
+        private const val MMR_CANDIDATE_POOL = 15
+
+        /**
+         * Diversity pool size - take top N candidates then pick randomly.
+         * Smaller pool = stronger exploitation. 5 is a good balance: enough
+         * variety to avoid repetition without feeling random.
+         */
+        private const val DIVERSITY_POOL_SIZE = 5
         
         /**
          * Weight for engagement prediction vs raw similarity
@@ -91,6 +87,8 @@ class YouTubeLikeRecommender {
         val diversityScore: Float,
         val freshnessBoost: Float,
         val saturationPenalty: Float,
+        val timeOfDayBoost: Float,
+        val dislikedPenalty: Float,
         val finalScore: Float
     )
     
@@ -106,8 +104,60 @@ class YouTubeLikeRecommender {
         val totalHistoryDislikes: Int,
         val likedCategories: Map<String, Int>,
         val dislikedCategories: Map<String, Int>,
+        /**
+         * Average display duration in minutes per category, derived from wallpaper history.
+         * A long average duration implies implicit long-term preference even without explicit
+         * likes. Used to boost engagement prediction in [predictEngagement].
+         */
+        val categorySetDurations: Map<String, Long> = emptyMap(),
+        /**
+         * L2-normalised centroid of disliked wallpaper embeddings, or null if no dislikes.
+         * Used to penalise candidates semantically close to disliked content, double-down on
+         * the negative EMA signal already encoded in the preference vector.
+         */
+        val dislikedEmbeddingCentroid: FloatArray? = null,
+        /**
+         * Current hour (0–23) for time-of-day personalisation.
+         * Defaults to system clock; can be overridden in tests.
+         */
+        val currentHour: Int = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY),
         val currentTimeMillis: Long = System.currentTimeMillis()
-    )
+    ) {
+        // FloatArray uses reference equality by default; override so array
+        // content is compared (and hashed) correctly.
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is SessionContext) return false
+            return recentlyViewedIds == other.recentlyViewedIds &&
+                recentCategories == other.recentCategories &&
+                sessionLikes == other.sessionLikes &&
+                sessionDislikes == other.sessionDislikes &&
+                totalHistoryLikes == other.totalHistoryLikes &&
+                totalHistoryDislikes == other.totalHistoryDislikes &&
+                likedCategories == other.likedCategories &&
+                dislikedCategories == other.dislikedCategories &&
+                categorySetDurations == other.categorySetDurations &&
+                dislikedEmbeddingCentroid.contentEquals(other.dislikedEmbeddingCentroid) &&
+                currentHour == other.currentHour &&
+                currentTimeMillis == other.currentTimeMillis
+        }
+
+        override fun hashCode(): Int {
+            var result = recentlyViewedIds.hashCode()
+            result = 31 * result + recentCategories.hashCode()
+            result = 31 * result + sessionLikes
+            result = 31 * result + sessionDislikes
+            result = 31 * result + totalHistoryLikes
+            result = 31 * result + totalHistoryDislikes
+            result = 31 * result + likedCategories.hashCode()
+            result = 31 * result + dislikedCategories.hashCode()
+            result = 31 * result + categorySetDurations.hashCode()
+            result = 31 * result + (dislikedEmbeddingCentroid?.contentHashCode() ?: 0)
+            result = 31 * result + currentHour
+            result = 31 * result + currentTimeMillis.hashCode()
+            return result
+        }
+    }
     
     /**
      * Select next wallpaper using YouTube-like algorithm.
@@ -136,7 +186,7 @@ class YouTubeLikeRecommender {
         
         // STEP 1: Serendipity roll - occasionally pick something completely random
         if (random.nextFloat() < SERENDIPITY_RATE) {
-            android.util.Log.d("YouTubeLikeRecommender", "🎲 Serendipity mode! Picking random wallpaper")
+            if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("YouTubeLikeRecommender", "🎲 Serendipity mode! Picking random wallpaper")
             // Pick from bottom 50% of candidates (less similar = more surprising)
             val surprisePool = candidates.sortedBy { it.second }.take(candidates.size / 2)
             return if (surprisePool.isNotEmpty()) {
@@ -149,7 +199,7 @@ class YouTubeLikeRecommender {
         // STEP 2: Exploration roll - explore underrepresented categories
         val effectiveExplorationRate = calculateAdaptiveExplorationRate(context)
         if (random.nextFloat() < effectiveExplorationRate) {
-            android.util.Log.d("YouTubeLikeRecommender", "🔍 Exploration mode! (rate=${String.format("%.1f%%", effectiveExplorationRate * 100)})")
+            if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("YouTubeLikeRecommender", "🔍 Exploration mode! (rate=${String.format("%.1f%%", effectiveExplorationRate * 100)})")
             return selectForExploration(candidates, context, random)
         }
         
@@ -158,23 +208,29 @@ class YouTubeLikeRecommender {
             scoreCandidate(wallpaper, similarity, context)
         }.sortedByDescending { it.finalScore }
         
-        // Log top candidates for debugging
-        scoredCandidates.take(3).forEachIndexed { i, sc ->
-            android.util.Log.d("YouTubeLikeRecommender", 
-                "Top ${i+1}: ${sc.wallpaper.id.take(20)}... " +
-                "final=${String.format("%.3f", sc.finalScore)} " +
-                "(base=${String.format("%.2f", sc.baseSimilarity)}, " +
-                "engage=${String.format("%.2f", sc.engagementScore)}, " +
-                "novel=${String.format("%.2f", sc.noveltyScore)}, " +
-                "sat=${String.format("%.2f", sc.saturationPenalty)})"
-            )
+        // Log top candidates for debugging (gated to avoid per-selection string
+        // formatting in release builds)
+        if (me.avinas.vanderwaals.BuildConfig.DEBUG) {
+            scoredCandidates.take(3).forEachIndexed { i, sc ->
+                android.util.Log.d("YouTubeLikeRecommender",
+                    "Top ${i+1}: ${sc.wallpaper.id.take(20)}... " +
+                    "final=${String.format("%.3f", sc.finalScore)} " +
+                    "(base=${String.format("%.2f", sc.baseSimilarity)}, " +
+                    "engage=${String.format("%.2f", sc.engagementScore)}, " +
+                    "tod=${String.format("%.2f", sc.timeOfDayBoost)}, " +
+                    "dis=-${String.format("%.2f", sc.dislikedPenalty)}, " +
+                    "novel=${String.format("%.2f", sc.noveltyScore)}, " +
+                    "sat=${String.format("%.2f", sc.saturationPenalty)})"
+                )
+            }
         }
         
-        // STEP 4: Take top candidates and pick randomly for diversity
-        val diversityPool = scoredCandidates.take(DIVERSITY_POOL_SIZE)
-        
-        // Use weighted random selection based on scores
-        return weightedRandomSelect(diversityPool, random)
+        // STEP 4: Apply Maximal Marginal Relevance (MMR) for embedding-aware diversity,
+        //         then stochastically pick from the resulting pool via softmax weights.
+        val mmrPool = selectWithMmr(scoredCandidates, DIVERSITY_POOL_SIZE)
+
+        // Temperature-scaled softmax selection
+        return weightedRandomSelect(mmrPool, random)
     }
     
     /**
@@ -186,27 +242,37 @@ class YouTubeLikeRecommender {
      */
     private fun calculateAdaptiveExplorationRate(context: SessionContext): Float {
         var rate = BASE_EXPLORATION_RATE
-        
-        // Adjust based on session satisfaction
+
+        // Scale down exploration as the preference model matures.
+        // With 50+ feedback events the model is well-calibrated; exploration
+        // should yield to exploitation.
+        val historyTotal = context.totalHistoryLikes + context.totalHistoryDislikes
+        val maturityScale = when {
+            historyTotal >= 50 -> 0.4f   // 60% reduction — trust the model
+            historyTotal >= 20 -> 0.7f   // 30% reduction — mostly trust it
+            else               -> 1.0f   // No reduction — still learning
+        }
+        rate *= maturityScale
+
+        // Adjust based on consecutive session dislikes (user is unhappy right now)
         val sessionTotal = context.sessionLikes + context.sessionDislikes
         if (sessionTotal > 0) {
             val sessionSatisfaction = context.sessionLikes.toFloat() / sessionTotal
-            // If satisfaction < 50%, increase exploration
-            // If satisfaction > 50%, decrease exploration
-            rate += (0.5f - sessionSatisfaction) * 0.2f
+            // Only increase exploration if satisfaction is genuinely low
+            if (sessionSatisfaction < 0.3f) {
+                rate += 0.10f
+            }
         }
-        
-        // Adjust based on historical satisfaction
-        val historyTotal = context.totalHistoryLikes + context.totalHistoryDislikes
+
+        // Historically unhappy user — explore more broadly
         if (historyTotal > 10) {
             val historySatisfaction = context.totalHistoryLikes.toFloat() / historyTotal
             if (historySatisfaction < 0.4f) {
-                // User is frequently unhappy - explore more!
-                rate += 0.15f
+                rate += 0.10f
             }
         }
         
-        return rate.coerceIn(0.05f, 0.4f)
+        return rate.coerceIn(0.02f, 0.25f)
     }
     
     /**
@@ -232,7 +298,8 @@ class YouTubeLikeRecommender {
                 val explorationBonus = 1f / (1f + categoryExposure)
                 Pair(wp, similarity + explorationBonus * 0.3f)
             }
-            scored.maxByOrNull { it.second }?.first ?: candidates.random(random).first
+            // Stochastic selection via temperature-softmax (not deterministic max)
+            selectByTemperatureSoftmax(scored, SOFTMAX_TEMPERATURE, random)
         } else {
             // All categories explored recently, just pick randomly from top half
             candidates.take(candidates.size / 2).random(random).first
@@ -241,18 +308,30 @@ class YouTubeLikeRecommender {
     
     /**
      * Calculate comprehensive score for a wallpaper candidate.
+     *
+     * Score weights (sum = 1.0):
+     * - Base similarity:    55% — embedding match to user preferences
+     * - Engagement:         18% — category feedback + implicit set-duration signal
+     * - Novelty:             7% — how new/different this content is
+     * - Diversity:           7% — how varied vs recent selections
+     * - Freshness:           7% — newly added content
+     * - Time-of-day:         6% — brightness preference matched to wall-clock hour
+     *
+     * Post-weighting adjustments:
+     * - Disliked centroid penalty subtracted (up to −0.25 × dislike similarity)
+     * - Saturation penalty applied multiplicatively
      */
     private fun scoreCandidate(
         wallpaper: WallpaperMetadata,
         baseSimilarity: Float,
         context: SessionContext
     ): ScoredCandidate {
-        // 1. Engagement prediction - will user like this?
+        // 1. Engagement prediction - will user like this? (category-based)
         val engagementScore = predictEngagement(wallpaper, context)
-        
+
         // 2. Novelty score - how new/different is this?
         val noveltyScore = calculateNoveltyScore(wallpaper, context)
-        
+
         // 3. Diversity score - how different from recent content?
         val diversityScore = calculateDiversityScore(wallpaper, context)
         
@@ -261,23 +340,23 @@ class YouTubeLikeRecommender {
         
         // 5. Saturation penalty - has user seen this category too much?
         val saturationPenalty = calculateSaturationPenalty(wallpaper.category, context)
-        
-        // Combine scores with weights
-        // Base similarity: 55% (still important to match preferences)
-        // Engagement prediction: 20% (predict positive reaction)
-        // Novelty: 10% (favor new/different)
-        // Diversity: 10% (variety in categories)
-        // Freshness: 5% (boost new content)
-        // Saturation: penalty applied after
-        val rawScore = (baseSimilarity * 0.55f) +
-                       (engagementScore * 0.20f) +
-                       (noveltyScore * 0.10f) +
-                       (diversityScore * 0.10f) +
-                       (freshnessBoost * 0.05f)
-        
-        // Apply saturation penalty (diminishing returns)
-        val finalScore = rawScore * (1f - saturationPenalty)
-        
+
+        // 6. Time-of-day boost — brightness matched to the current hour
+        val timeOfDayBoost = calculateTimeOfDayBoost(wallpaper, context.currentHour)
+
+        // 7. Disliked centroid penalty — penalise candidates close to disliked content
+        val dislikedPenalty = calculateDislikedPenalty(wallpaper, context.dislikedEmbeddingCentroid)
+
+        val rawScore = (baseSimilarity  * 0.55f) +
+                       (engagementScore * 0.18f) +
+                       (noveltyScore    * 0.07f) +
+                       (diversityScore  * 0.07f) +
+                       (freshnessBoost  * 0.07f) +
+                       (timeOfDayBoost  * 0.06f)
+
+        // Apply dislike penalty then saturation (both reduce the final score)
+        val finalScore = (rawScore - dislikedPenalty).coerceAtLeast(0f) * (1f - saturationPenalty)
+
         return ScoredCandidate(
             wallpaper = wallpaper,
             baseSimilarity = baseSimilarity,
@@ -286,35 +365,44 @@ class YouTubeLikeRecommender {
             diversityScore = diversityScore,
             freshnessBoost = freshnessBoost,
             saturationPenalty = saturationPenalty,
+            timeOfDayBoost = timeOfDayBoost,
+            dislikedPenalty = dislikedPenalty,
             finalScore = finalScore
         )
     }
     
     /**
      * Predict engagement probability - will user like this wallpaper?
-     * 
+     *
      * Uses category preference history as a proxy for engagement prediction.
-     * YouTube uses complex ML models; we use simpler heuristics.
+     * Returns a Bayesian-smoothed like probability (0–1).
      */
     private fun predictEngagement(wallpaper: WallpaperMetadata, context: SessionContext): Float {
         val category = wallpaper.category
-        
         val categoryLikes = context.likedCategories[category] ?: 0
         val categoryDislikes = context.dislikedCategories[category] ?: 0
         val total = categoryLikes + categoryDislikes
-        
-        return if (total > 0) {
-            // Category has feedback history
-            val likeRatio = categoryLikes.toFloat() / total
-            // Use Bayesian average with prior of 0.5
-            val priorWeight = 3
+        val priorWeight = 3
+        val explicitScore = if (total > 0) {
             (categoryLikes + priorWeight * 0.5f) / (total + priorWeight)
         } else {
-            // Unknown category - neutral with slight exploration bonus
-            0.55f
+            0.55f // Unknown category — neutral with slight exploration bonus
         }
+
+        // Implicit engagement: boost categories where wallpapers were kept for a long time.
+        // A long display duration is a strong implicit signal of genuine preference even
+        // without an explicit like tap.  Derived from WallpaperHistory.getDurationSeconds().
+        val avgDurationMinutes = context.categorySetDurations[category] ?: 0L
+        val implicitBonus = when {
+            avgDurationMinutes >= 720 -> 0.08f  // 12+ hours — strong preference
+            avgDurationMinutes >= 240 -> 0.05f  // 4+ hours  — clear preference
+            avgDurationMinutes >= 60  -> 0.03f  // 1+ hour   — mild preference
+            avgDurationMinutes >= 15  -> 0.01f  // 15+ min   — slight preference
+            else                      -> 0f
+        }
+        return (explicitScore + implicitBonus).coerceIn(0f, 1f)
     }
-    
+
     /**
      * Calculate novelty score - how new/different is this content?
      */
@@ -339,28 +427,29 @@ class YouTubeLikeRecommender {
     
     /**
      * Calculate diversity score - how different from recent selections?
+     *
+     * Currently based on category diversity only.  Source diversity would
+     * require a `recentSources` list in [SessionContext]; until that is
+     * added, category diversity is the sole signal.
      */
     private fun calculateDiversityScore(wallpaper: WallpaperMetadata, context: SessionContext): Float {
         if (context.recentCategories.isEmpty()) return 1f
-        
+
         // Category diversity
         val recentCategorySet = context.recentCategories.takeLast(5).toSet()
-        val categoryDiversity = if (wallpaper.category !in recentCategorySet) 1f else 0.3f
-        
-        // Source diversity (if available)
-        val sourceDiversity = 0.5f // Neutral for now
-        
-        return (categoryDiversity + sourceDiversity) / 2f
+        return if (wallpaper.category !in recentCategorySet) 1f else 0.3f
     }
     
     /**
      * Calculate freshness boost for newly added wallpapers.
+     *
+     * WallpaperMetadata does not currently carry an `addedAt` timestamp, so
+     * there is no signal to distinguish new content from old.  Returns 0
+     * (neutral) so the freshness weight in [scoreCandidate] is a no-op until
+     * a timestamp field is added to the entity and manifest.
      */
     private fun calculateFreshnessBoost(wallpaper: WallpaperMetadata, currentTimeMillis: Long): Float {
-        // If wallpaper has timestamp metadata, use it
-        // Otherwise return neutral
-        // For now, we don't have addedAt timestamp, so return slight boost for variety
-        return 0.05f
+        return 0f
     }
     
     /**
@@ -377,9 +466,9 @@ class YouTubeLikeRecommender {
         if (recentExposures == 0) return 0f
         
         // Logarithmic penalty - first exposure is free, then diminishing returns
-        // 1 exposure: 5% penalty
-        // 2 exposures: 15% penalty
-        // 3+ exposures: 30%+ penalty
+        // 1 exposure: ~16% penalty
+        // 2 exposures: ~25% penalty
+        // 3+ exposures: ~31%+ penalty
         val penalty = (1 - exp(-recentExposures * 0.5)).toFloat() * MAX_SATURATION_PENALTY
         
         return penalty.coerceIn(0f, MAX_SATURATION_PENALTY)
@@ -398,12 +487,12 @@ class YouTubeLikeRecommender {
         if (candidates.isEmpty()) throw IllegalArgumentException("Empty candidate list")
         if (candidates.size == 1) return candidates.first().wallpaper
         
-        // Convert scores to probabilities using softmax-like distribution
+        // Convert scores to probabilities using temperature-scaled softmax.
+        // Subtract max score before exp() for numerical stability (avoids Float overflow).
         val minScore = candidates.minOf { it.finalScore }
         val scores = candidates.map { (it.finalScore - minScore).coerceAtLeast(0.01f) }
-        
-        // Use score^2 for sharper distribution (favor higher scores more)
-        val weights = scores.map { it.pow(2) }
+        val maxScore = scores.max()
+        val weights = scores.map { exp((it - maxScore) / SOFTMAX_TEMPERATURE) }
         val totalWeight = weights.sum()
         
         // Weighted random selection
@@ -417,5 +506,166 @@ class YouTubeLikeRecommender {
         
         // Fallback to best candidate
         return candidates.first().wallpaper
+    }
+
+    /**
+     * Temperature-softmax weighted random selection from a list of (wallpaper, score) pairs.
+     * Stochastic — higher-scoring candidates are more likely but not guaranteed.
+     */
+    private fun selectByTemperatureSoftmax(
+        candidates: List<Pair<WallpaperMetadata, Float>>,
+        temperature: Float,
+        random: Random
+    ): WallpaperMetadata {
+        if (candidates.isEmpty()) throw IllegalArgumentException("Empty candidate list")
+        if (candidates.size == 1) return candidates.first().first
+
+        val scores = candidates.map { it.second }
+        val maxScore = scores.max()
+        val weights = scores.map { exp((it - maxScore) / temperature) }
+        val totalWeight = weights.sum()
+
+        var pick = random.nextFloat() * totalWeight
+        for (i in candidates.indices) {
+            pick -= weights[i]
+            if (pick <= 0) {
+                return candidates[i].first
+            }
+        }
+        return candidates.first().first
+    }
+
+    // ========== Private helpers added for advanced improvements ==========
+
+    /**
+     * Returns a brightness-aware boost based on the current wall-clock hour.
+     *
+     * Night (22:00\u201305:59): dark wallpapers preferred.
+     * Morning (06:00\u201309:59): bright wallpapers preferred.
+     * Evening (18:00\u201321:59): moderate brightness preferred.
+     * Daytime (10:00\u201317:59): neutral.
+     *
+     * Signal is normalised to [0, 1] for use as a score component.
+     */
+    private fun calculateTimeOfDayBoost(wallpaper: WallpaperMetadata, hour: Int): Float {
+        val brightness = wallpaper.brightness  // 0\u2013100
+        return when (hour) {
+            in 22..23, in 0..5 -> when {
+                brightness < 30  -> 1.0f
+                brightness < 45  -> 0.6f
+                brightness > 65  -> 0.0f
+                else             -> 0.3f
+            }
+            in 6..9 -> when {
+                brightness > 65  -> 1.0f
+                brightness > 50  -> 0.7f
+                brightness < 30  -> 0.1f
+                else             -> 0.4f
+            }
+            in 10..17 -> 0.5f  // Daytime: neutral mid-point
+            in 18..21 -> when {
+                brightness in 35..65 -> 0.8f
+                brightness > 75      -> 0.3f
+                brightness < 25      -> 0.2f
+                else                 -> 0.5f
+            }
+            else -> 0.5f
+        }
+    }
+
+    /**
+     * Penalises a candidate whose embedding is positively similar to the centroid of
+     * disliked wallpaper embeddings.
+     *
+     * Only wallpapers with a positive cosine similarity to the disliked centroid are
+     * penalised; orthogonal or anti-correlated wallpapers receive no penalty.
+     *
+     * Max penalty = 0.25 (applied when cosine similarity = 1.0).
+     */
+    private fun calculateDislikedPenalty(
+        wallpaper: WallpaperMetadata,
+        dislikedCentroid: FloatArray?
+    ): Float {
+        if (dislikedCentroid == null || wallpaper.embedding.isEmpty()) return 0f
+        // Raw cosine in [-1, 1]; clamp at 0 so anti-similar items get no penalty
+        val sim = cosineSimilarityLocal(wallpaper.embedding, dislikedCentroid).coerceAtLeast(0f)
+        return sim * 0.25f
+    }
+
+    /**
+     * Cosine similarity between two float vectors, returned in [-1, 1].
+     * Returns 0 for zero-magnitude vectors.
+     */
+    private fun cosineSimilarityLocal(v1: FloatArray, v2: FloatArray): Float {
+        if (v1.size != v2.size) return 0f
+        var dot = 0f; var m1 = 0f; var m2 = 0f
+        for (i in v1.indices) {
+            dot += v1[i] * v2[i]
+            m1  += v1[i] * v1[i]
+            m2  += v2[i] * v2[i]
+        }
+        if (m1 == 0f || m2 == 0f) return 0f
+        return (dot / (sqrt(m1) * sqrt(m2))).coerceIn(-1f, 1f)
+    }
+
+    /**
+     * Selects [k] candidates from the top of [candidates] using Maximal Marginal
+     * Relevance (MMR), balancing relevance (final score) against embedding-space
+     * diversity.
+     *
+     * MMR objective per iteration:
+     * ```
+     * argmax_d [ \u03bb \u00d7 score(d) \u2212 (1\u2212\u03bb) \u00d7 max_{d'\u2208S} sim(d, d') ]
+     * ```
+     * where S is the set of already-selected candidates.
+     *
+     * Wallpapers without embeddings fall back to category diversity as a proxy
+     * for embedding similarity.
+     *
+     * @param candidates Scored candidates sorted by finalScore descending
+     * @param k          Number of candidates to select
+     * @return MMR-selected list of up to [k] candidates
+     */
+    private fun selectWithMmr(
+        candidates: List<ScoredCandidate>,
+        k: Int
+    ): List<ScoredCandidate> {
+        if (candidates.size <= k) return candidates
+
+        // Consider only the top MMR_CANDIDATE_POOL entries as the source pool
+        val pool = candidates.take(minOf(MMR_CANDIDATE_POOL, candidates.size)).toMutableList()
+        val selected = mutableListOf<ScoredCandidate>()
+
+        // Always include the highest-scoring candidate first
+        selected.add(pool.removeAt(0))
+
+        while (selected.size < k && pool.isNotEmpty()) {
+            val best = pool.maxByOrNull { candidate ->
+                val relevance = candidate.finalScore
+                val maxSim: Float = if (candidate.wallpaper.embedding.isNotEmpty()) {
+                    // Embedding-based similarity to already-selected items
+                    selected
+                        .filter { it.wallpaper.embedding.isNotEmpty() }
+                        .maxOfOrNull { sel ->
+                            cosineSimilarityLocal(
+                                candidate.wallpaper.embedding,
+                                sel.wallpaper.embedding
+                            )
+                        } ?: 0f
+                } else {
+                    // Fallback for candidates without client-side embeddings:
+                    val sameCategory = selected.count {
+                        it.wallpaper.category == candidate.wallpaper.category
+                    }
+                    if (selected.isEmpty()) 0f else sameCategory.toFloat() / selected.size
+                }
+                MMR_LAMBDA * relevance - (1f - MMR_LAMBDA) * maxSim
+            } ?: break
+
+            selected.add(best)
+            pool.remove(best)
+        }
+
+        return selected
     }
 }

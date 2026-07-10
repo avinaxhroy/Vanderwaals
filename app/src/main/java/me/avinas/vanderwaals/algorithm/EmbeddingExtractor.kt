@@ -31,6 +31,17 @@ class EmbeddingExtractor @Inject constructor(
 ) {
     private var interpreter: Interpreter? = null
     private var isModelLoaded = false
+
+    // TFLite Interpreter is not thread-safe; serialise inference calls.
+    private val inferenceLock = Any()
+
+    // Reusable inference buffers. Every access is serialised by [inferenceLock],
+    // so these can be reused across calls, avoiding ~800 KB of direct-memory
+    // allocation plus a TensorBuffer and IntArray on every extraction (significant
+    // GC pressure during batch/onboarding inference).
+    private var inputBuffer: ByteBuffer? = null
+    private var pixelBuffer: IntArray? = null
+    private var outputBuffer: TensorBuffer? = null
     
     companion object {
         private const val TAG = "EmbeddingExtractor"
@@ -64,7 +75,7 @@ class EmbeddingExtractor @Inject constructor(
             val modelBuffer = loadModelFile()
             interpreter = Interpreter(modelBuffer)
             isModelLoaded = true
-            Log.d(TAG, "TFLite model loaded successfully")
+            if (me.avinas.vanderwaals.BuildConfig.DEBUG) Log.d(TAG, "TFLite model loaded successfully")
             true
         } catch (e: FileNotFoundException) {
             Log.e(TAG, "Model file not found: $MODEL_PATH. Please download the model.", e)
@@ -121,9 +132,6 @@ class EmbeddingExtractor @Inject constructor(
             
             // Create input buffer with float32 values
             // Model expects 224x224x3 floats = 602,112 bytes (4 bytes per float)
-            val inputBuffer = ByteBuffer.allocateDirect(4 * INPUT_SIZE * INPUT_SIZE * 3)
-            inputBuffer.order(java.nio.ByteOrder.nativeOrder())
-            
             // CRITICAL: Must match Python curation script preprocessing!
             // Python curation uses timm's create_transform() which does:
             //   1. ToTensor(): [0-255] -> [0.0-1.0]
@@ -131,30 +139,48 @@ class EmbeddingExtractor @Inject constructor(
             // The TFLite model (converted from timm PyTorch via ONNX) expects this same input.
             val pixels = IntArray(INPUT_SIZE * INPUT_SIZE)
             resizedBitmap.getPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
-            
-            for (pixel in pixels) {
-                // Extract RGB, scale to [0-1], then apply ImageNet normalization
-                val r = ((pixel shr 16) and 0xFF) / 255f
-                val g = ((pixel shr 8) and 0xFF) / 255f
-                val b = (pixel and 0xFF) / 255f
-                
-                inputBuffer.putFloat((r - IMAGENET_MEAN[0]) / IMAGENET_STD[0])
-                inputBuffer.putFloat((g - IMAGENET_MEAN[1]) / IMAGENET_STD[1])
-                inputBuffer.putFloat((b - IMAGENET_MEAN[2]) / IMAGENET_STD[2])
+
+            // TFLite Interpreter is not thread-safe — guard the run() call.
+            // The reusable buffers are accessed only inside this lock, so reuse
+            // is safe and avoids ~800 KB of direct-memory allocation per call.
+            val embedding: FloatArray
+            synchronized(inferenceLock) {
+                val input = inputBuffer ?: ByteBuffer
+                    .allocateDirect(4 * INPUT_SIZE * INPUT_SIZE * 3)
+                    .also {
+                        it.order(java.nio.ByteOrder.nativeOrder())
+                        inputBuffer = it
+                    }
+                input.rewind()
+
+                val px = pixelBuffer ?: IntArray(INPUT_SIZE * INPUT_SIZE).also { pixelBuffer = it }
+                resizedBitmap.getPixels(px, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
+
+                for (pixel in px) {
+                    // Extract RGB, scale to [0-1], then apply ImageNet normalization
+                    val r = ((pixel shr 16) and 0xFF) / 255f
+                    val g = ((pixel shr 8) and 0xFF) / 255f
+                    val b = (pixel and 0xFF) / 255f
+
+                    input.putFloat((r - IMAGENET_MEAN[0]) / IMAGENET_STD[0])
+                    input.putFloat((g - IMAGENET_MEAN[1]) / IMAGENET_STD[1])
+                    input.putFloat((b - IMAGENET_MEAN[2]) / IMAGENET_STD[2])
+                }
+                input.rewind()
+
+                if (me.avinas.vanderwaals.BuildConfig.DEBUG) Log.d(
+                    TAG,
+                    "Input buffer size: ${input.remaining()} bytes (expected: ${4 * INPUT_SIZE * INPUT_SIZE * 3})"
+                )
+
+                val output = outputBuffer ?: TensorBuffer.createFixedSize(
+                    intArrayOf(1, EMBEDDING_SIZE),
+                    org.tensorflow.lite.DataType.FLOAT32
+                ).also { outputBuffer = it }
+
+                interpreter?.run(input, output.buffer.rewind())
+                embedding = output.floatArray
             }
-            
-            inputBuffer.rewind()
-            
-            Log.d(TAG, "Input buffer size: ${inputBuffer.remaining()} bytes (expected: ${4 * INPUT_SIZE * INPUT_SIZE * 3})")
-            
-            val outputBuffer = TensorBuffer.createFixedSize(
-                intArrayOf(1, EMBEDDING_SIZE),
-                org.tensorflow.lite.DataType.FLOAT32
-            )
-            
-            interpreter?.run(inputBuffer, outputBuffer.buffer.rewind())
-            
-            val embedding = outputBuffer.floatArray
             
             // CRITICAL FIX: Normalize embedding to unit length (same as Python curation script)
             // Python script does: embedding = embedding / np.linalg.norm(embedding)
@@ -176,7 +202,7 @@ class EmbeddingExtractor @Inject constructor(
             }
             
             val duration = System.currentTimeMillis() - startTime
-            Log.d(TAG, "Embedding extracted in ${duration}ms (normalized magnitude: 1.0)")
+            if (me.avinas.vanderwaals.BuildConfig.DEBUG) Log.d(TAG, "Embedding extracted in ${duration}ms (normalized magnitude: 1.0)")
             
             embedding
             
@@ -215,6 +241,6 @@ class EmbeddingExtractor @Inject constructor(
         interpreter?.close()
         interpreter = null
         isModelLoaded = false
-        Log.d(TAG, "TFLite model resources released")
+        if (me.avinas.vanderwaals.BuildConfig.DEBUG) Log.d(TAG, "TFLite model resources released")
     }
 }

@@ -80,8 +80,8 @@ class WallpaperChangeService : Service() {
     
     companion object {
         private const val TAG = "WallpaperChangeService"
-        private const val CHANNEL_ID = "wallpaper_change_channel"
-        private const val NOTIFICATION_ID = 1001
+        private const val CHANNEL_ID = me.avinas.vanderwaals.core.NotificationConstants.CHANNEL_WALLPAPER_CHANGE
+        private const val NOTIFICATION_ID = me.avinas.vanderwaals.core.NotificationConstants.NOTIFICATION_ID_CHANGE
         private const val WAKELOCK_TIMEOUT_MS = 60_000L // 1 minute max
         
         // Intent action
@@ -312,7 +312,7 @@ class WallpaperChangeService : Service() {
             
             // SmartCrop to screen dimensions
             val screenSize = me.avinas.vanderwaals.core.getDeviceScreenSize(applicationContext)
-            processedBitmap = me.avinas.vanderwaals.core.SmartCrop.smartCropBitmap(
+            processedBitmap = me.avinas.vanderwaals.core.SmartCrop.smartCropBitmapAsync(
                 source = bitmap,
                 targetWidth = screenSize.width,
                 targetHeight = screenSize.height,

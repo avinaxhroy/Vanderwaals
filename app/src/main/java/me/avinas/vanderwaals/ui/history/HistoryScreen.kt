@@ -44,6 +44,20 @@ import com.skydoves.landscapist.glide.GlideImage
 import me.avinas.vanderwaals.domain.usecase.FeedbackType
 import java.io.File
 import me.avinas.vanderwaals.ui.theme.*
+import me.avinas.vanderwaals.ui.theme.components.*
+import me.avinas.vanderwaals.ui.onboarding.*
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.style.TextAlign
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,152 +74,260 @@ fun HistoryScreen(
     
     val isDark = LocalThemeIsDark.current
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val metrics = rememberOnboardingLayoutMetrics()
 
     androidx.activity.compose.BackHandler {
         onNavigateBack()
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = if (isDark) BackgroundDark else BackgroundLight,
-        snackbarHost = { 
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-            ) 
-        },
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "History",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (isDark) TextPrimaryDark else TextPrimaryLight
-                    )
-                },
-                navigationIcon = {
-                    IconButton(
-                        onClick = onNavigateBack,
-                        modifier = Modifier.padding(start = 4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = if (isDark) TextPrimaryDark else TextPrimaryLight
+    Box(modifier = Modifier.fillMaxSize()) {
+        OnboardingBackdrop(isDark = isDark, modifier = Modifier.matchParentSize())
+        
+        Scaffold(
+            modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            containerColor = Color.Transparent,
+            snackbarHost = { 
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                ) 
+            },
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "History",
+                            fontFamily = PlayfairDisplayFamily,
+                            fontStyle = FontStyle.Italic,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 24.sp,
+                            color = getOnboardingTextPrimary(isDark)
                         )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (isDark) BackgroundDark else BackgroundLight,
-                    scrolledContainerColor = if (isDark) BackgroundDark else BackgroundLight,
-                    titleContentColor = if (isDark) TextPrimaryDark else TextPrimaryLight,
-                    navigationIconContentColor = if (isDark) TextPrimaryDark else TextPrimaryLight
-                ),
-                windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top),
-                scrollBehavior = scrollBehavior
-            )
-        }
-    ) { paddingValues ->
-        when (val state = uiState) {
-            is HistoryViewModel.HistoryUiState.Loading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = BrandPrimary)
-                }
+                    },
+                    navigationIcon = {
+                        IconButton(
+                            onClick = onNavigateBack,
+                            modifier = Modifier.padding(start = 4.dp).bounceClick()
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = getOnboardingTextPrimary(isDark)
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = if (isDark) Color(0xFF14120F).copy(alpha = 0.8f) else Color(0xFFF9F7F5).copy(alpha = 0.8f),
+                        titleContentColor = getOnboardingTextPrimary(isDark),
+                        navigationIconContentColor = getOnboardingTextPrimary(isDark)
+                    ),
+                    windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top),
+                    scrollBehavior = scrollBehavior
+                )
             }
-            is HistoryViewModel.HistoryUiState.Success -> {
-                val historyGroups = state.groups
-                if (historyGroups.isEmpty()) {
+        ) { paddingValues ->
+            when (val state = uiState) {
+                is HistoryViewModel.HistoryUiState.Loading -> {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(paddingValues),
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        Box(
+                            modifier = Modifier
+                                .shadow(
+                                    elevation = 4.dp,
+                                    shape = RoundedCornerShape(metrics.cardCornerRadius),
+                                    ambientColor = if (isDark) Color(0xFF3F3F46).copy(alpha = 0.12f) else Color(0x0A000000),
+                                    spotColor = Color.Transparent
+                                )
+                                .border(1.dp, getOnboardingCardBorder(isDark), RoundedCornerShape(metrics.cardCornerRadius))
+                                .clip(RoundedCornerShape(metrics.cardCornerRadius))
+                                .background(getOnboardingCardBackground(isDark))
+                                .padding(24.dp)
+                                .widthIn(max = 160.dp)
                         ) {
-                            Text(
-                                text = "No history yet",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isDark) TextPrimaryDark else TextPrimaryLight
-                            )
-                            Text(
-                                text = "Wallpapers you've used will appear here",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (isDark) TextSecondaryDark else TextSecondaryLight
-                            )
-                        }
-                    }
-                } else {
-                    LazyVerticalGrid(
-                        modifier = Modifier
-                            .fillMaxSize(),
-                        columns = GridCells.Adaptive(minSize = 340.dp),
-                        contentPadding = PaddingValues(
-                            top = paddingValues.calculateTopPadding() + 8.dp,
-                            bottom = paddingValues.calculateBottomPadding() + 32.dp,
-                            start = 16.dp,
-                            end = 16.dp
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(24.dp)
-                    ) {
-                        historyGroups.forEach { (dateHeader, items) ->
-                            item(key = "header_$dateHeader", span = { GridItemSpan(maxLineSpan) }) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                CircularProgressIndicator(
+                                    color = BrandPrimary,
+                                    strokeWidth = 3.dp,
+                                    modifier = Modifier.size(36.dp)
+                                )
                                 Text(
-                                    text = dateHeader.uppercase(),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isDark) TextSecondaryDark else TextSecondaryLight,
-                                    letterSpacing = 1.2.sp,
-                                    modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
+                                    text = "Loading...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = getOnboardingTextSecondary(isDark)
                                 )
                             }
-                            
-                            items.forEach { historyItem ->
-                                item(key = "item_${historyItem.id}") {
-                                    PremiumSettingsCard(
-                                        isDark = isDark,
-                                        contentPadding = PaddingValues(0.dp)
+                        }
+                    }
+                }
+                is HistoryViewModel.HistoryUiState.Success -> {
+                    val historyGroups = state.groups
+                    if (historyGroups.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(paddingValues)
+                                .padding(horizontal = 24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .widthIn(max = 360.dp)
+                                    .shadow(
+                                        elevation = 4.dp,
+                                        shape = RoundedCornerShape(metrics.cardCornerRadius),
+                                        ambientColor = if (isDark) Color(0xFF3F3F46).copy(alpha = 0.12f) else Color(0x0A000000),
+                                        spotColor = Color.Transparent
+                                    )
+                                    .border(1.dp, getOnboardingCardBorder(isDark), RoundedCornerShape(metrics.cardCornerRadius))
+                                    .clip(RoundedCornerShape(metrics.cardCornerRadius))
+                                    .background(getOnboardingCardBackground(isDark))
+                                    .padding(32.dp)
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(80.dp)
+                                            .background(
+                                                brush = Brush.radialGradient(
+                                                    colors = listOf(
+                                                        BrandPrimary.copy(alpha = 0.25f),
+                                                        BrandPrimary.copy(alpha = 0.05f),
+                                                        Color.Transparent
+                                                    )
+                                                ),
+                                                shape = CircleShape
+                                            )
+                                            .border(
+                                                width = 1.dp,
+                                                color = BrandPrimary.copy(alpha = 0.15f),
+                                                shape = CircleShape
+                                            ),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        HistoryItemRow(
-                                            item = historyItem,
-                                            isDark = isDark,
-                                            onThumbnailClick = { selectedWallpaper = historyItem },
-                                            onLikeClick = {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                viewModel.updateFeedback(historyItem.id, FeedbackType.LIKE) {
-                                                    viewModel.showSnackbar(snackbarHostState, "Preferences updated")
-                                                }
-                                            },
-                                            onDislikeClick = {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                viewModel.updateFeedback(historyItem.id, FeedbackType.DISLIKE) {
-                                                    viewModel.showSnackbar(snackbarHostState, "Preferences updated")
-                                                }
-                                            },
-                                            onDownloadClick = {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                viewModel.downloadWallpaper(
-                                                    wallpaperId = historyItem.wallpaper.id,
-                                                    onSuccess = {
-                                                        viewModel.showSnackbar(snackbarHostState, "Saved to gallery")
+                                        Icon(
+                                            imageVector = Icons.Default.History,
+                                            contentDescription = null,
+                                            tint = BrandPrimary,
+                                            modifier = Modifier.size(36.dp)
+                                        )
+                                    }
+
+                                    Text(
+                                        text = "Your Gallery is Waiting",
+                                        fontFamily = PlayfairDisplayFamily,
+                                        fontStyle = FontStyle.Italic,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 24.sp,
+                                        textAlign = TextAlign.Center,
+                                        color = getOnboardingTextPrimary(isDark)
+                                    )
+
+                                    Text(
+                                        text = "Wallpapers you've selected and applied will be preserved here in your personal collection.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        textAlign = TextAlign.Center,
+                                        color = getOnboardingTextSecondary(isDark),
+                                        lineHeight = 20.sp
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(paddingValues),
+                            contentAlignment = Alignment.TopCenter
+                        ) {
+                            LazyVerticalGrid(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .widthIn(max = metrics.maxContentWidth),
+                                columns = GridCells.Adaptive(minSize = 340.dp),
+                                contentPadding = PaddingValues(
+                                    top = 8.dp,
+                                    bottom = 32.dp,
+                                    start = metrics.horizontalPadding,
+                                    end = metrics.horizontalPadding
+                                ),
+                                horizontalArrangement = Arrangement.spacedBy(metrics.cardSpacing),
+                                verticalArrangement = Arrangement.spacedBy(metrics.cardSpacing)
+                            ) {
+                                historyGroups.forEach { (dateHeader, items) ->
+                                    item(key = "header_$dateHeader", span = { GridItemSpan(maxLineSpan) }) {
+                                        Text(
+                                            text = dateHeader.uppercase(),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = getOnboardingTextSecondary(isDark),
+                                            letterSpacing = 1.2.sp,
+                                            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp, start = 8.dp)
+                                        )
+                                    }
+                                    
+                                    items.forEach { historyItem ->
+                                        item(key = "item_${historyItem.id}") {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .shadow(
+                                                        elevation = 4.dp,
+                                                        shape = RoundedCornerShape(metrics.cardCornerRadius),
+                                                        ambientColor = if (isDark) Color(0xFF3F3F46).copy(alpha = 0.12f) else Color(0x0A000000),
+                                                        spotColor = Color.Transparent
+                                                    )
+                                                    .border(1.dp, getOnboardingCardBorder(isDark), RoundedCornerShape(metrics.cardCornerRadius))
+                                                    .clip(RoundedCornerShape(metrics.cardCornerRadius))
+                                                    .background(getOnboardingCardBackground(isDark))
+                                                    .bounceClick { selectedWallpaper = historyItem }
+                                            ) {
+                                                HistoryItemRow(
+                                                    item = historyItem,
+                                                    isDark = isDark,
+                                                    onThumbnailClick = { selectedWallpaper = historyItem },
+                                                    onLikeClick = {
+                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        viewModel.updateFeedback(historyItem.id, FeedbackType.LIKE) {
+                                                            viewModel.showSnackbar(snackbarHostState, "Preferences updated")
+                                                        }
                                                     },
-                                                    onError = { error ->
-                                                        viewModel.showSnackbar(snackbarHostState, error)
+                                                    onDislikeClick = {
+                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        viewModel.updateFeedback(historyItem.id, FeedbackType.DISLIKE) {
+                                                            viewModel.showSnackbar(snackbarHostState, "Preferences updated")
+                                                        }
+                                                    },
+                                                    onDownloadClick = {
+                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        viewModel.downloadWallpaper(
+                                                            wallpaperId = historyItem.wallpaper.id,
+                                                            onSuccess = {
+                                                                viewModel.showSnackbar(snackbarHostState, "Saved to gallery")
+                                                            },
+                                                            onError = { error ->
+                                                                viewModel.showSnackbar(snackbarHostState, error)
+                                                            }
+                                                        )
                                                     }
                                                 )
                                             }
-                                        )
+                                        }
                                     }
                                 }
                             }
@@ -216,8 +338,10 @@ fun HistoryScreen(
         }
     }
 
-    // Full-screen preview dialog
+    // Full-screen Lock Screen simulation preview dialog
     selectedWallpaper?.let { item ->
+        var showOverlay by remember { mutableStateOf(true) }
+        
         Dialog(
             onDismissRequest = { selectedWallpaper = null },
             properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -226,7 +350,10 @@ fun HistoryScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black)
-                    .clickable { selectedWallpaper = null }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { showOverlay = !showOverlay }
             ) {
                 val imageModel = if (File(item.localCroppedPath).exists()) {
                     File(item.localCroppedPath)
@@ -237,24 +364,194 @@ fun HistoryScreen(
                 GlideImage(
                     imageModel = { imageModel },
                     imageOptions = ImageOptions(
-                        contentScale = ContentScale.Fit,
+                        contentScale = ContentScale.Crop,
                         alignment = Alignment.Center
                     ),
                     modifier = Modifier.fillMaxSize()
                 )
                 
-                IconButton(
-                    onClick = { selectedWallpaper = null },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp)
-                        .windowInsetsPadding(WindowInsets.safeDrawing)
+                // Simulated Lock Screen content overlay
+                AnimatedVisibility(
+                    visible = showOverlay,
+                    enter = fadeIn(animationSpec = tween(300)) + expandVertically(animationSpec = tween(300)),
+                    exit = fadeOut(animationSpec = tween(300)) + shrinkVertically(animationSpec = tween(300)),
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Close",
-                        tint = Color.White
-                    )
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // Padlock, Clock, and Date
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .statusBarsPadding()
+                                .padding(top = 56.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.85f),
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "9:41",
+                                style = MaterialTheme.typography.displayLarge.copy(
+                                    fontSize = 84.sp,
+                                    fontWeight = FontWeight.Light,
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    letterSpacing = (-1).sp
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Thursday, May 22",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    letterSpacing = 0.5.sp
+                                )
+                            )
+                        }
+
+                        // Floating action control bar at the bottom
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .navigationBarsPadding()
+                                .padding(bottom = 32.dp)
+                                .padding(horizontal = 24.dp)
+                        ) {
+                            GlassCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .widthIn(max = 320.dp),
+                                shape = RoundedCornerShape(32.dp),
+                                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Like Button
+                                    AnimatedFeedbackButton(
+                                        isActive = item.feedback == FeedbackType.LIKE,
+                                        activeIcon = Icons.Filled.Favorite,
+                                        inactiveIcon = Icons.Outlined.FavoriteBorder,
+                                        activeColor = Color(0xFFF43F5E),
+                                        isDark = true,
+                                        label = null,
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            viewModel.updateFeedback(item.id, FeedbackType.LIKE) {
+                                                viewModel.showSnackbar(snackbarHostState, "Preferences updated")
+                                            }
+                                        }
+                                    )
+
+                                    // Dislike Button
+                                    AnimatedFeedbackButton(
+                                        isActive = item.feedback == FeedbackType.DISLIKE,
+                                        activeIcon = Icons.Filled.ThumbDown,
+                                        inactiveIcon = Icons.Outlined.ThumbDown,
+                                        activeColor = BrandPrimary,
+                                        isDark = true,
+                                        label = null,
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            viewModel.updateFeedback(item.id, FeedbackType.DISLIKE) {
+                                                viewModel.showSnackbar(snackbarHostState, "Preferences updated")
+                                            }
+                                        }
+                                    )
+
+                                    // Download Button
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.1f), CircleShape)
+                                            .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                                            .bounceClick {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                viewModel.downloadWallpaper(
+                                                    wallpaperId = item.wallpaper.id,
+                                                    onSuccess = {
+                                                        viewModel.showSnackbar(snackbarHostState, "Saved to gallery")
+                                                    },
+                                                    onError = { error ->
+                                                        viewModel.showSnackbar(snackbarHostState, error)
+                                                    }
+                                                )
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Download,
+                                            contentDescription = "Download",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Simulated iOS Home Indicator at the very bottom
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 8.dp)
+                                .size(width = 140.dp, height = 5.dp)
+                                .background(Color.White.copy(alpha = 0.5f), RoundedCornerShape(2.5.dp))
+                        )
+                    }
+                }
+
+                // Close and toggle buttons at the top of the dialog
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Close button (Left)
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                            .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
+                            .bounceClick { selectedWallpaper = null },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // Visibility Toggle button (Right)
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                            .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
+                            .bounceClick { showOverlay = !showOverlay },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (showOverlay) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = "Toggle Overlay",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }
@@ -295,49 +592,61 @@ private fun HistoryItemRow(
                 alignment = Alignment.Center
             ),
             modifier = Modifier
-                .width(72.dp)
-                .height(110.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .clickable(onClick = onThumbnailClick)
+                .width(80.dp)
+                .height(120.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+                .bounceClick(onClick = onThumbnailClick)
         )
 
         Column(
             modifier = Modifier
                 .weight(1f)
-                .height(110.dp)
+                .height(120.dp)
                 .padding(vertical = 4.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = item.wallpaper.category.ifEmpty { "Wallpaper" }.replaceFirstChar { it.uppercase() },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = if (isDark) TextPrimaryDark else TextPrimaryLight,
+                    color = getOnboardingTextPrimary(isDark),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = item.appliedAt,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (isDark) TextSecondaryDark else TextSecondaryLight,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Schedule,
+                        contentDescription = "Applied date",
+                        tint = getOnboardingTextSecondary(isDark).copy(alpha = 0.8f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = item.appliedAt,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = getOnboardingTextSecondary(isDark),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.Start),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.Start),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 AnimatedFeedbackButton(
                     isActive = item.feedback == FeedbackType.LIKE,
                     activeIcon = Icons.Filled.Favorite,
                     inactiveIcon = Icons.Outlined.FavoriteBorder,
-                    activeColor = Color(0xFFF43F5E), // Rose color
+                    activeColor = Color(0xFFF43F5E),
                     isDark = isDark,
                     label = null,
                     onClick = onLikeClick
@@ -355,15 +664,27 @@ private fun HistoryItemRow(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                IconButton(
-                    onClick = onDownloadClick,
-                    modifier = Modifier.size(36.dp)
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(
+                            getOnboardingCardBackground(isDark),
+                            CircleShape
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = getOnboardingCardBorder(isDark),
+                            shape = CircleShape
+                        )
+                        .bounceClick(onClick = onDownloadClick),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Download,
                         contentDescription = "Download",
-                        tint = if (isDark) TextPrimaryDark else TextPrimaryLight,
-                        modifier = Modifier.size(22.dp)
+                        tint = getOnboardingTextPrimary(isDark),
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -382,94 +703,74 @@ private fun AnimatedFeedbackButton(
     onClick: () -> Unit
 ) {
     val containerColor by animateColorAsState(
-        targetValue = if (isActive) activeColor.copy(alpha = 0.15f) else Color.Transparent,
+        targetValue = if (isActive) activeColor.copy(alpha = 0.2f) else Color.Transparent,
         animationSpec = tween(200),
         label = "container_color"
     )
     
     val contentColor by animateColorAsState(
-        targetValue = if (isActive) activeColor else (if (isDark) TextSecondaryDark else TextSecondaryLight),
+        targetValue = if (isActive) activeColor else getOnboardingTextSecondary(isDark),
         animationSpec = tween(200),
         label = "content_color"
     )
 
     if (label != null) {
-        Button(
-            onClick = onClick,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = containerColor,
-                contentColor = contentColor
-            ),
-            shape = RoundedCornerShape(18.dp),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-            modifier = Modifier.height(36.dp)
+        Row(
+            modifier = Modifier
+                .height(36.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(
+                    if (isActive) activeColor.copy(alpha = 0.2f) else getOnboardingCardBackground(isDark),
+                    RoundedCornerShape(18.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = if (isActive) activeColor.copy(alpha = 0.4f) else getOnboardingCardBorder(isDark),
+                    shape = RoundedCornerShape(18.dp)
+                )
+                .bounceClick(onClick = onClick)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
             Icon(
                 imageVector = if (isActive) activeIcon else inactiveIcon,
                 contentDescription = label,
+                tint = contentColor,
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                color = contentColor
             )
         }
     } else {
-        IconButton(
-            onClick = onClick,
+        Box(
             modifier = Modifier
                 .size(40.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(containerColor)
+                .clip(CircleShape)
+                .background(
+                    if (isActive) activeColor.copy(alpha = 0.2f) else getOnboardingCardBackground(isDark),
+                    CircleShape
+                )
+                .border(
+                    width = 1.dp,
+                    color = if (isActive) activeColor.copy(alpha = 0.4f) else getOnboardingCardBorder(isDark),
+                    shape = CircleShape
+                )
+                .bounceClick(onClick = onClick),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = if (isActive) activeIcon else inactiveIcon,
                 contentDescription = null,
                 tint = contentColor,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
     }
 }
 
-@Composable
-private fun PremiumSettingsCard(
-    isDark: Boolean,
-    modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(0.dp),
-    onClick: (() -> Unit)? = null,
-    content: @Composable () -> Unit
-) {
-    val containerColor = if (isDark) SurfaceOverlayDark else SurfaceLight
-    val borderColor = if (isDark) SurfaceHighlightDark else SurfaceHighlightLight
-    
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .border(1.dp, borderColor, RoundedCornerShape(16.dp))
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
-        colors = CardDefaults.cardColors(
-            containerColor = containerColor
-        ),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Box(modifier = Modifier.padding(contentPadding)) {
-            content()
-        }
-    }
-}
-
-@Composable
-private fun SettingsDivider(
-    isDark: Boolean,
-    modifier: Modifier = Modifier
-) {
-    HorizontalDivider(
-        modifier = modifier.padding(start = 16.dp, end = 16.dp),
-        color = if (isDark) SurfaceHighlightDark else SurfaceHighlightLight,
-        thickness = 1.dp
-    )
-}

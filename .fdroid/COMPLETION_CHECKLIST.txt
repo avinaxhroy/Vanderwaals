@@ -180,10 +180,9 @@ ANDROID REQUIREMENTS
   ✅ Compile SDK: 36
   ✅ Java Version: 17
 
-PERMISSIONS (ALL 10 JUSTIFIED)
+PERMISSIONS (ALL 9 JUSTIFIED)
   ✅ INTERNET - Download wallpapers
   ✅ SET_WALLPAPER - Apply to device
-  ✅ READ_MEDIA_IMAGES - Gallery access
   ✅ ACCESS_NETWORK_STATE - Connectivity check
   ✅ POST_NOTIFICATIONS - Alerts
   ✅ FOREGROUND_SERVICE - Background tasks

@@ -78,15 +78,23 @@ object CompositionAnalyzer {
     fun analyzeBitmap(bitmap: Bitmap): CompositionAnalysis {
         val width = bitmap.width
         val height = bitmap.height
-        
+
+        // Bulk-read every pixel once and share the buffer across all 9 region
+        // analyses. This replaces per-pixel Bitmap.getPixel JNI calls (the
+        // dominant cost of this method) with array indexing.
+        val pixels = IntArray(width * height)
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+
         // Divide into 3x3 grid (rule of thirds)
         val gridWidth = width / 3
         val gridHeight = height / 3
-        
+
         val regions = Array(3) { row ->
             Array(3) { col ->
                 analyzeRegion(
-                    bitmap,
+                    pixels,
+                    width,
+                    height,
                     col * gridWidth,
                     row * gridHeight,
                     gridWidth,
@@ -221,19 +229,27 @@ object CompositionAnalyzer {
         val edgeCount: Int
     )
     
-    private fun analyzeRegion(bitmap: Bitmap, startX: Int, startY: Int, width: Int, height: Int): RegionStats {
+    private fun analyzeRegion(
+        pixels: IntArray,
+        bitmapWidth: Int,
+        bitmapHeight: Int,
+        startX: Int,
+        startY: Int,
+        width: Int,
+        height: Int
+    ): RegionStats {
         var totalBrightness = 0f
         var pixelCount = 0
         val brightnesses = mutableListOf<Float>()
         var edgeCount = 0
         
-        val endX = (startX + width).coerceAtMost(bitmap.width)
-        val endY = (startY + height).coerceAtMost(bitmap.height)
+        val endX = (startX + width).coerceAtMost(bitmapWidth)
+        val endY = (startY + height).coerceAtMost(bitmapHeight)
         
         // Sample every 4th pixel for performance
         for (y in startY until endY step 4) {
             for (x in startX until endX step 4) {
-                val pixel = bitmap.getPixel(x, y)
+                val pixel = pixels[y * bitmapWidth + x]
                 val r = (pixel shr 16) and 0xFF
                 val g = (pixel shr 8) and 0xFF
                 val b = pixel and 0xFF
@@ -245,7 +261,7 @@ object CompositionAnalyzer {
                 
                 // Simple edge detection (brightness gradient)
                 if (x < endX - 4 && y < endY - 4) {
-                    val nextPixel = bitmap.getPixel(x + 4, y)
+                    val nextPixel = pixels[y * bitmapWidth + (x + 4)]
                     val nextR = (nextPixel shr 16) and 0xFF
                     val nextBrightness = (nextR + ((nextPixel shr 8) and 0xFF) + (nextPixel and 0xFF)) / (3f * 255f)
                     

@@ -1,15 +1,12 @@
 package me.avinas.vanderwaals.feature.wallpaper.presentation
 
-import android.Manifest
 import android.animation.ObjectAnimator
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.view.animation.AccelerateInterpolator
@@ -17,7 +14,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,10 +30,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.BatteryFull
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -59,13 +52,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.animation.doOnEnd
-import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import me.avinas.vanderwaals.ui.theme.VanderwaalsTheme
+import me.avinas.vanderwaals.ui.theme.LocalNavigationBarPadding
+import androidx.compose.foundation.layout.navigationBars
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import me.avinas.vanderwaals.data.dao.UserPreferenceDao
@@ -92,26 +87,7 @@ class MainActivity : ComponentActivity() {
         const val TAG = "MainActivity"
     }
 
-    private var showPermissionDeniedDialog by mutableStateOf(false)
-    private var showPermissionPermanentlyDeniedDialog by mutableStateOf(false)
-    private var showPermissionExplanationDialog by mutableStateOf(false)
     private var showAlarmPermissionDialog by mutableStateOf(false)
-    
-    private val storagePermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            Log.d(TAG, "Storage permission granted")
-            // After storage permission, check alarm permission
-            checkAlarmPermission()
-        } else {
-            if (shouldShowRequestPermissionRationale(getStoragePermission())) {
-                showPermissionDeniedDialog = true
-            } else {
-                showPermissionPermanentlyDeniedDialog = true
-            }
-        }
-    }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         // Check system dark mode to set initial system bars correctly
@@ -202,7 +178,7 @@ class MainActivity : ComponentActivity() {
             }
             
             LaunchedEffect(Unit) {
-                requestPermissionsIfNeeded()
+                checkAlarmPermission()
             }
             
             VanderwaalsTheme(
@@ -211,13 +187,15 @@ class MainActivity : ComponentActivity() {
             ) {
                 // Wrap with LiquidGlassProvider to enable Smart Launcher-style liquid glass effects
                 me.avinas.vanderwaals.ui.theme.glass.LiquidGlassProvider {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .fillMaxSize(),
-                            // .systemBarsPadding(), // REMOVED: Allow content to extend behind system bars for edge-to-edge
-                        color = MaterialTheme.colorScheme.background
-                    ) {
+                    val navBarPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    CompositionLocalProvider(LocalNavigationBarPadding provides navBarPadding) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .fillMaxSize(),
+                                // .systemBarsPadding(), // REMOVED: Allow content to extend behind system bars for edge-to-edge
+                            color = MaterialTheme.colorScheme.background
+                        ) {
                         // Show loading screen while app is initializing
                         if (!isInitialized) {
                             LoadingScreen(
@@ -235,36 +213,6 @@ class MainActivity : ComponentActivity() {
                                     VanderwaalsNavGraph(onboardingComplete = onboardingComplete!!)
                                 }
                             }
-                        }
-                        
-                        if (showPermissionDeniedDialog) {
-                            PermissionRationaleDialog(
-                                onDismiss = { showPermissionDeniedDialog = false },
-                                onRetry = {
-                                    showPermissionDeniedDialog = false
-                                    storagePermissionLauncher.launch(getStoragePermission())
-                                }
-                            )
-                        }
-                        
-                        if (showPermissionPermanentlyDeniedDialog) {
-                            PermissionPermanentlyDeniedDialog(
-                                onDismiss = { showPermissionPermanentlyDeniedDialog = false },
-                                onOpenSettings = {
-                                    showPermissionPermanentlyDeniedDialog = false
-                                    openAppSettings()
-                                }
-                            )
-                        }
-                        
-                        if (showPermissionExplanationDialog) {
-                            PermissionExplanationDialog(
-                                onDismiss = { showPermissionExplanationDialog = false },
-                                onContinue = {
-                                    showPermissionExplanationDialog = false
-                                    storagePermissionLauncher.launch(getStoragePermission())
-                                }
-                            )
                         }
                         
                         if (showAlarmPermissionDialog) {
@@ -291,24 +239,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-        }
-    }
-    
-    private fun requestPermissionsIfNeeded() {
-        val permission = getStoragePermission()
-        when {
-            ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED -> {
-                Log.d(TAG, "Storage permission already granted")
-                // Check alarm permission after storage
-                checkAlarmPermission()
-            }
-            shouldShowRequestPermissionRationale(permission) -> {
-                // User has previously denied, show rationale
-                showPermissionExplanationDialog = true
-            }
-            else -> {
-                // First time asking, show beautiful explanation first
-                showPermissionExplanationDialog = true
             }
         }
     }
@@ -337,95 +267,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    
-    private fun getStoragePermission(): String {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_IMAGES
-        } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        }
-    }
-    
-    private fun openAppSettings() {
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = Uri.fromParts("package", packageName, null)
-        }
-        startActivity(intent)
-    }
-}
-
-@Composable
-private fun PermissionExplanationDialog(
-    onDismiss: () -> Unit,
-    onContinue: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = {
-            Icon(
-                imageVector = androidx.compose.material.icons.Icons.Default.PhotoLibrary,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = androidx.compose.ui.Modifier.size(48.dp)
-            )
-        },
-        title = { 
-            Text(
-                "Access Your Photos",
-                style = MaterialTheme.typography.headlineSmall,
-                textAlign = TextAlign.Center
-            ) 
-        },
-        text = { 
-            androidx.compose.foundation.layout.Column(
-                horizontalAlignment = androidx.compose.ui.Alignment.Start,
-                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    "Vanderwaals needs permission to access your photos to:",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
-                )
-                
-                PermissionReasonItem(
-                    icon = androidx.compose.material.icons.Icons.Default.Wallpaper,
-                    text = "Display beautiful wallpapers from curated collections"
-                )
-                
-                PermissionReasonItem(
-                    icon = androidx.compose.material.icons.Icons.Default.Download,
-                    text = "Download and cache wallpapers for offline access"
-                )
-                
-                PermissionReasonItem(
-                    icon = androidx.compose.material.icons.Icons.Default.Sync,
-                    text = "Automatically change your wallpapers at your chosen frequency"
-                )
-                
-                androidx.compose.foundation.layout.Spacer(modifier = androidx.compose.ui.Modifier.height(8.dp))
-                
-                Text(
-                    "Your privacy is important. Vanderwaals only accesses images needed for wallpapers and never shares your data.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                )
-            }
-        },
-        confirmButton = {
-            androidx.compose.material3.Button(
-                onClick = onContinue,
-                modifier = androidx.compose.ui.Modifier.fillMaxWidth(0.5f)
-            ) {
-                Text("Continue")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Not Now")
-            }
-        }
-    )
 }
 
 @Composable
@@ -448,54 +289,6 @@ private fun PermissionReasonItem(
             style = MaterialTheme.typography.bodyMedium
         )
     }
-}
-
-@Composable
-private fun PermissionRationaleDialog(
-    onDismiss: () -> Unit,
-    onRetry: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Storage Permission Required") },
-        text = { 
-            Text("Vanderwaals needs access to your photos to load wallpapers. This permission is required for the app to function properly.")
-        },
-        confirmButton = {
-            TextButton(onClick = onRetry) {
-                Text("Grant Permission")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
-private fun PermissionPermanentlyDeniedDialog(
-    onDismiss: () -> Unit,
-    onOpenSettings: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Permission Required") },
-        text = { 
-            Text("Storage permission is required for Vanderwaals to function. Please grant the permission in app settings.")
-        },
-        confirmButton = {
-            TextButton(onClick = onOpenSettings) {
-                Text("Open Settings")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
 }
 
 @Composable

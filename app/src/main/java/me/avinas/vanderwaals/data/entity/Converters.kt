@@ -214,4 +214,45 @@ class Converters(private val gson: Gson) {
             null
         }
     }
+
+    /**
+     * Converts a Map<String, Float> to a JSON string for storage in Room.
+     *
+     * Used for storing mood/style affinity maps in [UserPreferences].
+     *
+     * @param value Map of tag -> affinity score, can be null
+     * @return JSON string representation, or "{}" for null input
+     */
+    @TypeConverter
+    fun fromStringFloatMap(value: Map<String, Float>?): String {
+        return if (value == null) {
+            "{}"
+        } else {
+            gson.toJson(value)
+        }
+    }
+
+    /**
+     * Converts a JSON string back to a Map<String, Float>.
+     *
+     * Handles edge cases:
+     * - Null input → empty map
+     * - Empty string → empty map
+     * - Invalid JSON → empty map (graceful degradation)
+     *
+     * @param value JSON string from database
+     * @return Map of tag -> affinity score, never null (returns empty map on error)
+     */
+    @TypeConverter
+    fun toStringFloatMap(value: String?): Map<String, Float> {
+        if (value.isNullOrEmpty() || value == "{}") {
+            return emptyMap()
+        }
+        return try {
+            val type = object : TypeToken<Map<String, Float>>() {}.type
+            gson.fromJson(value, type) ?: emptyMap()
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
 }

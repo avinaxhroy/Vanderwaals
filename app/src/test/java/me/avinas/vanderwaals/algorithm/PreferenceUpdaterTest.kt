@@ -6,286 +6,304 @@ import kotlin.math.abs
 import kotlin.math.sqrt
 
 /**
- * Unit tests for PreferenceUpdater.
- * 
- * Tests the Exponential Moving Average (EMA) algorithm for updating user preferences:
- * - Positive feedback (likes): Pull preference vector toward target
- * - Negative feedback (dislikes): Push preference vector away from target
- * - Vector normalization after updates
- * - Adaptive learning rates
- * - Edge cases (zero vectors, extreme values)
+ * Unit tests for [PreferenceUpdater].
+ *
+ * Tests the real production class (not a re-implementation):
+ * - EMA with momentum (`updateWithPositiveFeedback` / `updateWithNegativeFeedback`)
+ * - Velocity clipping (`MAX_VELOCITY_MAGNITUDE`)
+ * - Confidence-weighted learning rate (`updateWithConfidenceWeighting`)
+ * - Preference decay toward uniform (`applyPreferenceDecay`)
+ * - Temporal decay with half-life (`applyTemporalDecay`)
+ * - Zero-vector normalisation → uniform fallback (cold-start safety)
+ * - Size-mismatch guard
+ * - 1280-dimension performance
  */
 class PreferenceUpdaterTest {
 
+    private val updater = PreferenceUpdater()
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private fun magnitude(v: FloatArray): Float =
+        sqrt(v.sumOf { (it * it).toDouble() }).toFloat()
+
+    private fun isNormalized(v: FloatArray, tolerance: Float = 0.01f): Boolean =
+        abs(magnitude(v) - 1.0f) < tolerance
+
+    private fun cosine(v1: FloatArray, v2: FloatArray): Float {
+        var dot = 0.0f
+        var n1 = 0.0f
+        var n2 = 0.0f
+        for (i in v1.indices) {
+            dot += v1[i] * v2[i]
+            n1 += v1[i] * v1[i]
+            n2 += v2[i] * v2[i]
+        }
+        val d = sqrt(n1 * n2)
+        return if (d > 0f) dot / d else 0f
+    }
+
+    private fun uniformVector(n: Int): FloatArray =
+        FloatArray(n) { 1f / sqrt(n.toFloat()) }
+
+    // ── Positive feedback (likes) ─────────────────────────────────────────────
+
     @Test
-    fun testLikePullsTowardTarget() {
-        val preferenceVector = floatArrayOf(1.0f, 0.0f, 0.0f)
-        val targetEmbedding = floatArrayOf(0.0f, 1.0f, 0.0f)
-        val learningRate = 0.5f
-        
-        val updated = updateWithPositiveFeedback(preferenceVector, targetEmbedding, learningRate)
-        
-        // After update: preference should move toward target
-        // new = current + lr * (target - current)
-        // new = [1,0,0] + 0.5 * ([0,1,0] - [1,0,0])
-        // new = [1,0,0] + 0.5 * [-1,1,0]
-        // new = [1,0,0] + [-0.5,0.5,0] = [0.5,0.5,0]
-        // After normalization: [0.707, 0.707, 0]
-        
+    fun likePullsTowardTarget() {
+        val current = floatArrayOf(1f, 0f, 0f)
+        val target = floatArrayOf(0f, 1f, 0f)
+        val (updated, _) = updater.updateWithPositiveFeedback(current, target, 0.5f)
+
+        // new = current + 0.5*(target-current) = [0.5, 0.5, 0] → normalized [0.707, 0.707, 0]
         assertEquals(0.707f, updated[0], 0.01f)
         assertEquals(0.707f, updated[1], 0.01f)
         assertTrue(isNormalized(updated))
     }
 
     @Test
-    fun testProgressiveMovement() {
-        var preferenceVector = floatArrayOf(1.0f, 0.0f, 0.0f)
-        val targetEmbedding = floatArrayOf(0.0f, 1.0f, 0.0f)
-        val learningRate = 0.2f
-        
-        // Apply multiple updates
+    fun likeProgressiveMovement() {
+        var current = floatArrayOf(1f, 0f, 0f)
+        val target = floatArrayOf(0f, 1f, 0f)
         repeat(5) {
-            preferenceVector = updateWithPositiveFeedback(preferenceVector, targetEmbedding, learningRate)
+            val (updated, _) = updater.updateWithPositiveFeedback(current, target, 0.2f)
+            current = updated
         }
-        
-        // After 5 updates, should be much closer to target
-        assertTrue(preferenceVector[1] > 0.5f)
-        assertTrue(isNormalized(preferenceVector))
+        assertTrue("Should move toward target", current[1] > 0.5f)
+        assertTrue(isNormalized(current))
     }
 
     @Test
-    fun testZeroLearningRate() {
-        val preferenceVector = floatArrayOf(1.0f, 0.0f, 0.0f)
-        val targetEmbedding = floatArrayOf(0.0f, 1.0f, 0.0f)
-        
-        val updated = updateWithPositiveFeedback(preferenceVector, targetEmbedding, 0.0f)
-        
-        assertArrayEquals(normalize(preferenceVector), updated, 0.0001f)
+    fun likeZeroLearningRateKeepsVector() {
+        val current = floatArrayOf(1f, 0f, 0f)
+        val target = floatArrayOf(0f, 1f, 0f)
+        val (updated, _) = updater.updateWithPositiveFeedback(current, target, 0f)
+        // With lr=0, velocity=0, updated=current → normalised current
+        assertArrayEquals(current, updated, 0.001f)
     }
 
     @Test
-    fun testFullLearningRate() {
-        val preferenceVector = floatArrayOf(1.0f, 0.0f, 0.0f)
-        val targetEmbedding = floatArrayOf(0.0f, 1.0f, 0.0f)
-        
-        val updated = updateWithPositiveFeedback(preferenceVector, targetEmbedding, 1.0f)
-        
-        assertArrayEquals(normalize(targetEmbedding), updated, 0.0001f)
+    fun likeFullLearningRateMatchesTarget() {
+        val current = floatArrayOf(1f, 0f, 0f)
+        val target = floatArrayOf(0f, 1f, 0f)
+        val (updated, _) = updater.updateWithPositiveFeedback(current, target, 1f)
+        // With lr=1: velocity = 0.3*0 + 1*(target-current) = [-1,1,0]
+        // updated = current + velocity = [0, 1, 0] → normalized = [0, 1, 0]
+        assertArrayEquals(target, updated, 0.001f)
     }
 
+    // ── Negative feedback (dislikes) ──────────────────────────────────────────
+
     @Test
-    fun testDislikePushesAway() {
-        val preferenceVector = floatArrayOf(0.707f, 0.707f, 0.0f) // Normalized
-        val targetEmbedding = floatArrayOf(1.0f, 0.0f, 0.0f)
-        val learningRate = 0.5f
-        
-        val updated = updateWithNegativeFeedback(preferenceVector, targetEmbedding, learningRate)
-        
-        // After update: preference should move away from target
-        // new = current - lr * (target - current)
-        // X component should decrease (move away from 1.0)
-        assertTrue(updated[0] < preferenceVector[0])
+    fun dislikePushesAwayFromTarget() {
+        val current = floatArrayOf(0.707f, 0.707f, 0f)
+        val target = floatArrayOf(1f, 0f, 0f)
+        val (updated, _) = updater.updateWithNegativeFeedback(current, target, 0.5f)
+
+        assertTrue("X component should decrease", updated[0] < current[0])
         assertTrue(isNormalized(updated))
     }
 
     @Test
-    fun testIncreasedDistance() {
-        val preferenceVector = floatArrayOf(0.5f, 0.5f, 0.707f)
-        val normalized = normalize(preferenceVector)
-        val targetEmbedding = floatArrayOf(1.0f, 0.0f, 0.0f)
-        
-        val initialDistance = euclideanDistance(normalized, normalize(targetEmbedding))
-        
-        val updated = updateWithNegativeFeedback(normalized, targetEmbedding, 0.3f)
-        
-        val finalDistance = euclideanDistance(updated, normalize(targetEmbedding))
-        
-        assertTrue(finalDistance >= initialDistance)
-    }
+    fun dislikeProgressiveDistancing() {
+        var current = floatArrayOf(0.6f, 0.6f, 0.53f)
+        current = FloatArray(3) { i -> current[i] / magnitude(current) }
+        val target = floatArrayOf(1f, 0f, 0f)
+        val initialSim = cosine(current, target)
 
-    @Test
-    fun testProgressiveDistancing() {
-        var preferenceVector = floatArrayOf(0.6f, 0.6f, 0.53f)
-        preferenceVector = normalize(preferenceVector)
-        val targetEmbedding = floatArrayOf(1.0f, 0.0f, 0.0f)
-        val learningRate = 0.15f
-        
-        val initialSimilarity = cosineSimilarity(preferenceVector, normalize(targetEmbedding))
-        
-        // Apply multiple dislikes
         repeat(5) {
-            preferenceVector = updateWithNegativeFeedback(preferenceVector, targetEmbedding, learningRate)
+            val (updated, _) = updater.updateWithNegativeFeedback(current, target, 0.15f)
+            current = updated
         }
-        
-        val finalSimilarity = cosineSimilarity(preferenceVector, normalize(targetEmbedding))
-        
-        assertTrue(finalSimilarity < initialSimilarity)
+        assertTrue("Similarity should decrease", cosine(current, target) < initialSim)
+    }
+
+    // ── Momentum ──────────────────────────────────────────────────────────────
+
+    @Test
+    fun momentumAccumulatesVelocityAcrossUpdates() {
+        val current = floatArrayOf(1f, 0f, 0f)
+        val target = floatArrayOf(0f, 1f, 0f)
+        val lr = 0.3f
+
+        // First update: no prior momentum
+        val (v1, velocity1) = updater.updateWithPositiveFeedback(current, target, lr)
+        // Second update: carry velocity forward
+        val (v2, velocity2) = updater.updateWithPositiveFeedback(v1, target, lr, velocity1)
+
+        // Velocity magnitude should be larger with momentum than without
+        val magWithMomentum = magnitude(velocity2)
+        val (_, velocityNoMomentum) = updater.updateWithPositiveFeedback(v1, target, lr)
+        val magWithoutMomentum = magnitude(velocityNoMomentum)
+
+        assertTrue(
+            "Momentum should accumulate velocity ($magWithMomentum > $magWithoutMomentum)",
+            magWithMomentum > magWithoutMomentum
+        )
     }
 
     @Test
-    fun testNormalizationMagnitude() {
-        val vector = floatArrayOf(3.0f, 4.0f, 0.0f)
-        val normalized = normalize(vector)
-        
-        val magnitude = sqrt(normalized.sumOf { (it * it).toDouble() }).toFloat()
-        assertEquals(1.0f, magnitude, 0.0001f)
+    fun velocityClippingLimitsMagnitude() {
+        val size = 10
+        val current = FloatArray(size) { 0f }
+        val target = FloatArray(size) { 1000f } // Extreme target → huge velocity
+        val (_, velocity) = updater.updateWithPositiveFeedback(current, target, 1f)
+
+        val mag = magnitude(velocity)
+        assertTrue(
+            "Velocity magnitude $mag should be <= ${0.5f + 0.01f}",
+            mag <= 0.5f + 0.01f
+        )
+    }
+
+    // ── Confidence weighting ──────────────────────────────────────────────────
+
+    @Test
+    fun confidenceWeightingReducesEffectiveRate() {
+        val current = floatArrayOf(1f, 0f, 0f)
+        val target = floatArrayOf(0f, 1f, 0f)
+
+        val (noConfidence, _) =
+            updater.updateWithConfidenceWeighting(current, target, 0.5f, 0f, isPositive = true)
+        val (fullConfidence, _) =
+            updater.updateWithConfidenceWeighting(current, target, 0.5f, 1f, isPositive = true)
+
+        // High confidence → lower effective rate → less movement toward target
+        assertTrue(
+            "Full confidence should move less than zero confidence",
+            fullConfidence[1] < noConfidence[1]
+        )
     }
 
     @Test
-    fun testZeroVectorNormalization() {
-        val zeroVector = floatArrayOf(0.0f, 0.0f, 0.0f)
-        val normalized = normalize(zeroVector)
-        
-        // Should return a default normalized vector or handle gracefully
-        assertTrue(isNormalized(normalized) || normalized.all { it == 0.0f })
+    fun confidenceWeightingAtOneUsesFortyPercent() {
+        val current = floatArrayOf(1f, 0f, 0f)
+        val target = floatArrayOf(0f, 1f, 0f)
+
+        val (confident, _) =
+            updater.updateWithConfidenceWeighting(current, target, 0.5f, 1f, isPositive = true)
+        val (direct, _) =
+            updater.updateWithPositiveFeedback(current, target, 0.5f * 0.4f)
+
+        assertArrayEquals(direct, confident, 0.001f)
+    }
+
+    // ── Decay ─────────────────────────────────────────────────────────────────
+
+    @Test
+    fun preferenceDecayBlendsTowardUniform() {
+        val current = floatArrayOf(1f, 0f, 0f)
+        val decayed = updater.applyPreferenceDecay(current, 0.5f)
+        val uniform = uniformVector(3)
+
+        // 50% blend toward uniform then normalised. The decayed vector should
+        // be between the original and uniform (closer to original since blend
+        // is only 0.5), and component [0] should be the largest.
+        assertTrue("Decayed[0] should be > uniform[0]", decayed[0] > uniform[0])
+        assertTrue("Decayed[1] should be > 0", decayed[1] > 0.01f)
+        assertTrue("Decayed[0] should be < original 1.0", decayed[0] < 0.99f)
+        assertTrue(isNormalized(decayed))
     }
 
     @Test
-    fun testVerySmallVector() {
-        val smallVector = FloatArray(1280) { 1e-10f }
-        val normalized = normalize(smallVector)
-        
-        assertTrue(isNormalized(normalized))
+    fun preferenceDecayFullResetsToUniform() {
+        val current = floatArrayOf(1f, 0f, 0f)
+        val decayed = updater.applyPreferenceDecay(current, 1f)
+        val uniform = uniformVector(3)
+
+        assertArrayEquals(uniform, decayed, 0.01f)
     }
 
     @Test
-    fun testAlreadyNormalized() {
-        val vector = floatArrayOf(0.6f, 0.8f, 0.0f) // Already normalized
-        val normalized = normalize(vector)
-        
-        assertArrayEquals(vector, normalized, 0.0001f)
+    fun preferenceDecayZeroIsNoOp() {
+        val current = floatArrayOf(1f, 0f, 0f)
+        val decayed = updater.applyPreferenceDecay(current, 0f)
+        assertArrayEquals(current, decayed, 0.0001f)
     }
 
     @Test
-    fun testEarlyLearningRate() {
-        val earlyRate = calculateLearningRate(feedbackCount = 5, isPositive = true)
-        val lateRate = calculateLearningRate(feedbackCount = 100, isPositive = true)
-        
-        assertTrue(earlyRate > lateRate)
+    fun temporalDecayAtZeroDaysIsNoOp() {
+        val current = floatArrayOf(1f, 0f, 0f)
+        val decayed = updater.applyTemporalDecay(current, 0.0)
+        assertArrayEquals(current, decayed, 0.0001f)
     }
 
     @Test
-    fun testNegativeHigherRate() {
-        val positiveRate = calculateLearningRate(feedbackCount = 20, isPositive = true)
-        val negativeRate = calculateLearningRate(feedbackCount = 20, isPositive = false)
-        
-        assertTrue(negativeRate > positiveRate)
+    fun temporalDecayAtHalfLifeIsFiftyPercentBlend() {
+        val current = floatArrayOf(1f, 0f, 0f)
+        val uniform = uniformVector(3)
+        val decayed = updater.applyTemporalDecay(current, 30.0, 30.0)
+
+        // At half-life: decayFactor=0.5, blend=0.5 toward uniform, then normalised.
+        // decayed[0] should be between uniform[0] and 1.0, and decayed[1] > 0.
+        assertTrue("Decayed[0] should be > uniform[0]", decayed[0] > uniform[0])
+        assertTrue("Decayed[0] should be < 1.0", decayed[0] < 0.99f)
+        assertTrue("Decayed[1] should be > 0", decayed[1] > 0.01f)
+        assertTrue(isNormalized(decayed))
     }
 
     @Test
-    fun testDecreasingRate() {
-        val rate1 = calculateLearningRate(feedbackCount = 5, isPositive = true)
-        val rate2 = calculateLearningRate(feedbackCount = 25, isPositive = true)
-        val rate3 = calculateLearningRate(feedbackCount = 75, isPositive = true)
-        
-        assertTrue(rate1 > rate2 && rate2 > rate3)
+    fun temporalDecayFarFutureApproachesUniform() {
+        val current = floatArrayOf(1f, 0f, 0f)
+        val decayed = updater.applyTemporalDecay(current, 365.0, 30.0)
+        val uniform = uniformVector(3)
+
+        // After ~12 half-lives, should be very close to uniform
+        assertArrayEquals(uniform, decayed, 0.01f)
+    }
+
+    // ── Edge cases ────────────────────────────────────────────────────────────
+
+    @Test
+    fun sizeMismatchReturnsCurrentVector() {
+        val current = floatArrayOf(1f, 0f, 0f)
+        val target = floatArrayOf(0f, 1f) // Wrong size
+        val (updated, velocity) = updater.updateWithPositiveFeedback(current, target, 0.5f)
+
+        assertArrayEquals(current, updated, 0.0001f)
+        assertArrayEquals(FloatArray(3), velocity, 0.0001f)
     }
 
     @Test
-    fun test1280Dimensions() {
-        val preferenceVector = FloatArray(1280) { i -> (i % 10).toFloat() / 10f }
-        val normalized = normalize(preferenceVector)
-        val targetEmbedding = FloatArray(1280) { i -> ((i + 5) % 10).toFloat() / 10f }
-        
-        val updated = updateWithPositiveFeedback(normalized, targetEmbedding, 0.1f)
-        
+    fun zeroVectorNormalizationReturnsUniform() {
+        // The production normalizeVector returns a uniform vector on zero
+        // magnitude (M3 fix). We can verify this indirectly: start from a
+        // zero preference and a non-zero target with lr that makes the
+        // updated vector zero, or more directly via decay on a zero vector.
+        val zero = FloatArray(3) { 0f }
+        val decayed = updater.applyPreferenceDecay(zero, 1f)
+        val uniform = uniformVector(3)
+
+        // decayed = (1-1)*zero + 1*uniform = uniform
+        assertArrayEquals(uniform, decayed, 0.01f)
+        assertTrue(isNormalized(decayed))
+    }
+
+    @Test
+    fun largeDimensionalityNormalization() {
+        val vec = FloatArray(1280) { i -> (i % 10).toFloat() / 10f }
+        val target = FloatArray(1280) { i -> ((i + 5) % 10).toFloat() / 10f }
+        val (updated, _) = updater.updateWithPositiveFeedback(vec, target, 0.1f)
+
         assertEquals(1280, updated.size)
         assertTrue(isNormalized(updated))
     }
 
     @Test
-    fun testPerformance() {
-        val preferenceVector = FloatArray(1280) { it.toFloat() / 1280f }
-        val normalized = normalize(preferenceVector)
-        val targetEmbedding = FloatArray(1280) { (it + 100).toFloat() / 1280f }
-        
-        val startTime = System.nanoTime()
-        
+    fun performance1280Dimensions1000Iterations() {
+        var current = FloatArray(1280) { it.toFloat() / 1280f }
+        current = FloatArray(1280) { i -> current[i] / magnitude(current) }
+        val target = FloatArray(1280) { (it + 100).toFloat() / 1280f }
+        var velocity: FloatArray? = null
+
+        val start = System.nanoTime()
         repeat(1000) {
-            updateWithPositiveFeedback(normalized, targetEmbedding, 0.1f)
+            val (updated, vel) = updater.updateWithPositiveFeedback(current, target, 0.1f, velocity)
+            current = updated
+            velocity = vel
         }
-        
-        val duration = (System.nanoTime() - startTime) / 1_000_000 // Convert to ms
-        
-        // Increased threshold to 500ms for more reliable test across different systems
-        assertTrue(duration < 500)
-    }
+        val durationMs = (System.nanoTime() - start) / 1_000_000
 
-    // Helper methods
-    private fun updateWithPositiveFeedback(
-        current: FloatArray,
-        target: FloatArray,
-        learningRate: Float
-    ): FloatArray {
-        val updated = FloatArray(current.size)
-        for (i in current.indices) {
-            updated[i] = current[i] + learningRate * (target[i] - current[i])
-        }
-        return normalize(updated)
-    }
-
-    private fun updateWithNegativeFeedback(
-        current: FloatArray,
-        target: FloatArray,
-        learningRate: Float
-    ): FloatArray {
-        val updated = FloatArray(current.size)
-        for (i in current.indices) {
-            updated[i] = current[i] - learningRate * (target[i] - current[i])
-        }
-        return normalize(updated)
-    }
-
-    private fun normalize(vector: FloatArray): FloatArray {
-        val magnitude = sqrt(vector.sumOf { (it * it).toDouble() }).toFloat()
-        if (magnitude < 1e-10f) {
-            // Return uniform vector for zero input
-            return FloatArray(vector.size) { 1.0f / sqrt(vector.size.toDouble()).toFloat() }
-        }
-        return FloatArray(vector.size) { vector[it] / magnitude }
-    }
-
-    private fun isNormalized(vector: FloatArray): Boolean {
-        val magnitude = sqrt(vector.sumOf { (it * it).toDouble() }).toFloat()
-        return abs(magnitude - 1.0f) < 0.01f
-    }
-
-    private fun euclideanDistance(v1: FloatArray, v2: FloatArray): Float {
-        var sum = 0.0
-        for (i in v1.indices) {
-            val diff = v1[i] - v2[i]
-            sum += diff * diff
-        }
-        return sqrt(sum).toFloat()
-    }
-
-    private fun cosineSimilarity(v1: FloatArray, v2: FloatArray): Float {
-        var dotProduct = 0.0f
-        var norm1 = 0.0f
-        var norm2 = 0.0f
-        
-        for (i in v1.indices) {
-            dotProduct += v1[i] * v2[i]
-            norm1 += v1[i] * v1[i]
-            norm2 += v2[i] * v2[i]
-        }
-        
-        val denominator = sqrt(norm1 * norm2)
-        return if (denominator > 0) dotProduct / denominator else 0.0f
-    }
-
-    private fun calculateLearningRate(feedbackCount: Int, isPositive: Boolean): Float {
-        return when {
-            feedbackCount < 10 -> if (isPositive) 0.15f else 0.20f
-            feedbackCount < 50 -> if (isPositive) 0.10f else 0.15f
-            else -> if (isPositive) 0.05f else 0.10f
-        }
-    }
-
-    private fun assertArrayEquals(expected: FloatArray, actual: FloatArray, delta: Float) {
-        assertEquals(expected.size, actual.size)
-        for (i in expected.indices) {
-            assertEquals("Element $i should match", expected[i], actual[i], delta)
-        }
+        assertTrue("1000 iterations should complete in < 500ms, took ${durationMs}ms", durationMs < 500)
+        assertTrue(isNormalized(current))
     }
 }

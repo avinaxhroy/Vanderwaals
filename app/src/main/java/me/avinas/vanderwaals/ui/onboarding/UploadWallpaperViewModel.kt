@@ -170,6 +170,7 @@ class UploadWallpaperViewModel @Inject constructor(
                 val enabledSources = mutableListOf<String>()
                 if (settings.githubEnabled) enabledSources.add("github")
                 if (settings.bingEnabled) enabledSources.add("bing")
+                if (settings.vanderwaalsCollectionEnabled) enabledSources.add("vanderwaals")
                 
                 // IMPROVED: Get actual wallpapers from category first
                 // Then use their embeddings as the "user preference"
@@ -316,6 +317,7 @@ class UploadWallpaperViewModel @Inject constructor(
             val enabledSources = mutableListOf<String>()
             if (settings.githubEnabled) enabledSources.add("github")
             if (settings.bingEnabled) enabledSources.add("bing")
+            if (settings.vanderwaalsCollectionEnabled) enabledSources.add("vanderwaals")
             
             android.util.Log.d("UploadWallpaper", "Enabled sources: $enabledSources")
             

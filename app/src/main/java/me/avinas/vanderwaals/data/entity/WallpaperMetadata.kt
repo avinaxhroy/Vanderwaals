@@ -6,38 +6,10 @@ import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
 
 /**
- * Room entity representing wallpaper metadata from GitHub and Bing sources.
- * 
- * Stores pre-computed data for all wallpapers in the content catalog:
- * - URL and thumbnail for downloading
- * - Pre-computed embedding vector (1280 floats) for similarity matching
- * - Color palette extracted during curation
- * - Category and brightness for contextual filtering
- * - Source attribution for credits
- * 
- * This data is synced weekly from the GitHub manifest.json file that contains
- * metadata for 6000+ wallpapers from curated sources.
- * 
- * **Database Indexes:**
- * - `category`: Enables fast filtering by wallpaper category
- * - `source`: Allows efficient querying by content source
- * - `brightness`: Supports brightness-based filtering
- * - `category + brightness`: Composite index for combined category and brightness filters
- * - `source + brightness`: Composite index for combined source and brightness filters
- * 
- * **Type Converters:**
- * - Uses [Converters] to serialize `colors` (List<String>) and `embedding` (FloatArray)
- * 
- * @property id Unique identifier for the wallpaper
- * @property url Direct download URL (GitHub raw or jsDelivr CDN)
- * @property thumbnailUrl URL for thumbnail preview
- * @property source Content source ("github" or "bing")
- * @property category Category from folder structure (e.g., "gruvbox", "nord", "nature")
- * @property colors List of hex color codes representing the color palette
- * @property brightness Brightness level (0-100)
- * @property embedding 1280-dimensional MobileNetV4 embedding vector
- * @property resolution Image resolution (e.g., "3840x2160")
- * @property attribution Source attribution and photographer credit
+ * Room entity for a wallpaper in the catalog.
+ *
+ * Stores the download URL, 1280-dim embedding vector, color palette, category,
+ * brightness, and source attribution. Synced weekly from manifest.json.
  */
 @Entity(
     tableName = "wallpaper_metadata",
@@ -64,7 +36,10 @@ data class WallpaperMetadata(
     val contrast: Int,
     val embedding: FloatArray,
     val resolution: String,
-    val attribution: String?
+    val attribution: String?,
+    val aestheticScore: Float = 0f,
+    val mood: List<String> = emptyList(),
+    val style: List<String> = emptyList()
 ) {
     /**
      * Override equals to properly compare FloatArray.
@@ -87,6 +62,9 @@ data class WallpaperMetadata(
         if (!embedding.contentEquals(other.embedding)) return false
         if (resolution != other.resolution) return false
         if (attribution != other.attribution) return false
+        if (aestheticScore != other.aestheticScore) return false
+        if (mood != other.mood) return false
+        if (style != other.style) return false
 
         return true
     }
@@ -105,8 +83,11 @@ data class WallpaperMetadata(
         result = 31 * result + brightness
         result = 31 * result + contrast
         result = 31 * result + embedding.contentHashCode()
-        result = 31 * result + resolution.hashCode()
-        result = 31 * result + (attribution?.hashCode() ?: 0)
+    result = 31 * result + resolution.hashCode()
+    result = 31 * result + (attribution?.hashCode() ?: 0)
+    result = 31 * result + aestheticScore.hashCode()
+    result = 31 * result + mood.hashCode()
+    result = 31 * result + style.hashCode()
         return result
     }
 }

@@ -5,43 +5,9 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Room entity tracking user preferences for specific colors.
- * 
- * This table stores aggregate feedback statistics for color hex codes,
- * enabling color-aware personalization when category information is missing.
- * 
- * **Usage:**
- * - Fallback personalization when wallpaper has blank/missing category
- * - Track which colors the user tends to like/dislike
- * - Boost wallpapers with similar color palettes during selection
- * - Enable personalization for uncategorized content
- * 
- * **Color Matching:**
- * - Uses RGB Euclidean distance for similarity calculation
- * - Compares against user's liked color palette
- * - Applied at ~10% weight in final ranking (lower than category boost)
- * 
- * **Color Score Calculation:**
- * ```
- * color_score = (likes - 2 × dislikes) / (likes + dislikes + 1)
- * 
- * Ranges from:
- * - +1.0: All likes, no dislikes (strong preference)
- * -  0.0: Neutral or no data
- * - -1.0: All dislikes, no likes (strong aversion)
- * ```
- * 
- * **Update Strategy:**
- * - Extract top 3 dominant colors from liked/disliked wallpapers
- * - Increment likes/dislikes for each color in the palette
- * - Increment views when wallpaper with this color is shown
- * - Update lastShown timestamp for temporal diversity
- * 
- * @property colorHex Hex color code (e.g., "#FF5733", "#3498DB") - Primary Key
- * @property likes Number of times user liked wallpapers containing this color
- * @property dislikes Number of times user disliked wallpapers containing this color
- * @property views Number of times wallpapers with this color were shown
- * @property lastShown Timestamp when color was last shown (milliseconds since epoch)
+ * Aggregate like/dislike/view counts per hex color.
+ * Fallback personalization signal when category data is missing.
+ * Score: (likes - 2*dislikes) / (likes + dislikes + 1), range [-1, +1].
  */
 @Entity(
     tableName = "color_preferences",

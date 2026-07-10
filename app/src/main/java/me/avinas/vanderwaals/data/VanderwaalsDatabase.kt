@@ -16,67 +16,8 @@ import me.avinas.vanderwaals.data.entity.WallpaperHistory
 import me.avinas.vanderwaals.data.entity.WallpaperMetadata
 
 /**
- * Room database for Vanderwaals wallpaper personalization system.
- * 
- * Extends Vanderwaals's database architecture with intelligent personalization tables:
- * - [WallpaperMetadata]: Pre-computed embeddings and metadata for 6000+ wallpapers
- * - [UserPreferences]: Learned aesthetic preferences with EMA algorithm
- * - [WallpaperHistory]: User interaction tracking for learning and history UI
- * - [DownloadQueueItem]: Priority-based download queue management
- * 
- * **Architecture:**
- * - Uses Room for reactive data access with Flow
- * - Custom TypeConverters for complex types (FloatArray, List<String>)
- * - Indexed columns for performance (category, brightness, priority)
- * - Auto-cleanup for history (100 entries) and queue (50 entries)
- * 
- * **Learning Algorithm:**
- * The database supports a complete personalization pipeline:
- * 1. Load wallpapers with embeddings from WallpaperMetadata
- * 2. Calculate similarity using UserPreferences.preferenceVector
- * 3. Populate DownloadQueueItem with top matches
- * 4. Track user interactions in WallpaperHistory
- * 5. Update preferences based on feedback (EMA algorithm)
- * 6. Re-rank queue with updated similarities
- * 
- * **Type Converters:**
- * - [Converters] handles List<String> and FloatArray serialization
- * - Provided via dependency injection for testability
- * 
- * **Database Migration:**
- * - Version 1: Initial schema with all tables
- * - Future versions: Add migrations in [MIGRATIONS] list
- * - Pre-launch: Use fallbackToDestructiveMigration() for development
- * 
- * **Usage:**
- * ```kotlin
- * @Module
- * @InstallIn(SingletonComponent::class)
- * object DatabaseModule {
- *     @Provides
- *     @Singleton
- *     fun provideDatabase(
- *         @ApplicationContext context: Context,
- *         converters: Converters
- *     ): VanderwaalsDatabase {
- *         return Room.databaseBuilder(
- *             context,
- *             VanderwaalsDatabase::class.java,
- *             VanderwaalsDatabase.DATABASE_NAME
- *         )
- *         .addTypeConverter(converters)
- *         .addMigrations(*VanderwaalsDatabase.MIGRATIONS)
- *         .fallbackToDestructiveMigration() // Remove for production
- *         .build()
- *     }
- * }
- * ```
- * 
- * @see WallpaperMetadata
- * @see UserPreferences
- * @see WallpaperHistory
- * @see DownloadQueueItem
- * @see Converters
+ * Room database holding wallpaper metadata, user preferences, history,
+ * download queue, feedback, and category/color preference tables.
  */
 @Database(
     entities = [
@@ -88,7 +29,7 @@ import me.avinas.vanderwaals.data.entity.WallpaperMetadata
         me.avinas.vanderwaals.data.entity.ColorPreference::class,
         me.avinas.vanderwaals.data.entity.CompositionPreference::class
     ],
-    version = 8,
+    version = 11,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -178,7 +119,7 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
         /**
          * Current database version.
          */
-        const val DATABASE_VERSION = 8
+        const val DATABASE_VERSION = 11
         
         /**
          * Migration from database version 1 to version 2.
@@ -429,10 +370,71 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
                 )
             }
         }
-        
+
+        /**
+         * Migration from database version 9 to version 10.
+         *
+         * Changes:
+         * - Removed the vdw_cached_wallpapers table and its indexes; the
+         *   Vanderwaals Collection on-demand source is no longer supported.
+         *
+         * Migration path: v9 (VDW cache present) → v10 (VDW cache dropped)
+         *
+         * For existing data:
+         * - The vdw_cached_wallpapers table is dropped (was only ever a TTL
+         *   cache for on-demand API responses; no user data is lost).
+         */
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP INDEX IF EXISTS index_vdw_cached_wallpapers_source")
+                db.execSQL("DROP INDEX IF EXISTS index_vdw_cached_wallpapers_category")
+                db.execSQL("DROP INDEX IF EXISTS index_vdw_cached_wallpapers_cachedAt")
+                db.execSQL("DROP TABLE IF EXISTS vdw_cached_wallpapers")
+            }
+        }
+
+        /**
+         * Migration from database version 10 to version 11.
+         *
+         * Changes:
+         * - Added `aestheticScore` (REAL), `mood` (TEXT JSON), `style` (TEXT JSON)
+         *   columns to `wallpaper_metadata` for Vanderwaals Collection semantic
+         *   metadata. These fields are absent for GitHub/Bing sources and default
+         *   to 0 / empty, enabling graceful degradation in the recommender.
+         * - Added `moodAffinity` and `styleAffinity` (TEXT JSON Map<String,
+         *   Float>) columns to `user_preferences` for learned mood/style
+         *   preference tracking.
+         *
+         * Migration path: v10 → v11 (semantic metadata + affinity learning)
+         *
+         * For existing data:
+         * - Existing wallpapers get aestheticScore=0, empty mood/style (neutral).
+         * - Existing user preferences get empty affinity maps (start learning
+         *   from subsequent feedback).
+         */
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE wallpaper_metadata ADD COLUMN aestheticScore REAL NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    "ALTER TABLE wallpaper_metadata ADD COLUMN mood TEXT NOT NULL DEFAULT '[]'"
+                )
+                db.execSQL(
+                    "ALTER TABLE wallpaper_metadata ADD COLUMN style TEXT NOT NULL DEFAULT '[]'"
+                )
+                db.execSQL(
+                    "ALTER TABLE user_preferences ADD COLUMN moodAffinity TEXT NOT NULL DEFAULT '{}'"
+                )
+                db.execSQL(
+                    "ALTER TABLE user_preferences ADD COLUMN styleAffinity TEXT NOT NULL DEFAULT '{}'"
+                )
+            }
+        }
+
         /**
          * Array of database migrations.
-         * 
+         *
          * Add new migrations here when incrementing version:
          * ```kotlin
          * val MIGRATIONS = arrayOf(
@@ -449,7 +451,9 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
             MIGRATION_4_5,
             MIGRATION_5_6,
             MIGRATION_6_7,
-            MIGRATION_7_8
+            MIGRATION_7_8,
+            MIGRATION_9_10,
+            MIGRATION_10_11
         )
         
         /**

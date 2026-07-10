@@ -17,8 +17,10 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import dagger.hilt.android.HiltAndroidApp
 import androidx.core.view.WindowCompat
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import me.avinas.vanderwaals.data.repository.ManifestRepository
@@ -35,6 +37,9 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
     lateinit var workerFactory: HiltWorkerFactory
     
     @Inject
+    lateinit var workManagerConfig: Configuration
+    
+    @Inject
     lateinit var manifestRepository: ManifestRepository
     
     @Inject
@@ -42,6 +47,17 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
     
     @Inject
     lateinit var settingsDataStore: me.avinas.vanderwaals.data.datastore.SettingsDataStore
+    
+    /**
+     * Application-scoped CoroutineScope with SupervisorJob.
+     * SupervisorJob ensures one child failure doesn't cancel siblings.
+     * CoroutineExceptionHandler prevents unhandled exceptions from crashing the app.
+     */
+    private val applicationScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, throwable ->
+            Log.e(TAG, "Uncaught coroutine exception in application scope", throwable)
+        }
+    )
     
     companion object {
         private const val TAG = "VanderwaalsApp"
@@ -71,6 +87,13 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
             override fun onActivityDestroyed(activity: Activity) {}
         })
         
+        // Install global uncaught exception handler to log crashes
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            Log.e(TAG, "FATAL: Uncaught exception on thread ${thread.name}", throwable)
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
+        
         initializeLogging()
         
         increaseCursorWindowSize()
@@ -82,23 +105,14 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
         // Trigger initial catalog sync if database is empty
         ensureInitialCatalogSync()
         
-        // CRITICAL: Initialize wallpaper auto-change scheduling
+        // Initialize wallpaper auto-change scheduling
         initializeWallpaperScheduling()
         
         Log.d(TAG, "Vanderwaals application initialized successfully")
     }
     
     override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder()
-            .setWorkerFactory(workerFactory)
-            .setMinimumLoggingLevel(if (BuildConfig.DEBUG) Log.DEBUG else Log.ERROR)
-            .setExecutor { command ->
-                Thread(command).apply {
-                    priority = Thread.NORM_PRIORITY - 1
-                    start()
-                }
-            }
-            .build()
+        get() = workManagerConfig
     
     private fun initializeLogging() {
         if (BuildConfig.DEBUG) {
@@ -128,7 +142,7 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         
         val wallpaperChannel = NotificationChannel(
-            "wallpaper_service_channel",
+            me.avinas.vanderwaals.core.NotificationConstants.CHANNEL_WALLPAPER_SERVICE,
             "Wallpaper Service",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
@@ -137,7 +151,7 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
         }
         
         val syncChannel = NotificationChannel(
-            "sync_channel",
+            me.avinas.vanderwaals.core.NotificationConstants.CHANNEL_SYNC,
             "Wallpaper Sync",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
@@ -145,7 +159,29 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
             setShowBadge(false)
         }
         
-        notificationManager.createNotificationChannels(listOf(wallpaperChannel, syncChannel))
+        // Channel for WallpaperMonitorService (unlock monitoring)
+        val monitorChannel = NotificationChannel(
+            me.avinas.vanderwaals.core.NotificationConstants.CHANNEL_WALLPAPER_MONITOR,
+            "Wallpaper Monitor",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Keeps app alive to detect device unlock"
+            setShowBadge(false)
+        }
+        
+        // Channel for WallpaperChangeService (scheduled changes)
+        val changeChannel = NotificationChannel(
+            me.avinas.vanderwaals.core.NotificationConstants.CHANNEL_WALLPAPER_CHANGE,
+            "Wallpaper Changes",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Shows when wallpaper is being changed"
+            setShowBadge(false)
+        }
+        
+        notificationManager.createNotificationChannels(
+            listOf(wallpaperChannel, syncChannel, monitorChannel, changeChannel)
+        )
         Log.d(TAG, "Notification channels created")
     }
     
@@ -189,7 +225,7 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
      * errors when the user triggers wallpaper changes before the weekly sync runs.
      */
     private fun ensureInitialCatalogSync() {
-        CoroutineScope(Dispatchers.IO).launch {
+        applicationScope.launch {
             try {
                 // Check if database has any wallpapers
                 val isDatabaseInitialized = manifestRepository.isDatabaseInitialized()
@@ -217,19 +253,12 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
     }
     
     /**
-     * CRITICAL: Initializes wallpaper auto-change scheduling based on user settings.
-     * 
-     * This ensures that when the app starts, wallpaper changes are scheduled
-     * according to the user's saved preferences (frequency, time, apply to screen).
-     * 
-     * Called on every app startup to restore schedules after device reboot or
-     * app restart.
-     * 
-     * IMPORTANT: Only restores schedules if onboarding is complete AND alarm permission
-     * is granted to prevent SecurityException on first launch.
+     * Initializes wallpaper auto-change scheduling based on user settings.
+     * Restores schedules on every app startup (after reboot or restart).
+     * Only runs if onboarding is complete and alarm permission is granted.
      */
     private fun initializeWallpaperScheduling() {
-        CoroutineScope(Dispatchers.IO).launch {
+        applicationScope.launch {
             try {
                 val settings = settingsDataStore.settings.first()
                 
@@ -248,6 +277,8 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
                     "6hours" -> me.avinas.vanderwaals.worker.ChangeInterval.SIX_HOURS
                     "12hours" -> me.avinas.vanderwaals.worker.ChangeInterval.TWELVE_HOURS
                     "daily" -> me.avinas.vanderwaals.worker.ChangeInterval.DAILY
+                    "3days" -> me.avinas.vanderwaals.worker.ChangeInterval.THREE_DAYS
+                    "7days" -> me.avinas.vanderwaals.worker.ChangeInterval.SEVEN_DAYS
                     "never" -> me.avinas.vanderwaals.worker.ChangeInterval.NEVER
                     else -> me.avinas.vanderwaals.worker.ChangeInterval.NEVER
                 }
@@ -264,6 +295,8 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
                     interval == me.avinas.vanderwaals.worker.ChangeInterval.THREE_HOURS ||
                     interval == me.avinas.vanderwaals.worker.ChangeInterval.SIX_HOURS ||
                     interval == me.avinas.vanderwaals.worker.ChangeInterval.TWELVE_HOURS ||
+                    interval == me.avinas.vanderwaals.worker.ChangeInterval.THREE_DAYS ||
+                    interval == me.avinas.vanderwaals.worker.ChangeInterval.SEVEN_DAYS ||
                     interval == me.avinas.vanderwaals.worker.ChangeInterval.FIFTEEN_MINUTES) {
                     
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {

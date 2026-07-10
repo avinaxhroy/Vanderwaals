@@ -7,82 +7,9 @@ import retrofit2.http.GET
 import retrofit2.http.Query
 
 /**
- * Retrofit API service for Bing Wallpaper Archive integration.
- * 
- * Provides endpoints for:
- * - Fetching the latest Bing daily wallpaper (UHD 3840×2160)
- * - Accessing the historical archive from npanuhin/Bing-Wallpaper-Archive
- * - Retrieving wallpaper metadata (title, caption, subtitle, description, copyright)
- * - Multi-region support (US, GB, CA, FR, DE, IT, ES, IN, CN, JP, BR, ROW)
- * 
- * **Strategy** (from VanderwaalsStrategy.md):
- * - Tier 2 content source: Professional photography
- * - Daily wallpaper via Bing API
- * - Historical archive: 10,000+ images per region
- * - UHD quality (3840×2160)
- * - Rich metadata and attribution
- * 
- * **Bing Daily Wallpaper API**:
- * - Base URL: https://www.bing.com/
- * - Endpoint: HPImageArchive.aspx
- * - Format: JSON
- * - Parameters: format=js, idx=[offset], n=[count], mkt=[market]
- * - Returns: URL, title, copyright, date
- * 
- * **Bing Wallpaper Archive** (npanuhin/Bing-Wallpaper-Archive):
- * - Base URL: https://bing.npanuhin.me/
- * - API Format: {country}/{language}.json (e.g., US/en.json, ROW/en.json)
- * - Year-based: {country}/{language}.{year}.json (e.g., US/en.2024.json)
- * - Supported regions: US/en, GB/en, CA/en, CA/fr, FR/fr, DE/de, IT/it, ES/es, IN/en, CN/zh, JP/ja, BR/pt, ROW/en
- * - Image URL: https://bing.npanuhin.me/{country}/{language}/{date}.jpg
- * - 10,000+ historical wallpapers per region
- * - Updated daily via automated workflow
- * 
- * **Available Countries and Languages**:
- * | Country | Language | Code   | Description                |
- * |---------|----------|--------|----------------------------|
- * | US      | English  | US/en  | United States             |
- * | GB      | English  | GB/en  | United Kingdom            |
- * | CA      | English  | CA/en  | Canada (English)          |
- * | CA      | French   | CA/fr  | Canada (French)           |
- * | FR      | French   | FR/fr  | France                    |
- * | DE      | German   | DE/de  | Germany                   |
- * | IT      | Italian  | IT/it  | Italy                     |
- * | ES      | Spanish  | ES/es  | Spain                     |
- * | IN      | English  | IN/en  | India                     |
- * | CN      | Chinese  | CN/zh  | China                     |
- * | JP      | Japanese | JP/ja  | Japan                     |
- * | BR      | Portuguese| BR/pt | Brazil                    |
- * | ROW     | English  | ROW/en | Rest of World             |
- * 
- * **Usage**:
- * ```kotlin
- * @Inject lateinit var bingService: BingArchiveService
- * 
- * // Fetch today's wallpaper from Bing API
- * val response = bingService.getDailyWallpaper()
- * if (response.isSuccessful) {
- *     val wallpaper = response.body()?.images?.firstOrNull()
- *     // Process wallpaper
- * }
- * 
- * // Fetch full archive for US region
- * val archiveResponse = bingService.getArchiveManifest("US", "en")
- * if (archiveResponse.isSuccessful) {
- *     val manifest = archiveResponse.body()  // Array of wallpaper entries
- *     // Process archive wallpapers
- * }
- * 
- * // Fetch specific year for bandwidth efficiency
- * val year2024 = bingService.getArchiveManifestYear("US", "en", 2024)
- * if (year2024.isSuccessful) {
- *     val wallpapers = year2024.body()  // Only 2024 wallpapers (100-500 KB)
- *     // Process year's wallpapers
- * }
- * ```
- * 
- * @see BingWallpaperDto
- * @see BingArchiveManifestDto
+ * Retrofit service for Bing daily wallpaper API and the
+ * npanuhin/Bing-Wallpaper-Archive historical archive.
+ * Supports per-region and per-year queries.
  */
 interface BingArchiveService {
     

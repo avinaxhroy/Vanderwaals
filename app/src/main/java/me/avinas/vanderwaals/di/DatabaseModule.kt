@@ -19,36 +19,8 @@ import me.avinas.vanderwaals.data.entity.Converters
 import javax.inject.Singleton
 
 /**
- * Hilt/Dagger module for providing database dependencies.
- * 
- * Provides singleton instances of:
- * - [VanderwaalsDatabase]: Main Room database
- * - [Converters]: Type converters for Room
- * - All DAOs: WallpaperMetadataDao, UserPreferenceDao, WallpaperHistoryDao, DownloadQueueDao
- * 
- * **Architecture:**
- * - Singleton scope ensures single database instance app-wide
- * - Converters are injected into database via Room's addTypeConverter
- * - All DAOs are provided from the database instance
- * 
- * **Usage:**
- * This module is automatically discovered by Hilt. Just inject dependencies:
- * ```kotlin
- * @HiltViewModel
- * class WallpaperViewModel @Inject constructor(
- *     private val metadataDao: WallpaperMetadataDao,
- *     private val preferencesDao: UserPreferenceDao
- * ) : ViewModel() {
- *     // Use DAOs
- * }
- * ```
- * 
- * **Development vs Production:**
- * - Development: Uses fallbackToDestructiveMigration() for quick iteration
- * - Production: Remove fallback, use proper migrations in VanderwaalsDatabase.MIGRATIONS
- * 
- * @see VanderwaalsDatabase
- * @see Converters
+ * Hilt module providing the Room database, type converters, and all DAOs
+ * as singletons.
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -110,6 +82,8 @@ object DatabaseModule {
         .enableMultiInstanceInvalidation()
         // CRITICAL: Set WAL journal mode with TRUNCATE for better multi-process sync
         .setJournalMode(androidx.room.RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+        // Prevent crash on database downgrade (e.g. user reverts to older app version)
+        .fallbackToDestructiveMigrationOnDowngrade()
         .build()
     }
     
@@ -250,4 +224,5 @@ object DatabaseModule {
     ): CompositionPreferenceDao {
         return database.compositionPreferenceDao
     }
-}
+    
+    }

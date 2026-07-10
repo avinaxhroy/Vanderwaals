@@ -1,63 +1,45 @@
 package me.avinas.vanderwaals.ui.analytics
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
-import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingFlat
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.skydoves.landscapist.glide.GlideImage
-import com.skydoves.landscapist.ImageOptions
 import androidx.compose.ui.layout.ContentScale
-import me.avinas.vanderwaals.ui.theme.components.LiquidGlassCard
-import me.avinas.vanderwaals.ui.theme.LiquidGlassBackground
+import me.avinas.vanderwaals.ui.theme.*
+import me.avinas.vanderwaals.ui.onboarding.*
 
-/**
- * Analytics Screen - Beautiful conversational dashboard
- * 
- * Shows personalization effectiveness, learning progress,
- * and actionable insights in a friendly, engaging way.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnalyticsScreen(
@@ -65,82 +47,67 @@ fun AnalyticsScreen(
     viewModel: AnalyticsViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val scrollState = rememberScrollState()
-    
-    // Track scroll state for dynamic TopAppBar background
-    val isScrolled by remember {
-        derivedStateOf { scrollState.value > 0 }
-    }
+    val isDark = LocalThemeIsDark.current
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
-    // Handle system back button
     androidx.activity.compose.BackHandler {
         onNavigateBack()
     }
 
-    LiquidGlassBackground {
+    val metrics = rememberOnboardingLayoutMetrics()
+
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        OnboardingBackdrop(
+            isDark = isDark,
+            modifier = Modifier.matchParentSize()
+        )
+
         Scaffold(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             containerColor = Color.Transparent,
-        topBar = {
-            Box {
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = isScrolled,
-                    enter = fadeIn(),
-                    exit = fadeOut()
-                ) {
-                    me.avinas.vanderwaals.ui.theme.components.GlassTopAppBarBackground(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(96.dp + WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding())
-                    )
-                }
-
+            topBar = {
                 TopAppBar(
-                    title = { 
+                    title = {
                         Text(
-                            "Personalization Insights",
-                            style = MaterialTheme.typography.headlineSmall,
+                            text = "Personalization Insights",
+                            fontFamily = PlayfairDisplayFamily,
+                            fontStyle = FontStyle.Italic,
                             fontWeight = FontWeight.Bold,
-                            color = if (me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current) Color.White else Color(0xFF111827)
+                            fontSize = 24.sp,
+                            color = getOnboardingTextPrimary(isDark)
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = onNavigateBack) {
+                        IconButton(
+                            onClick = onNavigateBack,
+                            modifier = Modifier.padding(start = 4.dp)
+                        ) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = if (me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current) Color.Gray else Color.Gray
+                                tint = getOnboardingTextPrimary(isDark)
                             )
                         }
                     },
-                    windowInsets = WindowInsets(0, 0, 0, 0),
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = if (isDark) Color(0xFF14120F).copy(alpha = 0.8f) else Color(0xFFF9F7F5).copy(alpha = 0.8f),
+                        titleContentColor = getOnboardingTextPrimary(isDark),
+                        navigationIconContentColor = getOnboardingTextPrimary(isDark)
                     ),
-                    modifier = Modifier
-                        .statusBarsPadding()
-                        .padding(vertical = 16.dp)
+                    windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top),
+                    scrollBehavior = scrollBehavior
                 )
             }
-        }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-        ) {
-            // Premium Background removed for Liquid Glass
-
-
-            
-            // Blur effect over blobs
-
-
+        ) { paddingValues ->
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
-                    .navigationBarsPadding()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.TopCenter
             ) {
                 when {
                     state.isLoading -> {
@@ -150,85 +117,184 @@ fun AnalyticsScreen(
                         ErrorView(error = state.error!!, onRetry = { viewModel.refresh() })
                     }
                     else -> {
-                        AnalyticsContent(
-                            state = state,
-                            scrollState = scrollState
-                        )
+                        AnalyticsContent(state = state, isDark = isDark, metrics = metrics)
                     }
                 }
             }
         }
-    }
     }
 }
 
 @Composable
 private fun AnalyticsContent(
     state: AnalyticsState,
-    scrollState: androidx.compose.foundation.ScrollState
+    isDark: Boolean,
+    metrics: OnboardingLayoutMetrics
 ) {
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .widthIn(max = metrics.maxContentWidth)
+            .padding(horizontal = metrics.horizontalPadding),
+        contentPadding = PaddingValues(
+            top = 8.dp,
+            bottom = 32.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(metrics.cardSpacing),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Hero Card - Personalization Status
-        PersonalizationStatusCard(state)
+        // Status Section
+        item {
+            AnalyticsSectionHeader(title = "STATUS", isDark = isDark)
+            PersonalizationStatusCard(state, isDark)
+        }
 
         // Smart Insights
         if (state.insights.isNotEmpty()) {
-            InsightsSection(state.insights)
+            item {
+                AnalyticsSectionHeader(title = "INSIGHTS", isDark = isDark)
+                InsightsSection(state.insights, isDark)
+            }
         }
 
-        // Learning Progress Card
+        // Learning Progress
         if (state.isPersonalizationWorking) {
-            LearningProgressCard(state)
+            item {
+                AnalyticsSectionHeader(title = "LEARNING PROGRESS", isDark = isDark)
+                LearningProgressCard(state, isDark)
+            }
         }
 
-        // Feedback Stats Card
+        // Feedback Stats
         if (state.totalFeedbackCount > 0) {
-            FeedbackStatsCard(state)
-        }
-
-        // Recommendation Impact Card - Show if we have any history data or personalization is active
-        if (state.totalWallpapersViewed > 0 || state.isPersonalizationWorking) {
-            RecommendationImpactCard(state)
+            item {
+                AnalyticsSectionHeader(title = "FEEDBACK", isDark = isDark)
+                FeedbackStatsCard(state, isDark)
+            }
         }
 
         // Category Breakdown
         if (state.topCategories.isNotEmpty()) {
-            CategoryBreakdownCard(state)
+            item {
+                AnalyticsSectionHeader(title = "TOP CATEGORIES", isDark = isDark)
+                CategoryBreakdownCard(state, isDark)
+            }
+        }
+
+        // Recommendation Impact
+        if (state.totalWallpapersViewed > 0 || state.isPersonalizationWorking) {
+            item {
+                AnalyticsSectionHeader(title = "IMPACT", isDark = isDark)
+                RecommendationImpactCard(state, isDark)
+            }
         }
 
         // History Stats
         if (state.totalWallpapersViewed > 0) {
-            HistoryStatsCard(
-                totalViewed = state.totalWallpapersViewed,
-                avgDuration = state.averageWallpaperDuration,
-                favoriteCategory = state.mostLikedCategory
-            )
+            item {
+                AnalyticsSectionHeader(title = "HISTORY", isDark = isDark)
+                HistoryStatsCard(
+                    totalViewed = state.totalWallpapersViewed,
+                    avgDuration = state.averageWallpaperDuration,
+                    favoriteCategory = state.mostLikedCategory,
+                    isDark = isDark
+                )
+            }
         }
 
-        // Advanced Metrics (for power users)
+        // Advanced Metrics
         if (state.totalFeedbackCount > 10) {
-            AdvancedMetricsCard(state)
+            item {
+                AnalyticsSectionHeader(title = "ADVANCED METRICS", isDark = isDark)
+                AdvancedMetricsCard(state, isDark)
+            }
         }
-
-        // Recommendations removed as per user request
-
-        // Bottom spacer
-        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
+// -------------------------------------------------------------------------
+// UI Components
+// -------------------------------------------------------------------------
+
 @Composable
-private fun PersonalizationStatusCard(state: AnalyticsState) {
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    val (statusColor, statusTitle, qualityLevel) = when {
-        !state.isPersonalizationActive -> Triple(if (isDark) Color.White else Color(0xFF111827), "Ready to Learn", 0)
-        !state.isPersonalizationWorking -> Triple(if (isDark) Color.White else Color(0xFF111827), "Learning...", 1)
+private fun AnalyticsSectionHeader(
+    title: String,
+    isDark: Boolean
+) {
+    Text(
+        text = title.uppercase(),
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Bold,
+        color = getOnboardingTextSecondary(isDark),
+        letterSpacing = 1.2.sp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, top = 12.dp, bottom = 4.dp),
+        textAlign = TextAlign.Start
+    )
+}
+
+@Composable
+private fun PremiumAnalyticsCard(
+    modifier: Modifier = Modifier,
+    isDark: Boolean,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val metrics = rememberOnboardingLayoutMetrics()
+    val cardModifier = modifier
+        .fillMaxWidth()
+        .shadow(
+            elevation = 4.dp,
+            shape = RoundedCornerShape(metrics.cardCornerRadius),
+            ambientColor = if (isDark) Color(0xFF3F3F46).copy(alpha = 0.12f) else Color(0x0A000000),
+            spotColor = Color.Transparent
+        )
+        .border(1.dp, getOnboardingCardBorder(isDark), RoundedCornerShape(metrics.cardCornerRadius))
+        .clip(RoundedCornerShape(metrics.cardCornerRadius))
+        .background(getOnboardingCardBackground(isDark))
+
+    Column(
+        modifier = cardModifier.padding(contentPadding),
+        content = content
+    )
+}
+
+@Composable
+private fun AnalyticsIconBox(
+    icon: ImageVector,
+    isDark: Boolean,
+    accentColor: Color = BrandPrimary
+) {
+    val metrics = rememberOnboardingLayoutMetrics()
+    Box(
+        modifier = Modifier
+            .size(metrics.iconBoxSize)
+            .clip(RoundedCornerShape(14.dp))
+            .background(accentColor.copy(alpha = 0.15f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = accentColor,
+            modifier = Modifier.size(metrics.iconSize)
+        )
+    }
+}
+
+// -------------------------------------------------------------------------
+// Section Cards
+// -------------------------------------------------------------------------
+
+@Composable
+private fun PersonalizationStatusCard(state: AnalyticsState, isDark: Boolean) {
+    val textPrimary = getOnboardingTextPrimary(isDark)
+    val textSecondary = getOnboardingTextSecondary(isDark)
+    
+    val (statusTitle, qualityLevel) = when {
+        !state.isPersonalizationActive -> Pair("Ready to Learn", 0)
+        !state.isPersonalizationWorking -> Pair("Learning...", 1)
         else -> {
             val level = when (state.personalizationQuality) {
                 PersonalizationQuality.LEARNING -> 1
@@ -246,341 +312,187 @@ private fun PersonalizationStatusCard(state: AnalyticsState) {
                 PersonalizationQuality.EXCELLENT -> "Level 5: Master"
                 else -> "Unknown"
             }
-            Triple(if (isDark) Color.White else Color(0xFF111827), title, level)
+            Pair(title, level)
         }
     }
 
-    LiquidGlassCard(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(8.dp)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Personalization Status",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF4B5563)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = statusTitle,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = statusColor
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                // Level pill
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(if (isDark) Color.White.copy(alpha = 0.2f) else Color(0xFF111827).copy(alpha = 0.1f))
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "Level $qualityLevel",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDark) Color.White else Color(0xFF111827)
-                    )
-                }
-            }
-            
-            // Visual Level Indicator with Koala
-            Box(contentAlignment = Alignment.Center) {
-                // Outer glow
-                Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .background(
-                            brush = Brush.radialGradient(
-                                colors = listOf(Color(0xFF2196F3).copy(alpha = 0.4f), Color.Transparent)
-                            )
-                        )
-                )
-                
-                val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-                CircularScoreIndicator(
-                    score = qualityLevel / 5f,
-                    size = 90.dp,
-                    strokeWidth = 6.dp,
-                    color = if (isDark) Color.White else Color(0xFF111827),
-                    showPercentage = false
-                )
-                
-                // Dynamic Koala Icon
-                val koalaIcon = when {
-                    !state.isPersonalizationWorking -> "Koala_Confused.png"
-                    qualityLevel <= 2 -> "Koala_Smile.png"
-                    qualityLevel <= 4 -> "Koala_Cool.png"
-                    else -> "Koala_Excited.png"
-                }
-                
-                KoalaIcon(
-                    name = koalaIcon,
-                    modifier = Modifier
-                        .size(64.dp) // Slightly larger to fill better
-                        .clip(CircleShape) // Clip to circle to hide straight bottom
-                        .offset(y = 2.dp),
-                    contentScale = ContentScale.Crop // Crop to fill the circle
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun QualityIndicator(quality: PersonalizationQuality, color: Color) {
-    val progress = when (quality) {
-        PersonalizationQuality.NOT_INITIALIZED -> 0f
-        PersonalizationQuality.LEARNING -> 0.2f
-        PersonalizationQuality.DEVELOPING -> 0.4f
-        PersonalizationQuality.ESTABLISHED -> 0.6f
-        PersonalizationQuality.REFINED -> 0.8f
-        PersonalizationQuality.EXCELLENT -> 1.0f
-    }
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
+    PremiumAnalyticsCard(isDark = isDark, contentPadding = PaddingValues(18.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Learning Progress",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = "${(progress * 100).toInt()}%",
-                style = MaterialTheme.typography.labelLarge,
-                color = color,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp)
-                .clip(RoundedCornerShape(4.dp)),
-            color = color,
-            trackColor = color.copy(alpha = 0.2f),
-        )
-    }
-}
-
-@Composable
-private fun InsightsSection(insights: List<SmartInsight>) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(
-            text = "💡 Smart Insights",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 4.dp),
-            color = if (me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current) Color.White else Color(0xFF111827)
-        )
-
-        insights.forEach { insight ->
-            InsightCard(insight)
-        }
-    }
-}
-
-@Composable
-private fun InsightCard(insight: SmartInsight) {
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    
-    // Dynamic colors: Brighter for Dark Mode, Darker/Bolder for Light Mode
-    val successColor = if (isDark) Color(0xFF4CAF50) else Color(0xFF2E7D32) // Green 500 vs 800
-    val learningColor = if (isDark) Color(0xFF2196F3) else Color(0xFF1565C0) // Blue 500 vs 800
-    val feedbackColor = if (isDark) Color(0xFFFF9800) else Color(0xFFE65100) // Orange 500 vs 900
-    val discoveryColor = if (isDark) Color(0xFF9C27B0) else Color(0xFF6A1B9A) // Purple 500 vs 800
-    val tipColor = if (isDark) Color(0xFF00BCD4) else Color(0xFF006064) // Cyan 500 vs 900
-    val warningColor = if (isDark) Color(0xFFF44336) else Color(0xFFB71C1C) // Red 500 vs 900
-
-    val mainColor = when (insight.type) {
-        InsightType.SUCCESS -> successColor
-        InsightType.LEARNING -> learningColor
-        InsightType.NEED_FEEDBACK -> feedbackColor
-        InsightType.DISCOVERY -> discoveryColor
-        InsightType.TIP -> tipColor
-        InsightType.WARNING -> warningColor
-    }
-
-    // Background tint should be subtle
-    
-    // Icon background circle
-    val iconBgColor = mainColor.copy(alpha = if (isDark) 0.2f else 0.1f)
-
-    val textColor = if (isDark) Color.White else Color(0xFF111827)
-    val bodyColor = if (isDark) Color.White.copy(alpha = 0.8f) else Color(0xFF4B5563)
-
-    val icon = when (insight.type) {
-        InsightType.SUCCESS -> Icons.Default.CheckCircle
-        InsightType.LEARNING -> Icons.Default.Psychology
-        InsightType.NEED_FEEDBACK -> Icons.AutoMirrored.Filled.HelpOutline
-        InsightType.DISCOVERY -> Icons.Default.Lightbulb
-        InsightType.TIP -> Icons.Default.AutoAwesome
-        InsightType.WARNING -> Icons.Default.Warning
-    }
-
-    LiquidGlassCard(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(iconBgColor, CircleShape)
-                    .border(1.dp, mainColor.copy(alpha = 0.3f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = mainColor,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-            
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = insight.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = textColor
-                )
-                
-                Text(
-                    text = insight.description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = bodyColor,
-                    lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.3f
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun LearningProgressCard(state: AnalyticsState) {
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    LiquidGlassCard(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = if (state.hasOriginalEmbedding) "Preference Mix" else "Learning Progress",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isDark) Color.White else Color(0xFF111827)
+                AnalyticsIconBox(icon = Icons.Default.VerifiedUser, isDark = isDark)
+                Column {
+                    Text(
+                        text = statusTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = textPrimary
+                    )
+                    Text(
+                        text = "Level $qualityLevel",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = textSecondary
+                    )
+                }
+            }
+            
+            Box(contentAlignment = Alignment.Center) {
+                CircularScoreIndicator(
+                    score = qualityLevel / 5f,
+                    size = 56.dp,
+                    strokeWidth = 4.dp,
+                    color = BrandPrimary,
+                    showPercentage = false,
+                    isDark = isDark
                 )
-                KoalaIcon(name = "Koala_Note.png", modifier = Modifier.size(40.dp))
+                Text(
+                    text = "${(qualityLevel / 5f * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InsightsSection(insights: List<SmartInsight>, isDark: Boolean) {
+    val textPrimary = getOnboardingTextPrimary(isDark)
+    val textSecondary = getOnboardingTextSecondary(isDark)
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        insights.forEach { insight ->
+            val mainColor = when (insight.type) {
+                InsightType.SUCCESS -> Color(0xFF4CAF50)
+                InsightType.LEARNING -> Color(0xFF2196F3)
+                InsightType.NEED_FEEDBACK -> Color(0xFFFF9800)
+                InsightType.DISCOVERY -> Color(0xFF9C27B0)
+                InsightType.TIP -> Color(0xFF00BCD4)
+                InsightType.WARNING -> Color(0xFFF44336)
+            }
+            
+            val icon = when (insight.type) {
+                InsightType.SUCCESS -> Icons.Default.CheckCircle
+                InsightType.LEARNING -> Icons.Default.Psychology
+                InsightType.NEED_FEEDBACK -> Icons.AutoMirrored.Filled.HelpOutline
+                InsightType.DISCOVERY -> Icons.Default.Lightbulb
+                InsightType.TIP -> Icons.Default.AutoAwesome
+                InsightType.WARNING -> Icons.Default.Warning
             }
 
-            // Only show the "Original Style vs Learned Style" split bar when user has an original embedding
-            // This is only true in Personalize Mode (user uploaded an image or selected categories)
-            // In Auto Mode, there's no "original style" - only learned preferences from feedback
+            PremiumAnalyticsCard(isDark = isDark, contentPadding = PaddingValues(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    AnalyticsIconBox(icon = icon, isDark = isDark, accentColor = mainColor)
+                    
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = insight.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = textPrimary
+                        )
+                        Text(
+                            text = insight.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = textSecondary
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LearningProgressCard(state: AnalyticsState, isDark: Boolean) {
+    val textPrimary = getOnboardingTextPrimary(isDark)
+    val textSecondary = getOnboardingTextSecondary(isDark)
+    val dividerColor = if (isDark) BorderDark.copy(alpha = 0.4f) else BorderLight.copy(alpha = 0.6f)
+
+    PremiumAnalyticsCard(isDark = isDark, contentPadding = PaddingValues(18.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (state.hasOriginalEmbedding) {
-                // Visual Split Bar
+                val originalWeight = state.originalAnchorInfluence.coerceAtLeast(1f)
+                val learnedWeight = state.learnedAnchorInfluence.coerceAtLeast(1f)
+                
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(24.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(5.dp))
                 ) {
                     Box(
                         modifier = Modifier
-                            .weight(0.4f)
+                            .weight(originalWeight)
                             .fillMaxHeight()
-                            .background(if (isDark) Color.White.copy(alpha = 0.3f) else Color(0xFF111827).copy(alpha = 0.1f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("40%", style = MaterialTheme.typography.labelSmall, color = if (isDark) Color.White else Color(0xFF111827))
-                    }
+                            .background(if (isDark) SurfaceHighlightDark else SurfaceHighlightLight)
+                    )
                     Box(
                         modifier = Modifier
-                            .weight(0.6f)
+                            .weight(learnedWeight)
                             .fillMaxHeight()
-                            .background(if (isDark) Color.White.copy(alpha = 0.8f) else Color(0xFF111827).copy(alpha = 0.8f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("60%", style = MaterialTheme.typography.labelSmall, color = if (isDark) Color(0xFF009688) else Color.White)
-                    }
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(BrandPrimary, BrandAccent)
+                                )
+                            )
+                    )
                 }
                 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Original Style", style = MaterialTheme.typography.bodySmall, color = if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF4B5563))
-                    Text("Learned Style", style = MaterialTheme.typography.bodySmall, color = if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF4B5563))
+                    Text(
+                        text = "Original Style (${state.originalAnchorInfluence.toInt()}%)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = textSecondary
+                    )
+                    Text(
+                        text = "Learned Taste (${state.learnedAnchorInfluence.toInt()}%)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = textSecondary
+                    )
                 }
-                
-                HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color(0xFF000000).copy(alpha = 0.1f))
+                HorizontalDivider(color = dividerColor)
             } else {
-                // Auto Mode - show a different message explaining learning
                 Text(
-                    text = "Learning from your feedback to understand your taste. " +
-                           "The more you like/dislike, the better recommendations become!",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (isDark) Color.White.copy(alpha = 0.8f) else Color(0xFF4B5563),
-                    lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.3f
+                    text = "Learning from your feedback to understand your taste. The more you like/dislike, the better recommendations become!",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = textSecondary
                 )
-                
-                HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color(0xFF000000).copy(alpha = 0.1f))
+                HorizontalDivider(color = dividerColor)
             }
 
-            // Exploration Icon Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .background(if (isDark) Color.White.copy(alpha = 0.1f) else Color(0xFF000000).copy(alpha = 0.05f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Explore, null, tint = if (isDark) Color.White else Color(0xFF111827), modifier = Modifier.size(16.dp))
-                    }
-                    Text("Exploration Rate", style = MaterialTheme.typography.bodyMedium, color = if (isDark) Color.White else Color(0xFF111827))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    AnalyticsIconBox(icon = Icons.Default.Explore, isDark = isDark)
+                    Text(
+                        text = "Exploration Rate",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = textPrimary
+                    )
                 }
                 Text(
                     text = "${(state.explorationRate * 100).toInt()}%",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = if (isDark) Color.White else Color(0xFF111827)
+                    color = textPrimary
                 )
             }
         }
@@ -588,197 +500,58 @@ private fun LearningProgressCard(state: AnalyticsState) {
 }
 
 @Composable
-private fun AnchorExplanation(
-    title: String,
-    description: String,
-    percentage: Int,
-    color: Color
-) {
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // Percentage circle
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .background(color.copy(alpha = 0.2f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
+private fun FeedbackStatsCard(state: AnalyticsState, isDark: Boolean) {
+    PremiumAnalyticsCard(isDark = isDark, contentPadding = PaddingValues(18.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(
-                text = "$percentage%",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = color
-            )
-        }
-
-        // Explanation
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = color
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.7f),
-                lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.2f
-            )
-        }
-    }
-}
-
-@Composable
-private fun FeedbackStatsCard(state: AnalyticsState) {
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    LiquidGlassCard(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text("👍", style = MaterialTheme.typography.titleLarge)
-                Text(
-                    text = "Your Feedback",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isDark) Color.White else Color(0xFF111827)
-                )
-            }
-
-            Text(
-                text = "You've shared your opinion ${state.totalFeedbackCount} times, helping me understand what you love!",
+                text = "You've shared your opinion ${state.totalFeedbackCount} times.",
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (isDark) Color.White.copy(alpha = 0.9f) else Color(0xFF4B5563)
+                color = getOnboardingTextSecondary(isDark)
             )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Likes
                 StatBox(
                     value = state.likeCount.toString(),
                     label = "Liked",
                     icon = Icons.Default.ThumbUp,
-                    color = if (isDark) Color.White else Color(0xFF111827),
+                    color = Color(0xFF22C55E),
+                    isDark = isDark,
                     modifier = Modifier.weight(1f)
                 )
-
-                // Dislikes
                 StatBox(
                     value = state.dislikeCount.toString(),
                     label = "Disliked",
                     icon = Icons.Default.ThumbDown,
-                    color = if (isDark) Color.White else Color(0xFF111827),
+                    color = Color(0xFFEF4444),
+                    isDark = isDark,
                     modifier = Modifier.weight(1f)
                 )
             }
-
-            // Feedback ratio visualization
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
             ) {
-                Text(
-                    text = "Preference Balance",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isDark) Color.White else Color(0xFF111827)
-                )
-                
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(32.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (isDark) Color.White.copy(alpha = 0.2f) else Color(0xFF111827).copy(alpha = 0.1f))
-                ) {
-                    if (state.likeCount > 0) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .weight(state.likeCount.toFloat())
-                                .background(Color(0xFF4CAF50)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (state.feedbackRatio > 0.3f) {
-                                Text(
-                                    text = "${(state.feedbackRatio * 100).toInt()}%",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                    if (state.dislikeCount > 0) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .weight(state.dislikeCount.toFloat())
-                                .background(Color(0xFFF44336)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (state.feedbackRatio < 0.7f) {
-                                Text(
-                                    text = "${((1 - state.feedbackRatio) * 100).toInt()}%",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Recent activity
-            if (state.recentLikes > 0 || state.recentDislikes > 0) {
-                HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.2f) else Color(0xFF000000).copy(alpha = 0.1f))
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Last 7 Days",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (isDark) Color.White else Color(0xFF111827)
+                if (state.likeCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .weight(state.likeCount.toFloat())
+                            .background(Color(0xFF22C55E))
                     )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        if (state.recentLikes > 0) {
-                            Text(
-                                text = "+${state.recentLikes} ❤️",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (isDark) Color.White else Color(0xFF111827),
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                        if (state.recentDislikes > 0) {
-                            Text(
-                                text = "${state.recentDislikes} 👎",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (isDark) Color.White else Color(0xFF111827),
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
+                }
+                if (state.dislikeCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .weight(state.dislikeCount.toFloat())
+                            .background(Color(0xFFEF4444))
+                    )
                 }
             }
         }
@@ -786,92 +559,64 @@ private fun FeedbackStatsCard(state: AnalyticsState) {
 }
 
 @Composable
-private fun RecommendationImpactCard(state: AnalyticsState) {
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    LiquidGlassCard(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text("✨", style = MaterialTheme.typography.titleLarge)
-                Text(
-                    text = "Recommendation Quality",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isDark) Color.White else Color(0xFF111827)
-                )
-            }
+private fun RecommendationImpactCard(state: AnalyticsState, isDark: Boolean) {
+    val textPrimary = getOnboardingTextPrimary(isDark)
+    val textSecondary = getOnboardingTextSecondary(isDark)
+    val dividerColor = if (isDark) BorderDark.copy(alpha = 0.4f) else BorderLight.copy(alpha = 0.6f)
 
-            // Similarity score
+    PremiumAnalyticsCard(isDark = isDark, contentPadding = PaddingValues(18.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Match Quality",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (isDark) Color.White else Color(0xFF111827)
-                    )
-                    Text(
-                        text = "How well wallpapers match your taste",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF4B5563)
-                    )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AnalyticsIconBox(icon = Icons.Default.Stars, isDark = isDark, accentColor = BrandAccent)
+                    Column {
+                        Text(
+                            text = "Match Quality",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = textPrimary
+                        )
+                        Text(
+                            text = "How well wallpapers match your taste",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = textSecondary
+                        )
+                    }
                 }
                 
                 CircularScoreIndicator(
                     score = state.averageSimilarityScore,
-                    size = 64.dp,
+                    size = 56.dp,
                     isPercentage = true,
-                    color = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF673AB7) // Darker purple in Light mode
+                    color = BrandAccent,
+                    isDark = isDark
                 )
             }
 
-            HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.2f) else Color(0xFF000000).copy(alpha = 0.1f))
+            HorizontalDivider(color = dividerColor)
 
-            // Trend indicator
             val (trendIcon, trendText, trendColor) = when (state.similarityTrend) {
-                SimilarityTrend.IMPROVING -> Triple(
-                    Icons.AutoMirrored.Filled.TrendingUp,
-                    "Recommendations are getting better! Your feedback is making a real impact.",
-                    Color(0xFF4CAF50)
-                )
-                SimilarityTrend.DECLINING -> Triple(
-                    Icons.AutoMirrored.Filled.TrendingDown,
-                    "Recommendations could be better. More feedback will help realign the algorithm.",
-                    Color(0xFFFF9800)
-                )
-                SimilarityTrend.STABLE -> Triple(
-                    Icons.AutoMirrored.Filled.TrendingFlat,
-                    "Consistent recommendations. The algorithm is stable and reliable.",
-                    Color(0xFF2196F3)
-                )
+                SimilarityTrend.IMPROVING -> Triple(Icons.AutoMirrored.Filled.TrendingUp, "Recommendations are getting better!", Color(0xFF22C55E))
+                SimilarityTrend.DECLINING -> Triple(Icons.AutoMirrored.Filled.TrendingDown, "Recommendations could be better.", Color(0xFFEF4444))
+                SimilarityTrend.STABLE -> Triple(Icons.AutoMirrored.Filled.TrendingFlat, "Consistent recommendations.", Color(0xFF3B82F6))
             }
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = trendIcon,
-                    contentDescription = null,
-                    tint = if (isDark) Color.White else trendColor, // Use color itself in light mode for visibility
-                    modifier = Modifier.size(24.dp)
-                )
+                Icon(imageVector = trendIcon, contentDescription = null, tint = trendColor, modifier = Modifier.size(24.dp))
                 Text(
                     text = trendText,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (isDark) Color.White.copy(alpha = 0.9f) else Color(0xFF4B5563),
-                    lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.3f
+                    color = textPrimary
                 )
             }
         }
@@ -879,132 +624,56 @@ private fun RecommendationImpactCard(state: AnalyticsState) {
 }
 
 @Composable
-private fun CategoryBreakdownCard(state: AnalyticsState) {
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    LiquidGlassCard(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+private fun CategoryBreakdownCard(state: AnalyticsState, isDark: Boolean) {
+    val textPrimary = getOnboardingTextPrimary(isDark)
+    PremiumAnalyticsCard(isDark = isDark, contentPadding = PaddingValues(18.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = "Top Categories",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (isDark) Color.White else Color(0xFF111827)
-            )
-
-            // Visual Grid/Cloud
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                state.topCategories.take(5).forEach { category ->
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
+            state.topCategories.take(5).forEach { category ->
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(getOnboardingCardBackground(isDark))
+                        .border(1.dp, getOnboardingCardBorder(isDark), RoundedCornerShape(16.dp))
+                        .padding(16.dp)
+                ) {
+                    Text(text = category.emoji, style = MaterialTheme.typography.headlineSmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = category.displayName,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = textPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Box(
                         modifier = Modifier
-                            .background(if (isDark) Color.White.copy(alpha = 0.2f) else Color(0xFF111827).copy(alpha = 0.1f), RoundedCornerShape(12.dp))
-                            .padding(12.dp)
+                            .width(48.dp)
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(2.5.dp))
+                            .background(if (isDark) SurfaceHighlightDark else SurfaceHighlightLight)
                     ) {
-                        Text(text = category.emoji, style = MaterialTheme.typography.headlineSmall)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = category.displayName,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (isDark) Color.White else Color(0xFF111827),
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        // Mini strength bar
+                        val fillRatio = category.preferenceStrength.coerceIn(0f, 1f)
                         Box(
                             modifier = Modifier
-                                .width(40.dp)
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(if (isDark) Color.White.copy(alpha = 0.3f) else Color(0xFF111827).copy(alpha = 0.1f))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(maxOf(0f, category.preferenceStrength))
-                                    .fillMaxHeight()
-                                    .background(if (isDark) Color.White else Color(0xFF3F51B5))
-                            )
-                        }
+                                .fillMaxWidth(fillRatio)
+                                .fillMaxHeight()
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(BrandPrimary, BrandAccent)
+                                    )
+                                )
+                        )
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun CategoryPreferenceRow(category: CategoryInsight) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = category.emoji,
-            style = MaterialTheme.typography.headlineSmall
-        )
-
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = category.displayName,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
-            )
-            
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (category.likeCount > 0) {
-                    Text(
-                        text = "${category.likeCount} ❤️",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF4CAF50)
-                    )
-                }
-                if (category.dislikeCount > 0) {
-                    Text(
-                        text = "${category.dislikeCount} 👎",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFF44336)
-                    )
-                }
-            }
-        }
-
-        // Preference strength indicator
-        val strengthColor = when {
-            category.preferenceStrength > 0.6f -> Color(0xFF4CAF50)
-            category.preferenceStrength < -0.6f -> Color(0xFFF44336)
-            else -> Color(0xFFFF9800)
-        }
-        
-        Text(
-            text = when {
-                category.preferenceStrength > 0.6f -> "Love"
-                category.preferenceStrength > 0.3f -> "Like"
-                category.preferenceStrength < -0.6f -> "Dislike"
-                category.preferenceStrength < -0.3f -> "Meh"
-                else -> "Neutral"
-            },
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = strengthColor
-        )
     }
 }
 
@@ -1012,156 +681,37 @@ private fun CategoryPreferenceRow(category: CategoryInsight) {
 private fun HistoryStatsCard(
     totalViewed: Int,
     avgDuration: Long,
-    favoriteCategory: String?
+    favoriteCategory: String?,
+    isDark: Boolean
 ) {
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    LiquidGlassCard(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                KoalaIcon(name = "Koala_Read.png", modifier = Modifier.size(32.dp))
-                Text(
-                    text = "Viewing History",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isDark) Color.White else Color(0xFF111827)
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                StatColumn(
-                    label = "Total Viewed",
-                    value = totalViewed.toString()
-                )
-                
-                // Format duration nicely
-                val durationText = if (avgDuration < 60) {
-                    "${avgDuration}s"
-                } else {
-                    "${avgDuration / 60}m"
-                }
-                
-                StatColumn(
-                    label = "Avg. Time",
-                    value = durationText
-                )
-                
-                StatColumn(
-                    label = "Favorite",
-                    value = favoriteCategory?.replaceFirstChar { it.uppercase() } ?: "None yet"
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AdvancedMetricsCard(state: AnalyticsState) {
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    LiquidGlassCard(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(
-                text = "Algorithm Metrics",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (isDark) Color.White else Color(0xFF111827)
-            )
-
-            // Grid of Mini Gauges
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                MiniGauge(label = "Learning", value = state.learningRate, color = if (isDark) Color.White else Color(0xFF111827))
-                MiniGauge(label = "Drift", value = state.preferenceDrift / 100f, color = if (isDark) Color.White else Color(0xFF111827))
-                MiniGauge(label = "Vector", value = state.preferenceVectorMagnitude / 10f, color = if (isDark) Color.White else Color(0xFF111827)) // Assuming max 10
-            }
-        }
-    }
-}
-
-@Composable
-private fun MiniGauge(label: String, value: Float, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(
-                progress = { value.coerceIn(0f, 1f) },
-                modifier = Modifier.size(40.dp),
-                color = color,
-                trackColor = color.copy(alpha = 0.3f),
-            )
-            Text(
-                text = "${(value * 100).toInt()}",
-                style = MaterialTheme.typography.labelSmall,
-                color = color,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = color.copy(alpha = 0.8f)
-        )
-    }
-}
-
-@Composable
-private fun AdvancedMetricRow(
-    label: String,
-    value: String,
-    description: String
-) {
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    Column(
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
+    PremiumAnalyticsCard(isDark = isDark, contentPadding = PaddingValues(18.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
+            StatColumn(label = "Viewed", value = totalViewed.toString(), isDark = isDark)
+            
+            val durationText = if (avgDuration < 60) "${avgDuration}s" else "${avgDuration / 60}m"
+            StatColumn(label = "Avg. Time", value = durationText, isDark = isDark)
+            
+            StatColumn(label = "Favorite", value = favoriteCategory?.replaceFirstChar { it.uppercase() } ?: "-", isDark = isDark)
         }
-        Text(
-            text = description,
-            style = MaterialTheme.typography.bodySmall,
-            color = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF4B5563)
-        )
     }
 }
 
-
-
-// ========== Helper Composables ==========
-
-
+@Composable
+private fun AdvancedMetricsCard(state: AnalyticsState, isDark: Boolean) {
+    PremiumAnalyticsCard(isDark = isDark, contentPadding = PaddingValues(18.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceAround
+        ) {
+            MiniGauge(label = "Learning", value = state.learningRate, color = BrandPrimary, isDark = isDark)
+            MiniGauge(label = "Drift", value = state.preferenceDrift / 100f, color = BrandAccent, isDark = isDark)
+            MiniGauge(label = "Vector", value = state.preferenceVectorMagnitude / 10f, color = BrandPrimaryMuted, isDark = isDark)
+        }
+    }
+}
 
 @Composable
 private fun StatBox(
@@ -1169,39 +719,32 @@ private fun StatBox(
     label: String,
     icon: ImageVector,
     color: Color,
+    isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = color.copy(alpha = 0.1f)
-        )
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(getOnboardingCardBackground(isDark))
+            .border(1.dp, getOnboardingCardBorder(isDark), RoundedCornerShape(16.dp))
+            .padding(16.dp)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = color,
-                modifier = Modifier.size(32.dp)
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = color
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = color.copy(alpha = 0.7f)
-            )
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+            }
+            Text(text = value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = color)
+            Text(text = label, style = MaterialTheme.typography.bodyMedium, color = getOnboardingTextSecondary(isDark))
         }
     }
 }
@@ -1209,24 +752,23 @@ private fun StatBox(
 @Composable
 private fun StatColumn(
     value: String,
-    label: String
+    label: String,
+    isDark: Boolean
 ) {
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
             text = value,
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = if (isDark) Color.White else Color(0xFF111827)
+            color = getOnboardingTextPrimary(isDark)
         )
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF4B5563),
-            textAlign = TextAlign.Center
+            color = getOnboardingTextSecondary(isDark)
         )
     }
 }
@@ -1236,82 +778,85 @@ private fun CircularScoreIndicator(
     score: Float,
     size: androidx.compose.ui.unit.Dp,
     strokeWidth: androidx.compose.ui.unit.Dp = 4.dp,
-    color: Color = MaterialTheme.colorScheme.primary,
+    color: Color = BrandPrimary,
     showPercentage: Boolean = true,
-    isPercentage: Boolean = false
+    isPercentage: Boolean = false,
+    isDark: Boolean
 ) {
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
-    val effectiveColor = if (color == MaterialTheme.colorScheme.primary) (if (isDark) color else Color(0xFF111827)) else color // Default color fix
     Box(contentAlignment = Alignment.Center) {
-        // Glow effect
         Box(
             modifier = Modifier
                 .size(size)
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(effectiveColor.copy(alpha = 0.3f), Color.Transparent)
-                    )
-                )
-        )
-
-        // Background circle to ensure visibility
-        Box(
-            modifier = Modifier
-                .size(size)
-                .border(strokeWidth, effectiveColor.copy(alpha = 0.1f), CircleShape)
+                .border(strokeWidth, color.copy(alpha = 0.12f), CircleShape)
         )
         
-        // Normalize score to 0-1 range
-        val normalizedScore = if (isPercentage) {
-            (score / 100f).coerceIn(0f, 1f)
-        } else {
-            score.coerceIn(0f, 1f)
-        }
+        val normalizedScore = if (isPercentage) (score / 100f).coerceIn(0f, 1f) else score.coerceIn(0f, 1f)
         
         CircularProgressIndicator(
             progress = { normalizedScore },
             modifier = Modifier.size(size),
-            color = effectiveColor,
-            trackColor = Color.Transparent, // We use the border above for track
+            color = color,
+            trackColor = Color.Transparent,
             strokeWidth = strokeWidth,
             strokeCap = androidx.compose.ui.graphics.StrokeCap.Round,
         )
         
-        // Display score as text in the center
         if (showPercentage) {
             val displayValue = if (isPercentage) score.toInt() else (score * 100).toInt()
             Text(
                 text = "$displayValue%",
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = effectiveColor
+                color = getOnboardingTextPrimary(isDark)
             )
         }
+    }
+}
+
+@Composable
+private fun MiniGauge(label: String, value: Float, color: Color, isDark: Boolean) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(
+                progress = { value.coerceIn(0f, 1f) },
+                modifier = Modifier.size(48.dp),
+                color = color,
+                trackColor = color.copy(alpha = 0.12f),
+                strokeWidth = 3.5.dp,
+                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
+            Text(
+                text = "${(value * 100).toInt()}",
+                style = MaterialTheme.typography.labelSmall,
+                color = getOnboardingTextPrimary(isDark),
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = getOnboardingTextSecondary(isDark)
+        )
     }
 }
 
 @Composable
 private fun LoadingView() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            CircularProgressIndicator()
-            Text(
-                text = "Analyzing your preferences...",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-            )
-        }
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(
+            color = BrandPrimary,
+            strokeWidth = 3.dp
+        )
     }
 }
 
 @Composable
-private fun ErrorView(error: String, onRetry: () -> Unit) {
+private fun ErrorView(
+    error: String,
+    onRetry: () -> Unit
+) {
+    val isDark = LocalThemeIsDark.current
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -1319,54 +864,40 @@ private fun ErrorView(error: String, onRetry: () -> Unit) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.padding(32.dp)
+            modifier = Modifier.padding(24.dp)
         ) {
             Icon(
-                imageVector = Icons.Default.Error,
+                imageVector = Icons.Default.ErrorOutline,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(64.dp)
+                tint = ErrorColor,
+                modifier = Modifier.size(48.dp)
             )
             Text(
-                text = "Oops!",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
+                text = "Failed to load insights",
+                style = MaterialTheme.typography.titleMedium,
+                color = getOnboardingTextPrimary(isDark),
+                textAlign = TextAlign.Center
             )
             Text(
                 text = error,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                color = getOnboardingTextSecondary(isDark),
                 textAlign = TextAlign.Center
             )
-            Button(onClick = onRetry) {
-                Text("Try Again")
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = onRetry,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BrandPrimary,
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "Retry",
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
     }
-}
-
-// Helper functions
-private fun formatDuration(seconds: Long): String {
-    return when {
-        seconds < 60 -> "${seconds}s"
-        seconds < 3600 -> "${seconds / 60}m"
-        seconds < 86400 -> "${seconds / 3600}h"
-        else -> "${seconds / 86400}d"
-    }
-}
-
-// Helper data class for tuple
-private data class Tuple4<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
-
-@Composable
-private fun KoalaIcon(
-    name: String,
-    modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Fit
-) {
-    GlideImage(
-        imageModel = { "file:///android_asset/koala/$name" },
-        modifier = modifier,
-        imageOptions = ImageOptions(contentScale = contentScale)
-    )
 }

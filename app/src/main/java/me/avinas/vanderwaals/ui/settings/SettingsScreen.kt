@@ -2,10 +2,10 @@ package me.avinas.vanderwaals.ui.settings
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,11 +28,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -42,12 +42,14 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import me.avinas.vanderwaals.ui.theme.LocalThemeIsDark
-import me.avinas.vanderwaals.ui.theme.components.*
 import me.avinas.vanderwaals.ui.theme.*
-
-// Mockup Colors
-
+import me.avinas.vanderwaals.ui.theme.components.*
+import me.avinas.vanderwaals.ui.theme.components.LiquidGlassCard
+import me.avinas.vanderwaals.core.BatteryOptimizationHelper
+import me.avinas.vanderwaals.ui.onboarding.*
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Brush
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,9 +66,15 @@ fun SettingsScreen(
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var showTimePickerDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
-    val isDark = me.avinas.vanderwaals.ui.theme.LocalThemeIsDark.current
+    val isDark = LocalThemeIsDark.current
+    val TextPrimaryDark = getOnboardingTextPrimary(true)
+    val TextPrimaryLight = getOnboardingTextPrimary(false)
+    val TextSecondaryDark = getOnboardingTextSecondary(true)
+    val TextSecondaryLight = getOnboardingTextSecondary(false)
+    val TextTertiaryDark = getOnboardingTextSecondary(true).copy(alpha = 0.7f)
+    val TextTertiaryLight = getOnboardingTextSecondary(false).copy(alpha = 0.7f)
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     
-    // Lifecycle observer to detect when user returns from permission settings
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -80,12 +88,10 @@ fun SettingsScreen(
         }
     }
 
-    // Handle system back button
     androidx.activity.compose.BackHandler {
         onNavigateBack()
     }
 
-    // Show toast messages as Snackbar
     LaunchedEffect(toastMessage) {
         toastMessage?.let {
             snackbarHostState.showSnackbar(
@@ -96,9 +102,18 @@ fun SettingsScreen(
         }
     }
 
-    LiquidGlassBackground {
+    val metrics = rememberOnboardingLayoutMetrics()
+
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        OnboardingBackdrop(
+            isDark = isDark,
+            modifier = Modifier.matchParentSize()
+        )
+
         Scaffold(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             containerColor = Color.Transparent,
             snackbarHost = { 
@@ -106,931 +121,985 @@ fun SettingsScreen(
                     hostState = snackbarHostState,
                     modifier = Modifier.padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
                 ) 
-            }
-        ) { paddingValues ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-            ) {
-
-            // Calculate top padding for content (StatusBar + TopAppBar height)
-            // Use safeDrawing to account for cutouts and status bars
-            val statusBarHeight = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
-            val topBarHeight = 64.dp // Standard M3 TopAppBar height
-            val contentTopPadding = statusBarHeight + topBarHeight + 16.dp
-
-            // Track scroll state for dynamic TopAppBar background
-            val listState = rememberLazyListState()
-            val isScrolled by remember {
-                derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 }
-            }
-
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentPadding = PaddingValues(
-                    top = contentTopPadding,
-                    bottom = 16.dp,
-                    start = 16.dp,
-                    end = 16.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
-            ) {
-
-                // MODE Section
-                item {
-                    LabelSectionHeader(title = "MODE")
-                    LiquidGlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Column {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(48.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(
-                                                if (isDark) Color(0xFF111827).copy(alpha = 0.4f)
-                                                else Color.Black.copy(alpha = 0.05f)
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Shuffle,
-                                            contentDescription = null,
-                                            tint = if (isDark) InfoColorDark else LightPrimary,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-                                    Column {
-                                        Text(
-                                            text = if (settings.mode == "personalized") "Personalized Mode" else "Auto Mode",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (isDark) Color.White else Color(0xFF111827)
-                                        )
-                                        Text(
-                                            text = if (settings.mode == "personalized") "Learning from your preferences" else "Automatic wallpaper selection",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (isDark) Color.Gray else Color(0xFF4B5563)
-                                        )
-                                    }
-                                }
-                                
-                                Switch(
-                                    checked = settings.mode == "personalized",
-                                    onCheckedChange = { enabled ->
-                                        viewModel.updateMode(if (enabled) "personalized" else "auto")
-                                    },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = if (isDark) InfoColorDark else LightPrimary,
-                                        uncheckedThumbColor = Color.White,
-                                        uncheckedTrackColor = if (isDark) Color.Gray else Color(0xFFE5E7EB)
-                                    )
-                                )
-                            }
-                            
-                            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 0.dp).padding(bottom = 16.dp)) {
-                                Text(
-                                    text = "In Auto Mode, wallpapers are selected automatically. Enable Personalized Mode to teach the app your style.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (isDark) Color.Gray else Color(0xFF4B5563),
-                                    lineHeight = 20.sp
-                                )
-                            }
-                            
-                            if (settings.mode == "personalized") {
-                                HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
-                                SettingsRow(
-                                    title = "Re-personalize Your Aesthetic",
-                                    onClick = onNavigateToOnboarding,
-                                    textColor = if (isDark) Color.White else Color(0xFF111827)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                        contentDescription = null,
-                                        tint = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF9CA3AF)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // APPEARANCE Section
-                item {
-                    LabelSectionHeader(title = "APPEARANCE")
-                    LiquidGlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(8.dp)
-                    ) {
-                        SegmentedControl(
-                            items = ThemeMode.entries.map { it.displayName },
-                            selectedIndex = settings.themeMode.ordinal,
-                            onItemSelected = { index ->
-                                viewModel.updateThemeMode(ThemeMode.entries[index])
-                            },
-                            isDark = isDark
-                        )
-                    }
-                }
-
-                // AUTO-CHANGE Section
-                item {
-                    LabelSectionHeader(title = "AUTO-CHANGE")
-                    LiquidGlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Column {
-                            // Frequency
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "Frequency",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Medium,
-                                        color = if (isDark) Color.White else Color(0xFF111827)
-                                    )
-                                    Text(
-                                        text = settings.interval.displayName,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (isDark) Color.Gray else Color(0xFF4B5563)
-                                    )
-                                }
-                                
-                                var expanded by remember { mutableStateOf(false) }
-                                Box {
-                                    Row(
-                                        modifier = Modifier.clickable { expanded = true },
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = settings.interval.displayName,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = if (isDark) Color.Gray else Color(0xFF4B5563),
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                        Icon(
-                                            imageVector = Icons.Default.ArrowDropDown,
-                                            contentDescription = null,
-                                            tint = if (isDark) Color.Gray else Color(0xFF4B5563)
-                                        )
-                                    }
-                                    
-                                    DropdownMenu(
-                                        expanded = expanded,
-                                        onDismissRequest = { expanded = false },
-                                        modifier = Modifier.background(if (isDark) Color(0xFF1F2937) else Color.White)
-                                    ) {
-                                        ChangeInterval.entries.forEach { interval ->
-                                            DropdownMenuItem(
-                                                text = { 
-                                                    Text(
-                                                        interval.displayName,
-                                                        color = if (isDark) Color.White else Color(0xFF111827)
-                                                    ) 
-                                                },
-                                                onClick = {
-                                                    viewModel.updateInterval(interval)
-                                                    expanded = false
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Playlist Size Slider for Every Unlock
-                            if (settings.interval == ChangeInterval.EVERY_UNLOCK) {
-                                HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
-                                
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "Daily Playlist Size",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Medium,
-                                            color = if (isDark) Color.White else Color(0xFF111827)
-                                        )
-                                        Text(
-                                            text = "${settings.dailyPlaylistSize} wallpapers",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isDark) InfoColorDark else LightPrimary
-                                        )
-                                    }
-                                    
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    
-                                    Slider(
-                                        value = settings.dailyPlaylistSize.toFloat(),
-                                        onValueChange = { viewModel.updateDailyPlaylistSize(it.toInt()) },
-                                        valueRange = 10f..50f,
-                                        steps = 39,
-                                        colors = SliderDefaults.colors(
-                                            thumbColor = if (isDark) InfoColorDark else LightPrimary,
-                                            activeTrackColor = if (isDark) InfoColorDark else LightPrimary,
-                                            inactiveTrackColor = if (isDark) Color.Gray.copy(alpha = 0.3f) else Color(0xFFE5E7EB)
-                                        )
-                                    )
-                                    
-                                    Text(
-                                        text = "A fresh set of wallpapers is downloaded daily and rotated on unlock.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF6B7280),
-                                        modifier = Modifier.padding(top = 4.dp)
-                                    )
-                                    
-                                    // Battery and cooldown warning note
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .background(
-                                                color = if (isDark) Color(0xFFF59E0B).copy(alpha = 0.1f) else Color(0xFFFEF3C7),
-                                                shape = RoundedCornerShape(8.dp)
-                                            )
-                                            .padding(12.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.Top
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Warning,
-                                            contentDescription = null,
-                                            tint = if (isDark) Color(0xFFF59E0B) else Color(0xFFD97706),
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Column {
-                                            Text(
-                                                text = "Battery Notice",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = if (isDark) Color(0xFFF59E0B) else Color(0xFFD97706)
-                                            )
-                                            Text(
-                                                text = "This mode has a 1-minute cooldown between changes to save battery. Frequent wallpaper changes may increase battery usage.",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF6B7280)
-                                            )
-                                        }
-                                    }
-                                }
-                                
-                                // Progress Indicator with actual count
-                                if (settings.isPlaylistDownloading) {
-                                    HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(16.dp),
-                                                strokeWidth = 2.dp,
-                                                color = if (isDark) InfoColorDark else LightPrimary
-                                            )
-                                            Text(
-                                                text = if (settings.playlistDownloadProgress.isApplying) 
-                                                    "Applying wallpaper..." 
-                                                else 
-                                                    settings.playlistDownloadProgress.progressText,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = if (isDark) Color.White else Color(0xFF111827),
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        }
-                                        
-                                        // Show progress bar if we have total count
-                                        if (settings.playlistDownloadProgress.totalCount > 0) {
-                                            LinearProgressIndicator(
-                                                progress = { 
-                                                    settings.playlistDownloadProgress.downloadedCount.toFloat() / 
-                                                        settings.playlistDownloadProgress.totalCount.toFloat() 
-                                                },
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(4.dp)
-                                                    .clip(RoundedCornerShape(2.dp)),
-                                                color = if (isDark) InfoColorDark else LightPrimary,
-                                                trackColor = if (isDark) Color.Gray.copy(alpha = 0.3f) else Color(0xFFE5E7EB)
-                                            )
-                                        }
-                                    }
-                                }
-                                
-                                // Apply Button - triggers immediate playlist download
-                                if (!settings.isPlaylistDownloading) {
-                                    HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
-                                    Button(
-                                        onClick = { viewModel.triggerDailyPlaylistDownload() },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (isDark) InfoColorDark else LightPrimary,
-                                            contentColor = Color.White
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(vertical = 12.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Download,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Download Playlist Now",
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-                                }
-                            }
-
-                            if (settings.interval == ChangeInterval.DAILY) {
-                                HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { showTimePickerDialog = true }
-                                        .padding(16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text(
-                                            text = "Change Time",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Medium,
-                                            color = if (isDark) Color.White else Color(0xFF111827)
-                                        )
-                                        Text(
-                                            text = settings.dailyTime?.let { "${it.hour}:${it.minute.toString().padStart(2, '0')}" } ?: "9:00 AM",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (isDark) Color.Gray else Color(0xFF4B5563)
-                                        )
-                                    }
-                                    Text(
-                                        text = settings.dailyTime?.let { String.format("%02d:%02d", it.hour, it.minute) } ?: "09:00",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = if (isDark) Color.Gray else Color(0xFF4B5563),
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-
-                // BATTERY & PERFORMANCE Section
-                item {
-                    val batteryOptimized = remember {
-                        !me.avinas.vanderwaals.core.BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
-                    }
-                    
-                    if (batteryOptimized && settings.interval != ChangeInterval.NEVER) {
-                        LabelSectionHeader(title = "BATTERY & PERFORMANCE")
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(if (isDark) Color(0xFFF43F5E).copy(alpha = 0.1f) else Color(0xFFEF4444).copy(alpha = 0.1f))
-                                .border(
-                                    1.dp, 
-                                    if (isDark) Color(0xFFF43F5E).copy(alpha = 0.2f) else Color(0xFFEF4444).copy(alpha = 0.2f),
-                                    RoundedCornerShape(16.dp)
-                                )
-                                .padding(16.dp)
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Icon(
-                                        imageVector = Icons.Default.BatteryAlert,
-                                        contentDescription = null,
-                                        tint = if (isDark) Color(0xFFF43F5E) else Color(0xFFEF4444)
-                                    )
-                                    Column {
-                                        Text(
-                                            text = "Battery Optimization Active",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (isDark) Color(0xFFFECDD3) else Color(0xFF991B1B)
-                                        )
-                                        Text(
-                                            text = "Auto-change may not work after restart.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (isDark) Color(0xFFFDA4AF) else Color(0xFFB91C1C)
-                                        )
-                                    }
-                                }
-                                Button(
-                                    onClick = { viewModel.openBatterySettings() },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (isDark) Color(0xFFF43F5E).copy(alpha = 0.2f) else Color(0xFFEF4444).copy(alpha = 0.2f),
-                                        contentColor = if (isDark) Color(0xFFFECDD3) else Color(0xFF991B1B)
-                                    ),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(vertical = 10.dp)
-                                ) {
-                                    Text("Open Battery Settings", fontWeight = FontWeight.SemiBold)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // APPLY TO Section
-                item {
-                    LabelSectionHeader(title = "APPLY TO")
-                    LiquidGlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(8.dp)
-                    ) {
-                        SegmentedControl(
-                            items = ApplyTo.entries.map { it.displayName },
-                            selectedIndex = ApplyTo.entries.indexOf(settings.applyTo),
-                            onItemSelected = { index ->
-                                viewModel.updateApplyTo(ApplyTo.entries[index])
-                            },
-                            isDark = isDark
-                        )
-                    }
-                }
-
-                // SOURCES Section
-                item {
-                    LabelSectionHeader(title = "SOURCES")
-                    LiquidGlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(16.dp)
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            settings.sourcesEnabled.entries.forEachIndexed { index, (source, enabled) ->
-                                if (index > 0) HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
-                                
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text(
-                                            text = source,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Medium,
-                                            color = if (isDark) Color.White else Color(0xFF111827)
-                                        )
-                                        Text(
-                                            text = if (enabled) "Enabled" else "Disabled",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (isDark) Color.Gray else Color(0xFF4B5563)
-                                        )
-                                    }
-                                    
-                                    Box(
-                                        modifier = Modifier
-                                            .size(24.dp)
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(if (enabled) (if (isDark) InfoColorDark else LightPrimary) else Color.Transparent)
-                                            .border(
-                                                1.dp, 
-                                                if (enabled) Color.Transparent else (if (isDark) Color.Gray else Color(0xFFD1D5DB)),
-                                                RoundedCornerShape(6.dp)
-                                            )
-                                            .clickable { viewModel.toggleSource(source, !enabled) },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (enabled) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            // Bing Sync Progress Section
-                            val isBingSyncing by viewModel.isBingSyncing.collectAsState()
-                            val bingSyncProgress by viewModel.bingSyncProgress.collectAsState()
-                            val bingSyncMessage by viewModel.bingSyncMessage.collectAsState()
-                            val bingWallpaperCount by viewModel.bingWallpaperCount.collectAsState()
-                            
-                            if (isBingSyncing) {
-                                HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
-                                
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(16.dp),
-                                                strokeWidth = 2.dp,
-                                                color = if (isDark) InfoColorDark else LightPrimary
-                                            )
-                                            Text(
-                                                text = bingSyncMessage,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontWeight = FontWeight.Medium,
-                                                color = if (isDark) Color.White else Color(0xFF111827)
-                                            )
-                                        }
-                                        
-                                        if (bingWallpaperCount > 0) {
-                                            Text(
-                                                text = "$bingWallpaperCount wallpapers",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = if (isDark) InfoColorDark else LightPrimary,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
-                                        }
-                                    }
-                                    
-                                    LinearProgressIndicator(
-                                        progress = { bingSyncProgress },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(4.dp)
-                                            .clip(RoundedCornerShape(2.dp)),
-                                        color = if (isDark) InfoColorDark else LightPrimary,
-                                        trackColor = if (isDark) Color.Gray.copy(alpha = 0.3f) else Color(0xFFE5E7EB)
-                                    )
-                                }
-                            }
-                            
-                            HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
-                            
-                            val isSyncing by viewModel.isSyncing.collectAsState()
-                            
-                            Button(
-                                onClick = { viewModel.syncNow() },
-                                enabled = !isSyncing,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f),
-                                    contentColor = if (isDark) Color.White else Color(0xFF111827),
-                                    disabledContainerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.02f)
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(vertical = 12.dp)
-                            ) {
-                                if (isSyncing) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(18.dp),
-                                        color = if (isDark) Color.White else Color(0xFF111827),
-                                        strokeWidth = 2.dp
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Syncing...")
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.Sync,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Sync Now")
-                                }
-                            }
-                            
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "Last synced: ${settings.lastSynced}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF6B7280)
-                                )
-                                
-                                if (settings.lastSynced == "Never synced") {
-                                    Text(
-                                        text = "Sync wallpaper catalog to start",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (isDark) ErrorColorDark else Color(0xFFEF4444),
-                                        fontWeight = FontWeight.Medium,
-                                        modifier = Modifier.padding(top = 4.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // STORAGE Section
-                item {
-                    LabelSectionHeader(title = "STORAGE")
-                    LiquidGlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(16.dp)
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            // Cache Size
-                            Column {
-                                Text(
-                                    text = "Cache Size",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (isDark) Color.White else Color(0xFF111827)
-                                )
-                                Text(
-                                    text = settings.cacheSize,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (isDark) Color.Gray else Color(0xFF4B5563)
-                                )
-                            }
-                            
-                            HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
-                            
-                            // Download Location
-                            Column {
-                                Text(
-                                    text = "Download Location",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (isDark) Color.White else Color(0xFF111827)
-                                )
-                                Text(
-                                    text = "Pictures/Vanderwaals",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (isDark) Color.Gray else Color(0xFF4B5563)
-                                )
-                            }
-                            
-                            HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
-                            
-                            Button(
-                                onClick = { showClearCacheDialog = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isDark) ErrorColorDark.copy(alpha = 0.2f) else Color(0xFFEF4444).copy(alpha = 0.1f),
-                                    contentColor = if (isDark) ErrorColorDark else Color(0xFFEF4444)
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(vertical = 10.dp)
-                            ) {
-                                Text("Clear Cache", fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                    }
-                }
-
-                // INSIGHTS Section
-                item {
-                    LabelSectionHeader(title = "INSIGHTS")
-                    LiquidGlassCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onNavigateToAnalytics() },
-                        contentPadding = PaddingValues(16.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(
-                                            if (isDark) Color(0xFF111827).copy(alpha = 0.4f)
-                                            else Color.Black.copy(alpha = 0.05f)
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Analytics,
-                                        contentDescription = null,
-                                        tint = if (isDark) InfoColorDark else LightPrimary,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                                Column {
-                                    Text(
-                                        text = "Personalization Analytics",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (isDark) Color.White else Color(0xFF111827)
-                                    )
-                                    Text(
-                                        text = "See how personalization is working",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (isDark) Color.Gray else Color(0xFF4B5563)
-                                    )
-                                }
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                tint = if (isDark) Color.Gray else Color(0xFF9CA3AF),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                }
-
-                // ABOUT Section
-                item {
-                    LabelSectionHeader(title = "ABOUT")
-                    LiquidGlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Column {
-                            SettingsRow(
-                                title = "Version",
-                                subtitle = "v${me.avinas.vanderwaals.BuildConfig.VERSION_NAME}",
-                                textColor = if (isDark) Color.White else Color(0xFF111827)
-                            )
-                            
-                            HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
-                            
-                            SettingsRow(
-                                title = "View on GitHub",
-                                subtitle = "Star us on GitHub",
-                                onClick = {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/avinaxhroy/Vanderwaals"))
-                                    context.startActivity(intent)
-                                },
-                                textColor = if (isDark) Color.White else Color(0xFF111827)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                                    contentDescription = null,
-                                    tint = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF9CA3AF)
-                                )
-                            }
-                            
-                            HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f))
-                            
-                            SettingsRow(
-                                title = "Rate on Store",
-                                subtitle = "Help us improve",
-                                onClick = {
-                                    val intent = android.content.Intent(
-                                        android.content.Intent.ACTION_VIEW,
-                                        android.net.Uri.parse("market://details?id=${context.packageName}")
-                                    )
-                                    try {
-                                        context.startActivity(intent)
-                                    } catch (e: android.content.ActivityNotFoundException) {
-                                        val webIntent = android.content.Intent(
-                                            android.content.Intent.ACTION_VIEW,
-                                            android.net.Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}")
-                                        )
-                                        context.startActivity(webIntent)
-                                    }
-                                },
-                                textColor = if (isDark) Color.White else Color(0xFF111827)
-                            )
-                        }
-                    }
-                }
-                
-                item {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
-                }
-            }
-
-            // TopAppBar Overlay
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-            ) {
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = isScrolled,
-                    enter = fadeIn(),
-                    exit = fadeOut()
-                ) {
-                    me.avinas.vanderwaals.ui.theme.components.GlassTopAppBarBackground(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(64.dp + WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding())
-                    )
-                }
-
+            },
+            topBar = {
                 TopAppBar(
                     title = {
                         Text(
                             text = "Settings",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
+                            fontFamily = PlayfairDisplayFamily,
+                            fontStyle = FontStyle.Italic,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 24.sp,
+                            color = getOnboardingTextPrimary(isDark)
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = onNavigateBack) {
+                        IconButton(
+                            onClick = onNavigateBack,
+                            modifier = Modifier.padding(start = 4.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back"
+                                contentDescription = "Back",
+                                tint = getOnboardingTextPrimary(isDark)
                             )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = if (isDark) Color(0xFF14120F).copy(alpha = 0.8f) else Color(0xFFF9F7F5).copy(alpha = 0.8f),
+                        titleContentColor = getOnboardingTextPrimary(isDark),
+                        navigationIconContentColor = getOnboardingTextPrimary(isDark)
                     ),
-                    windowInsets = WindowInsets(0, 0, 0, 0),
-                    modifier = Modifier
-                        .statusBarsPadding()
-                        .padding(vertical = 16.dp)
+                    windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top),
+                    scrollBehavior = scrollBehavior
                 )
+            }
+        ) { paddingValues ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .align(Alignment.TopCenter)
+                    .widthIn(max = metrics.maxContentWidth)
+                    .padding(horizontal = metrics.horizontalPadding),
+                contentPadding = PaddingValues(
+                    top = paddingValues.calculateTopPadding() + 8.dp,
+                    bottom = paddingValues.calculateBottomPadding() + 32.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(metrics.cardSpacing)
+            ) {
+
+            // MODE Section
+            item {
+                SettingsSectionHeader(
+                    title = "MODE",
+                    isDark = isDark
+                )
+                PremiumSettingsCard(
+                    isDark = isDark
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(18.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                SettingsIconBox(
+                                    icon = Icons.Default.Shuffle,
+                                    isDark = isDark,
+                                    accentColor = BrandPrimary
+                                )
+                                Column {
+                                    Text(
+                                        text = if (settings.mode == "personalized") "Personalized Mode" else "Auto Mode",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isDark) TextPrimaryDark else TextPrimaryLight
+                                    )
+                                    Text(
+                                        text = if (settings.mode == "personalized") "Learning from your preferences" else "Automatic wallpaper selection",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = if (isDark) TextSecondaryDark else TextSecondaryLight
+                                    )
+                                }
+                            }
+                            
+                            Switch(
+                                checked = settings.mode == "personalized",
+                                onCheckedChange = { enabled ->
+                                    viewModel.updateMode(if (enabled) "personalized" else "auto")
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = BrandPrimary,
+                                    uncheckedThumbColor = Color.White,
+                                    uncheckedTrackColor = if (isDark) SurfaceHighlightDark else SurfaceHighlightLight
+                                )
+                            )
+                        }
+                        
+                        Text(
+                            text = "In Auto Mode, wallpapers are selected automatically. Enable Personalized Mode to teach the app your style.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isDark) TextTertiaryDark else TextTertiaryLight,
+                            lineHeight = 20.sp,
+                            modifier = Modifier.padding(start = 18.dp, end = 18.dp, bottom = 18.dp)
+                        )
+                        
+                        if (settings.mode == "personalized") {
+                            SettingsDivider(isDark = isDark)
+                            SettingsNavigationRow(
+                                title = "Re-personalize Your Aesthetic",
+                                subtitle = "Update your wallpaper preferences",
+                                onClick = onNavigateToOnboarding,
+                                isDark = isDark,
+                                leadingIcon = Icons.Default.Brush,
+                                iconAccentColor = BrandPrimary
+                            )
+                        }
+                    }
+                }
+            }
+
+            // APPEARANCE Section
+            item {
+                SettingsSectionHeader(
+                    title = "APPEARANCE",
+                    isDark = isDark
+                )
+                PremiumSettingsCard(
+                    isDark = isDark,
+                    contentPadding = PaddingValues(10.dp)
+                ) {
+                    SegmentedControl(
+                        items = ThemeMode.entries.map { it.displayName },
+                        selectedIndex = settings.themeMode.ordinal,
+                        onItemSelected = { index ->
+                            viewModel.updateThemeMode(ThemeMode.entries[index])
+                        },
+                        isDark = isDark
+                    )
+                }
+            }
+
+            // AUTO-CHANGE Section
+            item {
+                SettingsSectionHeader(
+                    title = "AUTO-CHANGE",
+                    isDark = isDark
+                )
+                PremiumSettingsCard(
+                    isDark = isDark
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(18.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                SettingsIconBox(
+                                    icon = Icons.Default.Update,
+                                    isDark = isDark,
+                                    accentColor = Color(0xFF8B5CF6) // Purple
+                                )
+                                Column {
+                                    Text(
+                                        text = "Frequency",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isDark) TextPrimaryDark else TextPrimaryLight
+                                    )
+                                    Text(
+                                        text = settings.interval.displayName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = if (isDark) TextSecondaryDark else TextSecondaryLight
+                                    )
+                                }
+                            }
+                            
+                            var expanded by remember { mutableStateOf(false) }
+                            Box {
+                                Row(
+                                    modifier = Modifier.clickable { expanded = true },
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = settings.interval.displayName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = if (isDark) TextSecondaryDark else TextSecondaryLight,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = null,
+                                        tint = if (isDark) TextSecondaryDark else TextSecondaryLight
+                                    )
+                                }
+                                
+                                DropdownMenu(
+                                    expanded = expanded,
+                                    onDismissRequest = { expanded = false },
+                                    containerColor = if (isDark) SurfaceOverlayDark else SurfaceLight,
+                                    tonalElevation = 4.dp
+                                ) {
+                                    ChangeInterval.entries.forEach { interval ->
+                                        DropdownMenuItem(
+                                            text = { 
+                                                Text(
+                                                    interval.displayName,
+                                                    color = if (isDark) TextPrimaryDark else TextPrimaryLight
+                                                ) 
+                                            },
+                                            onClick = {
+                                                viewModel.updateInterval(interval)
+                                                expanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (settings.interval == ChangeInterval.EVERY_UNLOCK) {
+                            SettingsDivider(isDark = isDark)
+                            
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(18.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        SettingsIconBox(
+                                            icon = Icons.Default.Collections,
+                                            isDark = isDark,
+                                            accentColor = Color(0xFFF43F5E) // Rose
+                                        )
+                                        Text(
+                                            text = "Daily Playlist Size",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (isDark) TextPrimaryDark else TextPrimaryLight
+                                        )
+                                    }
+                                    Text(
+                                        text = "${settings.dailyPlaylistSize} wallpapers",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BrandPrimary
+                                    )
+                                }
+                                
+                                Spacer(modifier = Modifier.height(10.dp))
+                                
+                                Slider(
+                                    value = settings.dailyPlaylistSize.toFloat(),
+                                    onValueChange = { viewModel.updateDailyPlaylistSize(it.toInt()) },
+                                    valueRange = 10f..50f,
+                                    steps = 39,
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = BrandPrimary,
+                                        activeTrackColor = BrandPrimary,
+                                        inactiveTrackColor = if (isDark) SurfaceHighlightDark else SurfaceHighlightLight
+                                    )
+                                )
+                                
+                                Text(
+                                    text = "A fresh set of wallpapers is downloaded daily and rotated on unlock.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isDark) TextTertiaryDark else TextTertiaryLight,
+                                    modifier = Modifier.padding(top = 6.dp)
+                                )
+                                
+                                Spacer(modifier = Modifier.height(10.dp))
+                                WarningNotice(
+                                    title = "Battery Notice",
+                                    message = "This mode has a 1-minute cooldown between changes to save battery. Frequent wallpaper changes may increase battery usage.",
+                                    isDark = isDark
+                                )
+                            }
+                            
+                            if (settings.isPlaylistDownloading) {
+                                SettingsDivider(isDark = isDark)
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(18.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp,
+                                            color = BrandPrimary
+                                        )
+                                        Text(
+                                            text = if (settings.playlistDownloadProgress.isApplying) 
+                                                "Applying wallpaper..." 
+                                            else 
+                                                settings.playlistDownloadProgress.progressText,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isDark) TextPrimaryDark else TextPrimaryLight,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                    
+                                    if (settings.playlistDownloadProgress.totalCount > 0) {
+                                        LinearProgressIndicator(
+                                            progress = { 
+                                                settings.playlistDownloadProgress.downloadedCount.toFloat() / 
+                                                    settings.playlistDownloadProgress.totalCount.toFloat() 
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(4.dp)
+                                                .clip(RoundedCornerShape(2.dp)),
+                                            color = BrandPrimary,
+                                            trackColor = if (isDark) SurfaceHighlightDark else SurfaceHighlightLight
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            if (!settings.isPlaylistDownloading) {
+                                SettingsDivider(isDark = isDark)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(18.dp)
+                                        .shadow(8.dp, RoundedCornerShape(14.dp), ambientColor = BrandPrimary.copy(alpha = 0.25f), spotColor = Color.Transparent)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Brush.horizontalGradient(colors = listOf(BrandPrimary, BrandAccent)))
+                                        .bounceClick { viewModel.triggerDailyPlaylistDownload() }
+                                        .padding(vertical = 14.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Download,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = Color.White
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Download Playlist Now",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (settings.interval == ChangeInterval.DAILY) {
+                            SettingsDivider(isDark = isDark)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showTimePickerDialog = true }
+                                    .padding(18.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    SettingsIconBox(
+                                        icon = Icons.Default.Schedule,
+                                        isDark = isDark,
+                                        accentColor = Color(0xFFF59E0B) // Amber
+                                    )
+                                    Column {
+                                        Text(
+                                            text = "Change Time",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (isDark) TextPrimaryDark else TextPrimaryLight
+                                        )
+                                        Text(
+                                            text = settings.dailyTime?.let { "${it.hour}:${it.minute.toString().padStart(2, '0')}" } ?: "9:00 AM",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = if (isDark) TextSecondaryDark else TextSecondaryLight
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = settings.dailyTime?.let { String.format("%02d:%02d", it.hour, it.minute) } ?: "09:00",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (isDark) TextSecondaryDark else TextSecondaryLight,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // BATTERY & PERFORMANCE Section
+            item {
+                val batteryOptimized = remember {
+                    !BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
+                }
+                
+                if (batteryOptimized && settings.interval != ChangeInterval.NEVER) {
+                    SettingsSectionHeader(
+                        title = "BATTERY & PERFORMANCE",
+                        isDark = isDark
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(ErrorColor.copy(alpha = 0.1f))
+                            .border(
+                                width = 1.dp,
+                                color = ErrorColor.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            .padding(18.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Icon(
+                                    imageVector = Icons.Default.BatteryAlert,
+                                    contentDescription = null,
+                                    tint = ErrorColor
+                                )
+                                Column {
+                                    Text(
+                                        text = "Battery Optimization Active",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = ErrorColor
+                                    )
+                                    Text(
+                                        text = "Auto-change may not work after restart.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (isDark) TextSecondaryDark else TextSecondaryLight
+                                    )
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(
+                                        width = 1.dp,
+                                        color = ErrorColor.copy(alpha = 0.3f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(ErrorColor.copy(alpha = 0.15f))
+                                    .bounceClick { viewModel.openBatterySettings() }
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Open Battery Settings",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = ErrorColor
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // APPLY TO Section
+            item {
+                SettingsSectionHeader(
+                    title = "APPLY TO",
+                    isDark = isDark
+                )
+                PremiumSettingsCard(
+                    isDark = isDark,
+                    contentPadding = PaddingValues(10.dp)
+                ) {
+                    SegmentedControl(
+                        items = ApplyTo.entries.map { it.displayName },
+                        selectedIndex = ApplyTo.entries.indexOf(settings.applyTo),
+                        onItemSelected = { index ->
+                            viewModel.updateApplyTo(ApplyTo.entries[index])
+                        },
+                        isDark = isDark
+                    )
+                }
+            }
+
+            // SOURCES Section
+            item {
+                SettingsSectionHeader(
+                    title = "SOURCES",
+                    isDark = isDark
+                )
+                PremiumSettingsCard(
+                    isDark = isDark
+                ) {
+                    Column {
+                        settings.sourcesEnabled.entries.forEachIndexed { index, (source, enabled) ->
+                            if (index > 0) SettingsDivider(isDark = isDark)
+                            
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(18.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = source,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isDark) TextPrimaryDark else TextPrimaryLight
+                                    )
+                                    Text(
+                                        text = if (enabled) "Enabled" else "Disabled",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = if (isDark) TextSecondaryDark else TextSecondaryLight
+                                    )
+                                }
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .size(26.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .then(
+                                            if (enabled) {
+                                                Modifier.background(Brush.linearGradient(colors = listOf(BrandPrimary, BrandPrimary.copy(alpha = 0.8f))))
+                                            } else {
+                                                Modifier
+                                            }
+                                        )
+                                        .border(
+                                            width = if (enabled) 0.dp else 1.5.dp,
+                                            color = if (enabled) Color.Transparent else getOnboardingCardBorder(isDark),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .bounceClick { viewModel.toggleSource(source, !enabled) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (enabled) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        
+                        val isBingSyncing by viewModel.isBingSyncing.collectAsState()
+                        val bingSyncProgress by viewModel.bingSyncProgress.collectAsState()
+                        val bingSyncMessage by viewModel.bingSyncMessage.collectAsState()
+                        val bingWallpaperCount by viewModel.bingWallpaperCount.collectAsState()
+                        
+                        if (isBingSyncing) {
+                            SettingsDivider(isDark = isDark)
+                            
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 10.dp, horizontal = 18.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp,
+                                            color = BrandPrimary
+                                        )
+                                        Text(
+                                            text = bingSyncMessage,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Medium,
+                                            color = if (isDark) TextPrimaryDark else TextPrimaryLight
+                                        )
+                                    }
+                                
+                                    if (bingWallpaperCount > 0) {
+                                        Text(
+                                            text = "$bingWallpaperCount wallpapers",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = BrandPrimary,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                                
+                                LinearProgressIndicator(
+                                    progress = { bingSyncProgress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp)),
+                                    color = BrandPrimary,
+                                    trackColor = if (isDark) SurfaceHighlightDark else SurfaceHighlightLight
+                                )
+                            }
+                        }
+
+                        val isVanderwaalsCollectionSyncing by viewModel.isVanderwaalsCollectionSyncing.collectAsState()
+                        val vanderwaalsCollectionSyncProgress by viewModel.vanderwaalsCollectionSyncProgress.collectAsState()
+                        val vanderwaalsCollectionSyncMessage by viewModel.vanderwaalsCollectionSyncMessage.collectAsState()
+                        val vanderwaalsCollectionWallpaperCount by viewModel.vanderwaalsCollectionWallpaperCount.collectAsState()
+
+                        if (isVanderwaalsCollectionSyncing) {
+                            SettingsDivider(isDark = isDark)
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 10.dp, horizontal = 18.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp,
+                                            color = BrandAccent
+                                        )
+                                        Text(
+                                            text = vanderwaalsCollectionSyncMessage,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Medium,
+                                            color = if (isDark) TextPrimaryDark else TextPrimaryLight
+                                        )
+                                    }
+
+                                    if (vanderwaalsCollectionWallpaperCount > 0) {
+                                        Text(
+                                            text = "$vanderwaalsCollectionWallpaperCount wallpapers",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = BrandAccent,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+
+                                LinearProgressIndicator(
+                                    progress = { vanderwaalsCollectionSyncProgress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp)),
+                                    color = BrandAccent,
+                                    trackColor = if (isDark) SurfaceHighlightDark else SurfaceHighlightLight
+                                )
+                            }
+                        }
+                        
+                        SettingsDivider(isDark = isDark)
+                        
+                        val isSyncing by viewModel.isSyncing.collectAsState()
+                        
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(18.dp)
+                                .border(
+                                    width = 1.dp,
+                                    color = getOnboardingCardBorder(isDark),
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(getOnboardingCardBackground(isDark))
+                                .bounceClick { if (!isSyncing) viewModel.syncNow() }
+                                .padding(vertical = 14.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                if (isSyncing) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        color = if (isDark) TextPrimaryDark else TextPrimaryLight,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Syncing...",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isDark) TextPrimaryDark else TextPrimaryLight
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Sync,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = if (isDark) TextPrimaryDark else TextPrimaryLight
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Sync Now",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isDark) TextPrimaryDark else TextPrimaryLight
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Last synced: ${settings.lastSynced}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isDark) TextTertiaryDark else TextTertiaryLight
+                            )
+                            
+                            if (settings.lastSynced == "Never synced") {
+                                Text(
+                                    text = "Sync wallpaper catalog to start",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = ErrorColor,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(18.dp))
+                    }
+                }
+            }
+
+            // STORAGE Section
+            item {
+                SettingsSectionHeader(
+                    title = "STORAGE",
+                    isDark = isDark
+                )
+                PremiumSettingsCard(
+                    isDark = isDark
+                ) {
+                    Column {
+                        SettingsInfoRow(
+                            label = "Cache Size",
+                            value = settings.cacheSize,
+                            isDark = isDark,
+                            leadingIcon = Icons.Default.SdStorage,
+                            iconAccentColor = Color(0xFF10B981) // Emerald
+                        )
+                        
+                        SettingsDivider(isDark = isDark)
+                        
+                        SettingsInfoRow(
+                            label = "Download Location",
+                            value = "Pictures/Vanderwaals",
+                            isDark = isDark,
+                            leadingIcon = Icons.Default.FolderOpen,
+                            iconAccentColor = Color(0xFF3B82F6) // Blue
+                        )
+                        
+                        SettingsDivider(isDark = isDark)
+                        
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(18.dp)
+                                .border(
+                                    width = 1.dp,
+                                    color = ErrorColor.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(ErrorColor.copy(alpha = 0.1f))
+                                .bounceClick { showClearCacheDialog = true }
+                                .padding(vertical = 14.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Clear Cache",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = ErrorColor
+                            )
+                        }
+                    }
+                }
+            }
+
+            // INSIGHTS Section
+            item {
+                SettingsSectionHeader(
+                    title = "INSIGHTS",
+                    isDark = isDark
+                )
+                PremiumSettingsCard(
+                    isDark = isDark,
+                    onClick = { onNavigateToAnalytics() }
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            SettingsIconBox(
+                                icon = Icons.Default.Analytics,
+                                isDark = isDark,
+                                accentColor = BrandPrimary
+                            )
+                            Column {
+                                Text(
+                                    text = "Personalization Analytics",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (isDark) TextPrimaryDark else TextPrimaryLight
+                                )
+                                Text(
+                                    text = "See how personalization is working",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (isDark) TextSecondaryDark else TextSecondaryLight
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            tint = if (isDark) TextTertiaryDark else TextTertiaryLight,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            // ABOUT Section
+            item {
+                SettingsSectionHeader(
+                    title = "ABOUT",
+                    isDark = isDark
+                )
+                PremiumSettingsCard(
+                    isDark = isDark
+                ) {
+                    Column {
+                        SettingsInfoRow(
+                            label = "Version",
+                            value = "v${me.avinas.vanderwaals.BuildConfig.VERSION_NAME}",
+                            isDark = isDark,
+                            leadingIcon = Icons.Default.Info,
+                            iconAccentColor = Color(0xFF6366F1)
+                        )
+                        
+                        SettingsDivider(isDark = isDark)
+                        
+                        SettingsNavigationRow(
+                            title = "View on GitHub",
+                            subtitle = "Star us on GitHub",
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/avinaxhroy/Vanderwaals"))
+                                context.startActivity(intent)
+                            },
+                            isDark = isDark,
+                            leadingIcon = Icons.Default.Code,
+                            iconAccentColor = if (isDark) Color.White else Color.Black,
+                            trailingIcon = Icons.AutoMirrored.Filled.OpenInNew
+                        )
+                        
+                        SettingsDivider(isDark = isDark)
+                        
+                        SettingsNavigationRow(
+                            title = "Rate on Store",
+                            subtitle = "Help us improve",
+                            onClick = {
+                                val intent = android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("market://details?id=${context.packageName}")
+                                )
+                                try {
+                                    context.startActivity(intent)
+                                } catch (e: android.content.ActivityNotFoundException) {
+                                    val webIntent = android.content.Intent(
+                                        android.content.Intent.ACTION_VIEW,
+                                        android.net.Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}")
+                                    )
+                                    context.startActivity(webIntent)
+                                }
+                            },
+                            isDark = isDark,
+                            leadingIcon = Icons.Default.Star,
+                            iconAccentColor = Color(0xFFF59E0B),
+                            trailingIcon = Icons.AutoMirrored.Filled.OpenInNew
+                        )
+                    }
+                }
+            }
+            
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
             }
         }
     }
+    }
 
-    // Dialogs (Alarm, Clear Cache, Time Picker) - Kept mostly same but updated colors if needed
+    // Dialogs
     if (needsAlarmPermission) {
-        AlertDialog(
+        PremiumAlertDialog(
             onDismissRequest = { viewModel.dismissAlarmPermissionDialog() },
-            title = { Text("Alarm Permission Required") },
-            text = { Text("To schedule automatic wallpaper changes at precise intervals, Vanderwaals needs permission to set alarms.") },
-            confirmButton = {
-                TextButton(onClick = { viewModel.openAlarmPermissionSettings() }) {
-                    Text("Grant Permission")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissAlarmPermissionDialog() }) {
-                    Text("Cancel")
-                }
-            }
+            title = "Alarm Permission Required",
+            message = "To schedule automatic wallpaper changes at precise intervals, Vanderwaals needs permission to set alarms.",
+            confirmText = "Grant Permission",
+            onConfirm = { viewModel.openAlarmPermissionSettings() },
+            dismissText = "Cancel",
+            onDismiss = { viewModel.dismissAlarmPermissionDialog() },
+            isDark = isDark
         )
     }
 
     if (showClearCacheDialog) {
-        AlertDialog(
+        PremiumAlertDialog(
             onDismissRequest = { showClearCacheDialog = false },
-            title = { Text("Clear Cache?") },
-            text = { Text("This will delete all cached wallpapers. You can re-download them later.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.clearCache()
-                        showClearCacheDialog = false
-                    }
-                ) {
-                    Text("Clear", color = Color.Red)
-                }
+            title = "Clear Cache?",
+            message = "This will delete all cached wallpapers. You can re-download them later.",
+            confirmText = "Clear",
+            onConfirm = {
+                viewModel.clearCache()
+                showClearCacheDialog = false
             },
-            dismissButton = {
-                TextButton(onClick = { showClearCacheDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+            dismissText = "Cancel",
+            onDismiss = { showClearCacheDialog = false },
+            isDark = isDark,
+            confirmColor = ErrorColor
         )
     }
 
@@ -1039,149 +1108,486 @@ fun SettingsScreen(
         var selectedHour by remember { mutableStateOf(currentTime.hour) }
         var selectedMinute by remember { mutableStateOf(currentTime.minute) }
         
-        AlertDialog(
+        PremiumTimePickerDialog(
             onDismissRequest = { showTimePickerDialog = false },
-            title = { Text("Set Daily Change Time") },
-            text = {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        // Simple Time Picker Implementation
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            IconButton(onClick = { selectedHour = (selectedHour + 1) % 24 }) {
-                                Icon(Icons.Default.ArrowUpward, "Up")
-                            }
-                            Text(
-                                text = "%02d".format(selectedHour),
-                                style = MaterialTheme.typography.headlineLarge
-                            )
-                            IconButton(onClick = { selectedHour = if (selectedHour == 0) 23 else selectedHour - 1 }) {
-                                Icon(Icons.Default.ArrowDownward, "Down")
-                            }
-                        }
-                        Text(":", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(horizontal = 8.dp))
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            IconButton(onClick = { selectedMinute = (selectedMinute + 15) % 60 }) {
-                                Icon(Icons.Default.ArrowUpward, "Up")
-                            }
-                            Text(
-                                text = "%02d".format(selectedMinute),
-                                style = MaterialTheme.typography.headlineLarge
-                            )
-                            IconButton(onClick = { selectedMinute = if (selectedMinute == 0) 45 else selectedMinute - 15 }) {
-                                Icon(Icons.Default.ArrowDownward, "Down")
-                            }
-                        }
-                    }
-                }
+            initialHour = selectedHour,
+            initialMinute = selectedMinute,
+            onHourChange = { selectedHour = it },
+            onMinuteChange = { selectedMinute = it },
+            onConfirm = {
+                viewModel.updateDailyTime(DailyTime(selectedHour, selectedMinute))
+                showTimePickerDialog = false
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.updateDailyTime(DailyTime(selectedHour, selectedMinute))
-                        showTimePickerDialog = false
-                    }
-                ) {
-                    Text("Set")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTimePickerDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+            onDismiss = { showTimePickerDialog = false },
+            isDark = isDark
         )
     }
     
-    // Bing Manifest Type Selection Dialog
     val showBingTypeDialog by viewModel.showBingTypeDialog.collectAsState()
     var selectedBingType by remember { mutableStateOf("lite") }
     
     if (showBingTypeDialog) {
-        AlertDialog(
+        PremiumBingTypeDialog(
             onDismissRequest = { viewModel.dismissBingTypeDialog() },
-            containerColor = if (isDark) Color(0xFF1F2937) else Color.White,
-            title = {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
+            selectedType = selectedBingType,
+            onTypeChange = { selectedBingType = it },
+            onConfirm = { viewModel.onBingTypeSelected(selectedBingType) },
+            isDark = isDark
+        )
+    }
+}
+
+@Composable
+private fun SettingsSectionHeader(
+    title: String,
+    isDark: Boolean
+) {
+    Text(
+        text = title.uppercase(),
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Bold,
+        color = getOnboardingTextSecondary(isDark),
+        letterSpacing = 1.2.sp,
+        modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+    )
+}
+
+@Composable
+private fun PremiumSettingsCard(
+    modifier: Modifier = Modifier,
+    isDark: Boolean,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    onClick: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val metrics = rememberOnboardingLayoutMetrics()
+    val cardModifier = modifier
+        .fillMaxWidth()
+        .shadow(
+            elevation = 4.dp,
+            shape = RoundedCornerShape(metrics.cardCornerRadius),
+            ambientColor = if (isDark) Color(0xFF3F3F46).copy(alpha = 0.12f) else Color(0x0A000000),
+            spotColor = Color.Transparent
+        )
+        .border(1.dp, getOnboardingCardBorder(isDark), RoundedCornerShape(metrics.cardCornerRadius))
+        .clip(RoundedCornerShape(metrics.cardCornerRadius))
+        .background(getOnboardingCardBackground(isDark))
+        .let {
+            if (onClick != null) it.bounceClick(onClick) else it
+        }
+
+    Column(
+        modifier = cardModifier.padding(contentPadding),
+        content = content
+    )
+}
+
+@Composable
+private fun SettingsIconBox(
+    icon: ImageVector,
+    isDark: Boolean,
+    accentColor: Color
+) {
+    val metrics = rememberOnboardingLayoutMetrics()
+    Box(
+        modifier = Modifier
+            .size(metrics.iconBoxSize)
+            .clip(RoundedCornerShape(14.dp))
+            .background(accentColor.copy(alpha = 0.15f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = accentColor,
+            modifier = Modifier.size(metrics.iconSize)
+        )
+    }
+}
+
+@Composable
+private fun SettingsDivider(isDark: Boolean) {
+    HorizontalDivider(
+        color = getOnboardingCardBorder(isDark)
+    )
+}
+
+@Composable
+private fun SettingsNavigationRow(
+    title: String,
+    subtitle: String? = null,
+    onClick: () -> Unit,
+    isDark: Boolean,
+    leadingIcon: ImageVector? = null,
+    iconAccentColor: Color = BrandPrimary,
+    trailingIcon: ImageVector? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .bounceClick(onClick)
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        leadingIcon?.let {
+            SettingsIconBox(
+                icon = it,
+                isDark = isDark,
+                accentColor = iconAccentColor
+            )
+        }
+        
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = getOnboardingTextPrimary(isDark)
+            )
+            subtitle?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = getOnboardingTextSecondary(isDark),
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+        }
+        Icon(
+            imageVector = trailingIcon ?: Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = null,
+            tint = getOnboardingTextSecondary(isDark),
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+private fun SettingsInfoRow(
+    label: String,
+    value: String,
+    isDark: Boolean,
+    leadingIcon: ImageVector? = null,
+    iconAccentColor: Color = BrandPrimary
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        leadingIcon?.let {
+            SettingsIconBox(
+                icon = it,
+                isDark = isDark,
+                accentColor = iconAccentColor
+            )
+        }
+        
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = getOnboardingTextPrimary(isDark)
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                color = getOnboardingTextSecondary(isDark),
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun WarningNotice(
+    title: String,
+    message: String,
+    isDark: Boolean
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                color = WarningContainer.copy(alpha = if (isDark) 0.15f else 0.8f)
+            )
+            .border(
+                width = 1.dp,
+                color = WarningColor.copy(alpha = if (isDark) 0.25f else 0.15f),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(
+            imageVector = Icons.Default.Warning,
+            contentDescription = null,
+            tint = WarningColor,
+            modifier = Modifier.size(18.dp)
+        )
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = WarningColor
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (isDark) WarningColor.copy(alpha = 0.8f) else Color(0xFF78350F)
+            )
+        }
+    }
+}
+
+@Composable
+private fun PremiumAlertDialog(
+    onDismissRequest: () -> Unit,
+    title: String,
+    message: String,
+    confirmText: String,
+    onConfirm: () -> Unit,
+    dismissText: String,
+    onDismiss: () -> Unit,
+    isDark: Boolean,
+    confirmColor: Color? = null
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        containerColor = if (isDark) Color(0xFF14120F) else Color(0xFFF9F7F5),
+        title = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = getOnboardingTextPrimary(isDark)
+            )
+        },
+        text = {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = getOnboardingTextSecondary(isDark)
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = confirmColor ?: BrandPrimary
+                )
+            ) {
+                Text(confirmText, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = getOnboardingTextSecondary(isDark)
+                )
+            ) {
+                Text(dismissText)
+            }
+        },
+        shape = RoundedCornerShape(24.dp)
+    )
+}
+
+@Composable
+private fun PremiumTimePickerDialog(
+    onDismissRequest: () -> Unit,
+    initialHour: Int,
+    initialMinute: Int,
+    onHourChange: (Int) -> Unit,
+    onMinuteChange: (Int) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    isDark: Boolean
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        containerColor = if (isDark) Color(0xFF14120F) else Color(0xFFF9F7F5),
+        title = {
+            Text(
+                text = "Set Daily Change Time",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = getOnboardingTextPrimary(isDark)
+            )
+        },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
                 ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(onClick = { onHourChange((initialHour + 1) % 24) }) {
+                            Icon(Icons.Default.ArrowUpward, "Up", tint = getOnboardingTextPrimary(isDark))
+                        }
+                        Text(
+                            text = "%02d".format(initialHour),
+                            style = MaterialTheme.typography.headlineLarge,
+                            color = getOnboardingTextPrimary(isDark),
+                            fontWeight = FontWeight.Bold
+                        )
+                        IconButton(onClick = { onHourChange(if (initialHour == 0) 23 else initialHour - 1) }) {
+                            Icon(Icons.Default.ArrowDownward, "Down", tint = getOnboardingTextPrimary(isDark))
+                        }
+                    }
                     Text(
-                        text = "Choose Bing Collection",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDark) Color.White else Color(0xFF111827)
+                        text = ":",
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = getOnboardingTextPrimary(isDark),
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                        fontWeight = FontWeight.Bold
                     )
-                    Text(
-                        text = "Select how much wallpaper history to download",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isDark) Color.Gray else Color(0xFF6B7280),
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(onClick = { onMinuteChange((initialMinute + 15) % 60) }) {
+                            Icon(Icons.Default.ArrowUpward, "Up", tint = getOnboardingTextPrimary(isDark))
+                        }
+                        Text(
+                            text = "%02d".format(initialMinute),
+                            style = MaterialTheme.typography.headlineLarge,
+                            color = getOnboardingTextPrimary(isDark),
+                            fontWeight = FontWeight.Bold
+                        )
+                        IconButton(onClick = { onMinuteChange(if (initialMinute == 0) 45 else initialMinute - 15) }) {
+                            Icon(Icons.Default.ArrowDownward, "Down", tint = getOnboardingTextPrimary(isDark))
+                        }
+                    }
                 }
-            },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    // Recent Hits (Lite) Option
-                    BingTypeRadioCard(
-                        title = "Recent Hits",
-                        subtitle = "Last 3 years • ~1000 wallpapers",
-                        description = "Faster download, newer wallpapers",
-                        isSelected = selectedBingType == "lite",
-                        onClick = { selectedBingType = "lite" },
-                        isDark = isDark
-                    )
-                    
-                    // Global Archive (Full) Option
-                    BingTypeRadioCard(
-                        title = "Global Archive",
-                        subtitle = "2009-present • ~5400 wallpapers",
-                        description = "Complete collection, larger download",
-                        isSelected = selectedBingType == "full",
-                        onClick = { selectedBingType = "full" },
-                        isDark = isDark
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = { viewModel.onBingTypeSelected(selectedBingType) },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isDark) InfoColorDark else LightPrimary
-                    ),
-                    shape = RoundedCornerShape(8.dp)
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = BrandPrimary
+                )
+            ) {
+                Text("Set", fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = getOnboardingTextSecondary(isDark)
+                )
+            ) {
+                Text("Cancel")
+            }
+        },
+        shape = RoundedCornerShape(24.dp)
+    )
+}
+
+@Composable
+private fun PremiumBingTypeDialog(
+    onDismissRequest: () -> Unit,
+    selectedType: String,
+    onTypeChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    isDark: Boolean
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        containerColor = if (isDark) Color(0xFF14120F) else Color(0xFFF9F7F5),
+        title = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Choose Bing Collection",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = getOnboardingTextPrimary(isDark)
+                )
+                Text(
+                    text = "Select how much wallpaper history to download",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = getOnboardingTextSecondary(isDark),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                BingTypeRadioCard(
+                    title = "Recent Hits",
+                    subtitle = "Last 3 years • ~1000 wallpapers",
+                    description = "Faster download, newer wallpapers",
+                    isSelected = selectedType == "lite",
+                    onClick = { onTypeChange("lite") },
+                    isDark = isDark
+                )
+                
+                BingTypeRadioCard(
+                    title = "Global Archive",
+                    subtitle = "2009-present • ~5400 wallpapers",
+                    description = "Complete collection, larger download",
+                    isSelected = selectedType == "full",
+                    onClick = { onTypeChange("full") },
+                    isDark = isDark
+                )
+            }
+        },
+        confirmButton = {
+            Box(
+                modifier = Modifier
+                    .shadow(4.dp, RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Brush.horizontalGradient(listOf(BrandPrimary, BrandAccent)))
+                    .bounceClick(onConfirm)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Download,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
+                        tint = Color.White
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Download", fontWeight = FontWeight.SemiBold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissBingTypeDialog() }) {
-                    Text("Cancel", color = if (isDark) Color.Gray else Color(0xFF6B7280))
+                    Text("Download", fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
             }
-        )
-    }
-    }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismissRequest,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = getOnboardingTextSecondary(isDark)
+                )
+            ) {
+                Text("Cancel")
+            }
+        },
+        shape = RoundedCornerShape(24.dp)
+    )
 }
 
-/**
- * Radio card for Bing manifest type selection dialog.
- */
 @Composable
 private fun BingTypeRadioCard(
     title: String,
@@ -1191,34 +1597,36 @@ private fun BingTypeRadioCard(
     onClick: () -> Unit,
     isDark: Boolean
 ) {
+    val accent = BrandPrimary
+    val borderBrush = if (isSelected) {
+        Brush.linearGradient(colors = listOf(accent, accent.copy(alpha = 0.7f)))
+    } else {
+        SolidColor(getOnboardingCardBorder(isDark))
+    }
+    
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(
-                if (isSelected) {
-                    if (isDark) InfoColorDark.copy(alpha = 0.15f) else LightPrimary.copy(alpha = 0.1f)
-                } else {
-                    if (isDark) Color(0xFF111827).copy(alpha = 0.5f) else Color(0xFFF3F4F6)
-                }
+            .shadow(
+                elevation = if (isSelected) 8.dp else 0.dp,
+                shape = RoundedCornerShape(14.dp),
+                ambientColor = if (isSelected) accent.copy(alpha = 0.2f) else Color.Transparent,
+                spotColor = if (isSelected) accent.copy(alpha = 0.15f) else Color.Transparent
             )
+            .clip(RoundedCornerShape(14.dp))
+            .background(getOnboardingCardBackground(isDark))
             .border(
-                width = 2.dp,
-                color = if (isSelected) {
-                    if (isDark) InfoColorDark else LightPrimary
-                } else {
-                    Color.Transparent
-                },
-                shape = RoundedCornerShape(12.dp)
+                width = if (isSelected) 1.5.dp else 1.dp,
+                brush = borderBrush,
+                shape = RoundedCornerShape(14.dp)
             )
-            .clickable(onClick = onClick)
+            .bounceClick { onClick() }
             .padding(16.dp)
     ) {
         Row(
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Radio indicator
             Box(
                 modifier = Modifier
                     .size(20.dp)
@@ -1226,55 +1634,53 @@ private fun BingTypeRadioCard(
                     .clip(CircleShape)
                     .background(
                         if (isSelected) {
-                            if (isDark) InfoColorDark else LightPrimary
+                            Brush.linearGradient(colors = listOf(accent, accent.copy(alpha = 0.8f)))
                         } else {
-                            Color.Transparent
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    if (isDark) Color(0xFF1C1A17) else Color(0xFFF7F5F0),
+                                    if (isDark) Color(0xFF141210) else Color(0xFFECEAE3)
+                                )
+                            )
                         }
                     )
                     .border(
-                        width = 2.dp,
-                        color = if (isSelected) {
-                            if (isDark) InfoColorDark else LightPrimary
-                        } else {
-                            if (isDark) Color.Gray else Color(0xFFD1D5DB)
-                        },
+                        width = if (isSelected) 0.dp else 1.5.dp,
+                        color = if (isSelected) Color.Transparent else (if (isDark) Color(0xFF4A443A) else Color(0xFFD1CBBF)),
                         shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 if (isSelected) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(Color.White)
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp)
                     )
                 }
             }
             
-            // Text content
             Column {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isDark) Color.White else Color(0xFF111827)
+                    color = getOnboardingTextPrimary(isDark)
                 )
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (isDark) InfoColorDark else LightPrimary,
+                    color = BrandPrimary,
                     fontWeight = FontWeight.Medium
                 )
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (isDark) Color.Gray else Color(0xFF6B7280),
+                    color = getOnboardingTextSecondary(isDark),
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
         }
     }
 }
-
-

@@ -285,6 +285,7 @@
   <string name="settings_sources_title">Wallpaper Sources</string>
   <string name="settings_source_github">GitHub Collections</string>
   <string name="settings_source_bing">Bing Daily Wallpapers</string>
+  <string name="settings_source_vanderwaals">Vanderwaals Collection</string>
   <string name="settings_cache_title">Cache</string>
   <string name="settings_last_synced">Last synced: %1$s</string>
   

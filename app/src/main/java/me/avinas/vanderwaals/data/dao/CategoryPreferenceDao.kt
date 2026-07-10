@@ -9,33 +9,8 @@ import kotlinx.coroutines.flow.Flow
 import me.avinas.vanderwaals.data.entity.CategoryPreference
 
 /**
- * Data Access Object for category preference tracking.
- * 
- * Provides queries to:
- * - Track user preferences for wallpaper categories
- * - Record likes, dislikes, and views per category
- * - Calculate category scores for personalization
- * - Identify underexplored categories
- * 
- * **Usage in Algorithm:**
- * 1. Increment views when wallpaper shown
- * 2. Increment likes/dislikes on user feedback
- * 3. Use scores to boost/penalize categories during selection
- * 4. Explore underexplored categories periodically
- * 
- * **Example:**
- * ```kotlin
- * // When showing wallpaper
- * categoryPreferenceDao.incrementViews(wallpaper.category)
- * 
- * // When user likes wallpaper
- * categoryPreferenceDao.incrementLikes(wallpaper.category)
- * 
- * // Get category score for ranking
- * val score = categoryPreferenceDao.getByCategory(category)?.calculateScore() ?: 0f
- * ```
- * 
- * @see CategoryPreference
+ * DAO for tracking per-category preference scores (likes, dislikes, views).
+ * Scores are used to boost or penalize categories during wallpaper selection.
  */
 @Dao
 interface CategoryPreferenceDao {

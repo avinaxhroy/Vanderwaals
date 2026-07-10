@@ -25,12 +25,20 @@ class WallpaperSourceSelectionViewModel @Inject constructor(
     private val _bingManifestType = MutableStateFlow("lite")
     val bingManifestType: StateFlow<String> = _bingManifestType.asStateFlow()
 
+    private val _vanderwaalsCollectionEnabled = MutableStateFlow(false)
+    val vanderwaalsCollectionEnabled: StateFlow<Boolean> = _vanderwaalsCollectionEnabled.asStateFlow()
+
+    private val _vanderwaalsCollectionManifestType = MutableStateFlow("lite")
+    val vanderwaalsCollectionManifestType: StateFlow<String> = _vanderwaalsCollectionManifestType.asStateFlow()
+
     init {
         viewModelScope.launch {
             val settings = settingsDataStore.settings.first()
             _communityEnabled.value = settings.githubEnabled
             _bingEnabled.value = settings.bingEnabled
             _bingManifestType.value = settings.bingManifestType
+            _vanderwaalsCollectionEnabled.value = settings.vanderwaalsCollectionEnabled
+            _vanderwaalsCollectionManifestType.value = settings.vanderwaalsCollectionManifestType
         }
     }
 
@@ -46,6 +54,14 @@ class WallpaperSourceSelectionViewModel @Inject constructor(
         _bingManifestType.value = type
     }
 
+    fun toggleVanderwaalsCollection(enabled: Boolean) {
+        _vanderwaalsCollectionEnabled.value = enabled
+    }
+
+    fun setVanderwaalsCollectionManifestType(type: String) {
+        _vanderwaalsCollectionManifestType.value = type
+    }
+
 
     
     fun savePreferences(onComplete: () -> Unit) {
@@ -53,6 +69,8 @@ class WallpaperSourceSelectionViewModel @Inject constructor(
             settingsDataStore.toggleSource("github", _communityEnabled.value)
             settingsDataStore.toggleSource("bing", _bingEnabled.value)
             settingsDataStore.updateBingManifestType(_bingManifestType.value)
+            settingsDataStore.toggleSource("vanderwaals", _vanderwaalsCollectionEnabled.value)
+            settingsDataStore.updateVanderwaalsCollectionManifestType(_vanderwaalsCollectionManifestType.value)
             onComplete()
         }
     }

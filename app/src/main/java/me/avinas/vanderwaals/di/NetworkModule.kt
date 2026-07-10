@@ -35,37 +35,8 @@ annotation class JsDelivrBaseUrl
 annotation class GitHubRawBaseUrl
 
 /**
- * Hilt/Dagger module for providing network dependencies.
- * 
- * Provides singleton instances of:
- * - [Retrofit]: Configured for manifest downloads from jsDelivr/GitHub
- * - [OkHttpClient]: With timeouts, caching, and logging
- * - [Gson]: JSON serialization for manifest parsing
- * - [ManifestService]: Retrofit interface for manifest API
- * 
- * **Architecture:**
- * - Singleton scope for connection pooling and cache reuse
- * - Separate OkHttpClient instances for different base URLs if needed
- * - Debug logging enabled only in debug builds
- * - HTTP cache for offline access (10 MB)
- * 
- * **CDN Strategy:**
- * - Primary: jsDelivr CDN for fast global delivery
- * - Fallback: GitHub raw URL if CDN fails
- * 
- * **Usage:**
- * This module is automatically discovered by Hilt. Just inject dependencies:
- * ```kotlin
- * @Inject lateinit var manifestService: ManifestService
- * 
- * suspend fun syncManifest() {
- *     val response = manifestService.getManifest()
- *     // ...
- * }
- * ```
- * 
- * @see ManifestService
- * @see Retrofit
+ * Hilt module providing network singletons: Retrofit (jsDelivr CDN primary,
+ * GitHub raw fallback), OkHttpClient with 10 MB HTTP cache, and ManifestService.
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -89,7 +60,7 @@ object NetworkModule {
      * Format: `https://raw.githubusercontent.com/{owner}/{repo}/{branch}/`
      */
     private const val GITHUB_RAW_BASE_URL = "https://raw.githubusercontent.com/avinaxhroy/Vanderwaals/main/"
-    
+
     /**
      * Path to manifest file in repository.
      * 
@@ -111,12 +82,14 @@ object NetworkModule {
     
     /**
      * Read timeout in seconds.
-     * INCREASED to 5 minutes for large manifest download (65MB).
-     * On 3G (~1 Mbps): 65MB takes ~8 minutes
-     * On 4G (~10 Mbps): 65MB takes ~1 minute
-     * On WiFi (~50 Mbps): 65MB takes ~10 seconds
+     * This is the max inactivity between read calls (not total download time),
+     * so a slow-but-progressing download still succeeds; only a stalled
+     * connection fails. 60s is plenty for the ~10-15MB manifest and UHD images,
+     * and ensures the onboarding sync surfaces an actionable error/retry state
+     * quickly instead of hanging for minutes (which triggers Google Play's
+     * "unresponsive app" Broken Functionality rejection).
      */
-    private const val READ_TIMEOUT = 300L  // 5 minutes
+    private const val READ_TIMEOUT = 60L
     
     /**
      * Write timeout in seconds.
@@ -224,6 +197,12 @@ object NetworkModule {
     @Singleton
     fun provideLoggingInterceptor(): HttpLoggingInterceptor {
         return HttpLoggingInterceptor().apply {
+            redactHeader("Authorization")
+            redactHeader("Cookie")
+            redactHeader("Set-Cookie")
+            redactHeader("Proxy-Authorization")
+            redactHeader("CF-Access-Client-Id")
+            redactHeader("CF-Access-Client-Secret")
             level = if (BuildConfig.DEBUG) {
                 HttpLoggingInterceptor.Level.HEADERS
             } else {
@@ -382,6 +361,34 @@ object NetworkModule {
         
         return bingRetrofit.create(me.avinas.vanderwaals.network.BingApiService::class.java)
     }
+
+    /**
+     * Provides VanderwaalsCollectionService for fetching the Vanderwaals
+     * Collection wallpaper manifest.
+     *
+     * Separate Retrofit instance for the dedicated Vanderwaals API
+     * (`https://vanderwaalsapi.2626688.xyz/`), which serves the app's own
+     * curated wallpaper catalog (`cat/lite.json`, `cat/full.json`) in the
+     * same ManifestDto format used by the GitHub and Bing sources.
+     *
+     * @param okHttpClient Configured OkHttp client
+     * @param gson Gson for JSON parsing
+     * @return VanderwaalsCollectionService implementation
+     */
+    @Provides
+    @Singleton
+    fun provideVanderwaalsCollectionService(
+        okHttpClient: OkHttpClient,
+        gson: Gson
+    ): me.avinas.vanderwaals.network.VanderwaalsCollectionService {
+        val vanderwaalsRetrofit = Retrofit.Builder()
+            .baseUrl("https://vanderwaalsapi.2626688.xyz/")
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+
+        return vanderwaalsRetrofit.create(me.avinas.vanderwaals.network.VanderwaalsCollectionService::class.java)
+    }
     
     /**
      * Provides BingArchiveService for fetching wallpapers from Bing Wallpaper Archive.
@@ -458,4 +465,5 @@ object NetworkModule {
             ) = archiveService.getArchiveManifestYear(country, language, year)
         }
     }
-}
+
+    }

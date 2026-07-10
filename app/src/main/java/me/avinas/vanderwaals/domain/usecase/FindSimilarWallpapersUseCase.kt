@@ -10,43 +10,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Use case for finding wallpapers similar to a given embedding vector.
- * 
- * This use case implements the core recommendation algorithm:
- * 1. Retrieve all wallpapers from the local database
- * 2. Calculate cosine similarity between user embedding and each wallpaper
- * 3. Apply composite scoring (embedding 70%, color 20%, category 10%)
- * 4. Return top N matches sorted by similarity
- * 
- * **Usage Scenarios:**
- * - Initial onboarding: Find matches for user's uploaded wallpaper
- * - After feedback: Re-rank wallpapers based on updated preferences
- * - Manual refresh: User requests new recommendations
- * 
- * **Performance:**
- * - Calculating 6000 similarities: ~50ms on modern devices
- * - Uses efficient cosine similarity (dot product + normalization)
- * - Pre-computed embeddings stored in database
- * 
- * **Algorithm:**
- * ```
- * For each wallpaper:
- *   embedding_score = cosineSimilarity(userEmbedding, wallpaperEmbedding) [0.7 weight]
- *   color_score = colorSimilarity(userColors, wallpaperColors)           [0.2 weight]
- *   category_bonus = (same_category ? 0.05 : 0)                          [0.1 weight]
- *   
- *   final_score = (embedding_score × 0.7) + (color_score × 0.2) + (category_bonus × 0.1)
- * 
- * Sort by final_score descending
- * Return top N
- * ```
- * 
- * @property wallpaperRepository Repository for accessing wallpaper metadata
- * @property similarityCalculator Utility for computing similarity scores
- * 
- * @see ExtractEmbeddingUseCase
- * @see UpdatePreferencesUseCase
- * @see SelectNextWallpaperUseCase
+ * Finds wallpapers similar to a given embedding vector.
+ *
+ * Uses composite scoring: embedding similarity (70%), color matching (20%),
+ * category affinity (10%). Returns top N matches sorted by score.
  */
 @Singleton
 class FindSimilarWallpapersUseCase @Inject constructor(
@@ -56,63 +23,15 @@ class FindSimilarWallpapersUseCase @Inject constructor(
 ) {
     /**
      * Finds the most similar wallpapers to a given embedding vector.
-     * 
-     * **Thread Safety:**
-     * This operation performs database queries and CPU-intensive similarity
-     * calculations. Should be called from a background coroutine (IO dispatcher).
-     * 
-     * **Limit Parameter:**
-     * Default is 50 wallpapers (optimized for download queue size).
-     * Can be adjusted for different use cases:
-     * - Onboarding preview: 8-12 wallpapers
-     * - Download queue: 50 wallpapers
-     * - Full re-ranking: 100+ wallpapers
-     * 
-     * **Empty Results:**
-     * If no wallpapers are found (empty database), returns empty list.
-     * Caller should handle this case (e.g., trigger manifest sync).
-     * 
-     * **ENHANCED MATCHING:**
-     * Pass userAnalysis for superior semantic matching that captures image essence.
-     * 
-     * @param userEmbedding 1280-dimensional embedding vector representing user preference
-     * @param limit Maximum number of matches to return (default: 50)
-     * @param userAnalysis Enhanced image analysis of uploaded image (optional, recommended)
-     * @param userColors Optional user color palette for composite scoring
-     * @param userCategory Optional user category preference
-     * @param userBrightness Optional user brightness preference (0-100)
-     * @param userContrast Optional user contrast preference (0-100)
-     * @param useCompositeSimilarity If true, uses composite scoring (embedding + color + category)
-     * @return Result<List<WallpaperMetadata>> containing top matches on success,
-     *         or error description on failure
-     * 
-     * @throws None - All exceptions are caught and returned as Result.failure
-     * 
-     * Example:
-     * ```kotlin
-     * viewModelScope.launch {
-     *     // After user uploads wallpaper
-     *     val embedding = extractEmbeddingUseCase(uri).getOrNull() ?: return@launch
-     *     
-     *     // RECOMMENDED: Enhanced matching with image analysis
-     *     val analysis = enhancedImageAnalyzer.analyze(bitmap)
-     *     val result = findSimilarWallpapersUseCase(
-     *         userEmbedding = embedding,
-     *         userAnalysis = analysis,  // Captures essence of image
-     *         limit = 12
-     *     )
-     *     
-     *     result.fold(
-     *         onSuccess = { wallpapers ->
-     *             // Show preview gallery with better matches
-     *             displayMatches(wallpapers)
-     *         },
-     *         onFailure = { error ->
-     *             showError("Failed to find matches: ${error.message}")
-     *         }
-     *     )
-     * }
-     * ```
+     * Call from a background coroutine (IO dispatcher).
+     *
+     * @param userEmbedding 1280-dimensional embedding vector
+     * @param limit Maximum matches to return (default: 50)
+     * @param userAnalysis Optional enhanced image analysis for better matching
+     * @param userColors Optional color palette for composite scoring
+     * @param userCategory Optional category preference
+     * @param useCompositeSimilarity Use composite scoring (default: true)
+     * @return Result with top matches or error
      */
     suspend operator fun invoke(
         userEmbedding: FloatArray,
@@ -150,6 +69,7 @@ class FindSimilarWallpapersUseCase @Inject constructor(
             val enabledSources = mutableListOf<String>()
             if (settings.githubEnabled) enabledSources.add("github")
             if (settings.bingEnabled) enabledSources.add("bing")
+            if (settings.vanderwaalsCollectionEnabled) enabledSources.add("vanderwaals")
             
             val filteredWallpapers = if (enabledSources.isEmpty()) {
                 // If no sources enabled, fall back to all wallpapers

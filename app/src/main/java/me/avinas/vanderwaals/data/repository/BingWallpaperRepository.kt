@@ -13,26 +13,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Repository for syncing Bing wallpapers from daily API and archive.
- * 
- * Handles:
- * - Fetching Bing's daily wallpaper (last 8 days for weekly coverage)
- * - Importing from Bing Wallpaper Archive (10,000+ historical wallpapers)
- * - Converting to WallpaperMetadata entities
- * - Storing in local database
- * 
- * **Sync Strategy** (from VanderwaalsStrategy.md):
- * - Tier 2 content: Professional photography
- * - Daily wallpaper: Fetch last 8 days (weekly)
- * - Archive: Import recent 500 wallpapers on first sync
- * - Incremental: Add only new daily wallpapers
- * 
- * **Sources**:
- * 1. Bing Daily API: https://www.bing.com/HPImageArchive.aspx
- * 2. Bing Archive: https://github.com/npanuhin/Bing-Wallpaper-Archive
- * 
- * @property bingArchiveService Service for Bing API calls
- * @property wallpaperDao DAO for database operations
+ * Syncs Bing wallpapers from the daily API (last 8 days) and the
+ * npanuhin/Bing-Wallpaper-Archive into the local database.
  */
 @Singleton
 class BingWallpaperRepository @Inject constructor(

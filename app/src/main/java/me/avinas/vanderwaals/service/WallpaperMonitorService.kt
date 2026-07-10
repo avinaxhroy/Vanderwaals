@@ -87,8 +87,8 @@ class WallpaperMonitorService : Service() {
 
     companion object {
         private const val TAG = "WallpaperMonitorService"
-        private const val CHANNEL_ID = "wallpaper_monitor_channel"
-        private const val NOTIFICATION_ID = 999
+        private const val CHANNEL_ID = me.avinas.vanderwaals.core.NotificationConstants.CHANNEL_WALLPAPER_MONITOR
+        private const val NOTIFICATION_ID = me.avinas.vanderwaals.core.NotificationConstants.NOTIFICATION_ID_MONITOR
         
         // Rate limiting
         private const val PREF_NAME = "vanderwaals_unlock"
@@ -101,8 +101,8 @@ class WallpaperMonitorService : Service() {
         private const val HEALTH_CHECK_INTERVAL_MS = 300_000L // 5 minutes
         private const val MAX_CONSECUTIVE_FAILURES = 5
         
-        // Wakelock timeout (10 minutes - refreshed periodically)
-        private const val WAKELOCK_TIMEOUT_MS = 10 * 60 * 1000L
+        // Wakelock timeout (2 minutes - refreshed on each unlock event)
+        private const val WAKELOCK_TIMEOUT_MS = 2 * 60 * 1000L
     }
     
     // Service state
@@ -156,6 +156,13 @@ class WallpaperMonitorService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "Service started - Lifecycle: onStartCommand()")
+        
+        // Handle STOP_SERVICE action from notification
+        if (intent?.action == "STOP_SERVICE") {
+            Log.d(TAG, "STOP_SERVICE action received - stopping service")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         
         // Verify settings to ensure service should be running
         serviceScope.launch {
@@ -244,6 +251,9 @@ class WallpaperMonitorService : Service() {
                 currentState = ServiceState.PROCESSING
                 updateNotification("Changing wallpaper...")
                 Log.d(TAG, "Triggering wallpaper change directly for: $targetScreen (Settings: ${settings.applyTo})")
+                
+                // SAMSUNG FIX: Refresh wakelock on each unlock to prevent timeout expiry
+                acquireWakeLock()
                 
                 // DIRECT EXECUTION: Bypass WorkManager for immediate response
                 changeWallpaper(targetScreen)
@@ -421,7 +431,7 @@ class WallpaperMonitorService : Service() {
             
             // SmartCrop logic (simplified for service)
             val screenSize = me.avinas.vanderwaals.core.getDeviceScreenSize(applicationContext)
-            processedBitmap = me.avinas.vanderwaals.core.SmartCrop.smartCropBitmap(
+            processedBitmap = me.avinas.vanderwaals.core.SmartCrop.smartCropBitmapAsync(
                 source = bitmap,
                 targetWidth = screenSize.width,
                 targetHeight = screenSize.height,

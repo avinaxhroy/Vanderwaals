@@ -1,18 +1,18 @@
 🎨 WALLPAPERS THAT LEARN YOUR AESTHETIC
 
-Vanderwaals uses on-device AI to learn your unique style and deliver wallpapers you'll love. No endless scrolling—just fresh wallpapers that match your vibe.
+Vanderwaals uses on-device machine learning to learn your style and deliver wallpapers you'll love. No endless scrolling—just fresh wallpapers that match your vibe.
 
 ✨ HOW IT WORKS
 
-• Auto Mode: Discover wallpapers, AI learns from your feedback
+• Auto Mode: Discover wallpapers, the app learns from your feedback
 • Personalize Mode: Upload your favorite for instant matches
 • Auto-change triggers: Every unlock, hourly, daily, or manual
 • Apply to lock screen, home screen, or both
 
-🤖 INTELLIGENT PERSONALIZATION
+🤖 PERSONALIZATION
 
 Machine learning analyzes your aesthetic through:
-• Deep visual features (artistic style & mood via MobileNetV3)
+• Deep visual features (artistic style & mood via MobileNetV4)
 • Color matching (LAB color space for accurate palettes)
 • Category learning (minimal, nature, abstract, dark themes, etc.)
 
@@ -27,7 +27,7 @@ Thousands of high-quality wallpapers from:
 
 🔒 PRIVACY YOU CAN TRUST
 
-✓ 100% Offline AI: All ML runs on your device
+✓ 100% Offline ML: All processing runs on your device
 ✓ Zero Analytics: No Firebase, Google Analytics, or tracking
 ✓ No Data Collection: Your preferences never leave your phone
 ✓ Open Source (AGPL-3.0): Full code transparency

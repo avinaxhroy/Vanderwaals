@@ -9,54 +9,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Use case for updating user preference vector based on feedback.
- * 
- * **CRITICAL: Works identically for BOTH Auto and Personalize modes!**
- * This use case doesn't check the mode - it simply updates the preference vector
- * based on feedback. Both modes use the exact same learning algorithm.
- * 
- * **How It Works for Each Mode:**
- * 
- * PERSONALIZE MODE:
- * - Starts with preference vector from uploaded image (feedbackCount > 0)
- * - Each like/dislike updates this vector using EMA
- * - Vector continuously evolves with feedback
- * 
- * **AUTO MODE:**
- * - Starts with EMPTY preference vector (size = 0, feedbackCount = 0)
- * - First like: Creates preference vector directly from that wallpaper's embedding
- * - First dislike: Rejected (need at least one like to establish baseline)
- * - Subsequent likes/dislikes: Updates vector exactly like Personalize Mode using EMA
- * - After 10-15 likes: Vector is just as refined as Personalize Mode
- * 
- * **Learning Algorithm (EMA):**
- * ```
- * For LIKE feedback:
- *   preference_vector[i] += learning_rate × (wallpaper_embedding[i] - preference_vector[i])
- * 
- * For DISLIKE feedback:
- *   preference_vector[i] -= learning_rate × (wallpaper_embedding[i] - preference_vector[i])
- * 
- * Normalize preference_vector to unit length
- * ```
- * 
- * **Adaptive Learning Rates (same for both modes):**
- * - 0-10 feedback events: Fast learning (rate = 0.15 like, 0.20 dislike)
- * - 10-50 feedback events: Moderate learning (rate = 0.10 like, 0.15 dislike)
- * - 50+ feedback events: Stable maintenance (rate = 0.05 like, 0.10 dislike)
- * 
- * **Side Effects:**
- * After updating preferences, this use case triggers:
- * - Preference vector saved to database
- * - Wallpaper IDs added to liked/disliked lists
- * - Feedback count incremented
- * - Download queue re-ranking (via repository)
- * 
- * @property preferenceRepository Repository for accessing and updating user preferences
- * @property preferenceUpdater Algorithm implementation for EMA updates
- * 
- * @see FindSimilarWallpapersUseCase
- * @see SelectNextWallpaperUseCase
+ * Updates user preference vector based on like/dislike feedback using EMA.
+ *
+ * Works identically for both Auto and Personalize modes.
+ * In Auto mode, the first like creates the preference vector from scratch.
+ *
+ * Learning rates adapt based on feedback count:
+ * - 0-10: fast (0.15/0.20), 10-50: moderate (0.10/0.15), 50+: stable (0.05/0.10)
  */
 @Singleton
 class UpdatePreferencesUseCase @Inject constructor(
@@ -123,82 +82,83 @@ class UpdatePreferencesUseCase @Inject constructor(
                     IllegalStateException("User preferences not initialized. Call InitializePreferencesUseCase first.")
                 )
             
-            // Step 2: Validate wallpaper embedding
-            if (wallpaper.embedding.size != EXPECTED_EMBEDDING_SIZE) {
+            // Step 2: Check if embedding-based vector learning is possible.
+            // Vanderwaals API wallpapers have no client-side embedding (server-side only),
+            // so we skip the vector math but still run all other learning steps so that
+            // category, color, feedbackCount, and liked/disliked ID tracking stay accurate.
+            val hasValidEmbedding = wallpaper.embedding.size == EXPECTED_EMBEDDING_SIZE
+            if (!hasValidEmbedding && wallpaper.embedding.isNotEmpty()) {
+                // Non-empty but wrong size — genuine data corruption, reject early.
                 return Result.failure(
                     IllegalArgumentException(
                         "Invalid wallpaper embedding size: expected $EXPECTED_EMBEDDING_SIZE, got ${wallpaper.embedding.size}"
                     )
                 )
             }
-            
-            // CRITICAL FIX FOR AUTO MODE: Initialize preference vector from first positive feedback
+
+            // Auto Mode: Initialize preference vector from first positive feedback
             // When Auto Mode starts, preference vector is EMPTY (size = 0)
-            // First LIKE or DOWNLOAD should create the vector from that wallpaper's embedding
-            // First DISLIKE initializes with zero vector to enable negative learning
+            // First LIKE or DOWNLOAD creates the vector from that wallpaper's embedding
             val isVectorEmpty = currentPreferences.preferenceVector.isEmpty()
             val isPositive = feedback == FeedbackType.LIKE || feedback == FeedbackType.DOWNLOAD
-            
-            // Step 3: Initialize or get current vector
-            val currentVector = if (isVectorEmpty) {
-                if (isPositive) {
-                    // First positive feedback in Auto Mode: Initialize preference vector from this wallpaper
-                    android.util.Log.d("UpdatePreferences", 
-                        "Auto Mode FIRST ${feedback.name} - initializing preference vector from wallpaper ${wallpaper.id}"
-                    )
-                    wallpaper.embedding.clone()
+
+            // Step 3-5: Update preference vector using EMA with momentum.
+            // Skipped entirely for wallpapers without a local embedding (e.g. VDW API wallpapers).
+            val (updatedVector, newMomentum) = if (!hasValidEmbedding) {
+                // No local embedding — keep the existing vector unchanged; other signals still learn.
+                android.util.Log.d("UpdatePreferences",
+                    "Skipping vector update for ${wallpaper.id} (no local embedding); category/color/feedback still updated")
+                Pair(currentPreferences.preferenceVector, currentPreferences.momentumVector)
+            } else {
+                // Step 3: Initialize or get current vector
+                val currentVector = if (isVectorEmpty) {
+                    if (isPositive) {
+                        android.util.Log.d("UpdatePreferences",
+                            "Auto Mode FIRST ${feedback.name} - initializing preference vector from wallpaper ${wallpaper.id}")
+                        wallpaper.embedding.clone()
+                    } else {
+                        android.util.Log.d("UpdatePreferences",
+                            "Auto Mode FIRST DISLIKE - initializing with zero vector to enable negative learning")
+                        FloatArray(EXPECTED_EMBEDDING_SIZE)
+                    }
                 } else {
-                    // First dislike in Auto Mode: Initialize with zero vector
-                    // This allows the negative update to work: 0 - lr * embedding = -lr * embedding
-                    // Resulting in a vector pointing AWAY from the disliked wallpaper
-                    android.util.Log.d("UpdatePreferences", 
-                        "Auto Mode FIRST DISLIKE - initializing with zero vector to enable negative learning"
-                    )
-                    FloatArray(EXPECTED_EMBEDDING_SIZE) // Zero-filled array
+                    currentPreferences.preferenceVector
                 }
-            } else {
-                currentPreferences.preferenceVector
-            }
-            
-            // Step 4: Calculate adaptive learning rate based on feedback count
-            val baseLearningRate = calculateLearningRate(
-                feedbackCount = currentPreferences.feedbackCount,
-                feedbackType = feedback
-            )
-            
-            // Apply multiplier for implicit vs explicit feedback
-            val learningRate = baseLearningRate * learningRateMultiplier
-            
-            // Step 5: Update preference vector using EMA with momentum
-            // Skip EMA update on first positive feedback (already initialized above), otherwise update normally
-            val (updatedVector, newMomentum) = if (isVectorEmpty && isPositive) {
-                // First positive feedback: Use initialized vector as-is, no momentum yet
-                android.util.Log.d("UpdatePreferences", "First positive feedback (${feedback.name}) - using wallpaper embedding directly (no EMA update)")
-                Pair(currentVector, FloatArray(EXPECTED_EMBEDDING_SIZE))
-            } else {
-                // Subsequent feedback: Update using EMA
-                when (feedback) {
-                    FeedbackType.LIKE, FeedbackType.DOWNLOAD -> {
-                        // Both like and download use positive feedback update
-                        // Download just has higher learning rate (calculated above)
-                        preferenceUpdater.updateWithPositiveFeedback(
-                            currentVector = currentVector,
-                            targetEmbedding = wallpaper.embedding,
-                            learningRate = learningRate,
-                            momentum = currentPreferences.momentumVector.takeIf { it.isNotEmpty() }
-                        )
-                    }
-                    FeedbackType.DISLIKE -> {
-                        preferenceUpdater.updateWithNegativeFeedback(
-                            currentVector = currentVector,
-                            targetEmbedding = wallpaper.embedding,
-                            learningRate = learningRate,
-                            momentum = currentPreferences.momentumVector.takeIf { it.isNotEmpty() }
-                        )
+
+                // Step 4: Calculate adaptive learning rate based on feedback count
+                val baseLearningRate = calculateLearningRate(
+                    feedbackCount = currentPreferences.feedbackCount,
+                    feedbackType = feedback
+                )
+                val learningRate = baseLearningRate * learningRateMultiplier
+
+                // Step 5: Update preference vector using EMA with momentum
+                if (isVectorEmpty && isPositive) {
+                    android.util.Log.d("UpdatePreferences",
+                        "First positive feedback (${feedback.name}) - using wallpaper embedding directly (no EMA update)")
+                    Pair(currentVector, FloatArray(EXPECTED_EMBEDDING_SIZE))
+                } else {
+                    when (feedback) {
+                        FeedbackType.LIKE, FeedbackType.DOWNLOAD -> {
+                            preferenceUpdater.updateWithPositiveFeedback(
+                                currentVector = currentVector,
+                                targetEmbedding = wallpaper.embedding,
+                                learningRate = learningRate,
+                                momentum = currentPreferences.momentumVector.takeIf { it.isNotEmpty() }
+                            )
+                        }
+                        FeedbackType.DISLIKE -> {
+                            preferenceUpdater.updateWithNegativeFeedback(
+                                currentVector = currentVector,
+                                targetEmbedding = wallpaper.embedding,
+                                learningRate = learningRate,
+                                momentum = currentPreferences.momentumVector.takeIf { it.isNotEmpty() }
+                            )
+                        }
                     }
                 }
             }
-            
+
             // Step 6: Update liked/disliked wallpaper lists
             // DOWNLOAD counts as a "super like" - add to liked list
             val updatedLikedIds = if (isPositive) {
@@ -206,13 +166,21 @@ class UpdatePreferencesUseCase @Inject constructor(
             } else {
                 currentPreferences.likedWallpaperIds
             }
-            
+
             val updatedDislikedIds = if (feedback == FeedbackType.DISLIKE) {
                 currentPreferences.dislikedWallpaperIds + wallpaper.id
             } else {
                 currentPreferences.dislikedWallpaperIds
             }
-            
+
+            // Step 6: Update mood/style affinity maps (Vanderwaals Collection semantic tags)
+            val updatedMoodAffinity = updateTagAffinity(
+                currentPreferences.moodAffinity, wallpaper.mood, isPositive, learningRateMultiplier
+            )
+            val updatedStyleAffinity = updateTagAffinity(
+                currentPreferences.styleAffinity, wallpaper.style, isPositive, learningRateMultiplier
+            )
+
             // Step 6: Create updated preferences object with momentum
             val updatedPreferences = currentPreferences.copy(
                 preferenceVector = updatedVector,
@@ -220,7 +188,9 @@ class UpdatePreferencesUseCase @Inject constructor(
                 likedWallpaperIds = updatedLikedIds,
                 dislikedWallpaperIds = updatedDislikedIds,
                 feedbackCount = currentPreferences.feedbackCount + 1,
-                lastUpdated = System.currentTimeMillis()
+                lastUpdated = System.currentTimeMillis(),
+                moodAffinity = updatedMoodAffinity,
+                styleAffinity = updatedStyleAffinity
             )
             
             // Step 7: Save updated preferences to database
@@ -247,8 +217,8 @@ class UpdatePreferencesUseCase @Inject constructor(
             // Learn preferred visual styles from both LIKE and DOWNLOAD (with higher weight for download)
             if (isPositive) {
                 try {
-                    val wallpaperFile = java.io.File(context.filesDir, "wallpapers/${wallpaper.id}.jpg")
-                    if (wallpaperFile.exists()) {
+                    val wallpaperFile = me.avinas.vanderwaals.core.resolveWallpaperFile(context, wallpaper.id)
+                    if (wallpaperFile != null) {
                         val composition = compositionAnalyzer.analyzeComposition(wallpaperFile)
                         if (!composition.isEmpty()) {
                             // DOWNLOAD has higher learning rate (1.5x) for composition too
@@ -277,10 +247,8 @@ class UpdatePreferencesUseCase @Inject constructor(
                 ├── Wallpaper: ${wallpaper.id}
                 ├── Category: ${wallpaper.category.ifBlank { "uncategorized" }}
                 ├── Feedback: ${feedback.name}
-                ├── Learning Rate: ${String.format("%.4f", learningRate)} (base) × ${String.format("%.2f", learningRateMultiplier)} (multiplier)
                 ├── Old Feedback Count: ${currentPreferences.feedbackCount}
                 ├── New Feedback Count: ${updatedPreferences.feedbackCount}
-                ├── Vector Changed: ${!currentVector.contentEquals(updatedVector)}
                 └── Liked/Disliked Counts: ${updatedLikedIds.size}/${updatedDislikedIds.size}
             """.trimIndent())
             
@@ -312,16 +280,6 @@ class UpdatePreferencesUseCase @Inject constructor(
         feedbackCount: Int,
         feedbackType: FeedbackType
     ): Float {
-        // Base rates by feedback type:
-        // - DOWNLOAD: Highest weight (1.5x) - user wants to keep it for future
-        // - DISLIKE: High weight - strong signal to avoid similar content
-        // - LIKE: Standard weight - positive but not as strong as download
-        val baseMultiplier = when (feedbackType) {
-            FeedbackType.DOWNLOAD -> 1.5f  // 50% stronger than like
-            FeedbackType.DISLIKE -> 1.0f   // Standard negative
-            FeedbackType.LIKE -> 1.0f      // Standard positive
-        }
-        
         // TUNED FOR MobileNetV4: Slightly faster early/mid learning to capture richer signals
         val baseRate = when {
             feedbackCount < 10 -> {
@@ -352,6 +310,36 @@ class UpdatePreferencesUseCase @Inject constructor(
         return baseRate
     }
     
+    /**
+     * Updates mood/style tag affinity using exponential moving average.
+     *
+     * For each tag on the wallpaper, the affinity value is nudged toward
+     * +1 (like) or -1 (dislike) at the given learning rate. Tags absent
+     * from the current map start from 0 (neutral).
+     *
+     * @param current Current affinity map (tag → [-1,+1])
+     * @param tags Tags present on the wallpaper
+     * @param isPositive True for like/download, false for dislike
+     * @param learningRateMultiplier Multiplier applied to the base tag learning rate
+     * @return Updated affinity map
+     */
+    private fun updateTagAffinity(
+        current: Map<String, Float>,
+        tags: List<String>,
+        isPositive: Boolean,
+        learningRateMultiplier: Float
+    ): Map<String, Float> {
+        if (tags.isEmpty()) return current
+        val lr = 0.15f * learningRateMultiplier
+        val signal = if (isPositive) 1f else -1f
+        val result = current.toMutableMap()
+        for (tag in tags) {
+            val currentVal = result.getOrDefault(tag, 0f)
+            result[tag] = (currentVal * (1f - lr) + signal * lr).coerceIn(-1f, 1f)
+        }
+        return result
+    }
+
     companion object {
         /**
          * Expected embedding dimension for MobileNetV4-Conv-Small model.

@@ -6,33 +6,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Singleton manager for tracking download progress across the app.
- * 
- * Provides a StateFlow that emits download progress updates in real-time.
- * Used by UI components (like InitializationViewModel) to show download status.
- * 
- * **Progress State:**
- * - bytesDownloaded: Bytes downloaded so far
- * - totalBytes: Total file size (from Content-Length header)
- * - progress: Float from 0.0 to 1.0
- * - isDone: Whether download is complete
- * 
- * **Usage:**
- * ```kotlin
- * @Inject lateinit var downloadProgressManager: DownloadProgressManager
- * 
- * // In ViewModel:
- * viewModelScope.launch {
- *     downloadProgressManager.progressState.collect { state ->
- *         val percentComplete = (state.progress * 100).toInt()
- *         val mbDownloaded = state.bytesDownloaded / (1024 * 1024)
- *         val mbTotal = state.totalBytes / (1024 * 1024)
- *         _status.value = "Downloading: $mbDownloaded MB / $mbTotal MB ($percentComplete%)"
- *     }
- * }
- * ```
- */
+/** Exposes download progress as a [StateFlow] for UI consumption. */
 @Singleton
 class DownloadProgressManager @Inject constructor() {
     

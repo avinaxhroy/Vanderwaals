@@ -5,37 +5,8 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Room entity tracking user preferences for wallpaper categories.
- * 
- * This table stores aggregate feedback statistics for each category,
- * enabling category-aware personalization and diversity enforcement.
- * 
- * **Usage:**
- * - Track which categories the user tends to like/dislike
- * - Boost wallpapers from preferred categories during selection
- * - Enforce diversity by occasionally showing underexplored categories
- * - Prevent filter bubbles by limiting overrepresented categories
- * 
- * **Category Score Calculation:**
- * ```
- * category_score = (likes - 2 × dislikes) / (likes + dislikes + 1)
- * 
- * Ranges from:
- * - +1.0: All likes, no dislikes (strong preference)
- * -  0.0: Neutral or no data
- * - -1.0: All dislikes, no likes (strong aversion)
- * ```
- * 
- * **Update Strategy:**
- * - Increment likes/dislikes when user gives explicit feedback
- * - Increment views when wallpaper from category is shown
- * - Update lastShown timestamp for temporal diversity tracking
- * 
- * @property category Category name (e.g., "nature", "minimal", "anime")
- * @property likes Number of times user liked wallpapers from this category
- * @property dislikes Number of times user disliked wallpapers from this category
- * @property views Number of times wallpapers from this category were shown
- * @property lastShown Timestamp when category was last shown (milliseconds since epoch)
+ * Aggregate like/dislike/view counts per wallpaper category.
+ * Score: (likes - 2*dislikes) / (likes + dislikes + 1), range [-1, +1].
  */
 @Entity(
     tableName = "category_preferences",

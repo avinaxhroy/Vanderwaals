@@ -14,51 +14,18 @@ import javax.inject.Singleton
 import kotlin.random.Random
 
 /**
- * Use case for selecting the next wallpaper to display with intelligent learning algorithm.
- * 
- * **IMPORTANT: Both Auto and Personalize modes use the SAME learning algorithm!**
- * The ONLY difference is how preferences are initialized:
- * 
- * **PERSONALIZE MODE (Netflix: Tell us your favorites upfront):**
- * - During onboarding: User uploads favorite wallpaper OR selects category
- * - App finds similar wallpapers, user picks 3+ they like
- * - Creates initial preference vector immediately (feedbackCount > 0)
- * - Shows personalized wallpapers from day 1
- * - Continues learning from every like/dislike
- * 
- * **AUTO MODE (Netflix: Start watching, we'll learn as you go):**
- * - During onboarding: User skips upload step
- * - Starts with NO preference vector (feedbackCount = 0, empty vector)
- * - Shows diverse, high-quality wallpapers initially
- * - When user likes FIRST wallpaper: Creates preference vector
- * - After that: Uses EXACT SAME algorithm as Personalize Mode
- * - After 10-15 likes: Just as personalized as Personalize Mode
- * 
- * **Key Insight:**
- * Auto Mode IS personalized - it just learns from scratch instead of starting
- * with user's upload. Both modes end up equally personalized over time.
- * 
- * **Selection Algorithm:**
- * ```
- * 1. Check: Does preference vector exist? (feedbackCount > 0)
- * 2. If NO:  Show diverse wallpapers (Auto Mode cold start)
- *    If YES: Use similarity scoring (learned preferences)
- * 3. Filter out recently shown wallpapers (last 10)
- * 4. Apply epsilon-greedy selection (90% best, 10% explore)
- * 5. Return chosen wallpaper
- * ```
- * 
- * **Learning Mechanism (IDENTICAL for both modes):**
- * - Like: Pull preference vector toward wallpaper embedding
- * - Dislike: Push preference vector away from wallpaper embedding
- * - Adaptive learning rate based on feedback count
- * 
- * @property wallpaperRepository Repository for accessing downloaded wallpapers
- * @property preferenceRepository Repository for accessing user preferences
- * @property similarityCalculator Utility for computing similarity scores
- * 
- * @see UpdatePreferencesUseCase
- * @see FindSimilarWallpapersUseCase
+ * Selects the next wallpaper to display based on learned preferences.
+ *
+ * Both Auto and Personalize modes use the same learning algorithm.
+ * The only difference is initialization:
+ * - Personalize: starts with a preference vector from an uploaded image
+ * - Auto: starts with no vector; first like creates it
+ *
+ * Selection flow:
+ * 1. If preference vector exists → score by similarity
+ *    If not → show diverse wallpapers (cold start)
+ * 2. Filter out recently shown wallpapers
+ * 3. Apply YouTube-like selection (exploration + exploitation)
  */
 @Singleton
 class SelectNextWallpaperUseCase @Inject constructor(
@@ -74,23 +41,13 @@ class SelectNextWallpaperUseCase @Inject constructor(
     private val wallpaperHistoryDao: WallpaperHistoryDao,
     @param:dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) {
-    private val explorationStrategy = me.avinas.vanderwaals.algorithm.ExplorationStrategy()
     
     // YouTube-like recommender for more engaging, diverse recommendations
     private val youtubeLikeRecommender = me.avinas.vanderwaals.algorithm.YouTubeLikeRecommender()
     
     /**
-     * Seeded random instance for true randomness.
-     * CRITICAL FIX (Nov 2025): Creates new seed on each invocation combining multiple entropy sources.
-     * This prevents repeating patterns after app restart or data clear.
-     * 
-     * IMPROVED: Now uses multiple entropy sources including:
-     * - Device ID (consistent per device)
-     * - Current timestamp (changes every millisecond) 
-     * - Process uptime (different each app launch)
-     * - Random system noise
-     * 
-     * This ensures fresh installs don't see same sequence.
+     * Seeded random for true randomness per invocation.
+     * Combines device ID, timestamp, process uptime, and system noise.
      */
     private fun createSeededRandom(): Random {
         val deviceSeed = getDeviceSpecificSeed()
@@ -100,7 +57,7 @@ class SelectNextWallpaperUseCase @Inject constructor(
         
         // Combine all entropy sources with different bit operations for maximum randomness
         val combinedSeed = (deviceSeed.toLong() xor timeSeed xor uptimeSeed xor noiseSeed).toInt()
-        android.util.Log.d("SelectNextWallpaper", "Created seeded Random with combined seed: $combinedSeed (device=$deviceSeed, time=$timeSeed, uptime=$uptimeSeed, noise=$noiseSeed)")
+        if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Created seeded Random with combined seed: $combinedSeed (device=$deviceSeed, time=$timeSeed, uptime=$uptimeSeed, noise=$noiseSeed)")
         return Random(combinedSeed)
     }
     
@@ -147,31 +104,25 @@ class SelectNextWallpaperUseCase @Inject constructor(
      */
     suspend operator fun invoke(excludeWallpaperId: String? = null): Result<WallpaperMetadata> {
         return try {
-            // CRITICAL FIX (Dec 2025): Always get the currently active wallpaper and exclude it
-            // This prevents the algorithm from selecting the same wallpaper that's currently displayed.
-            // Previously, history was only recorded AFTER applying the wallpaper, causing a race condition
-            // where the same wallpaper could be selected again immediately.
+            // Always exclude currently active wallpaper to prevent re-selection
             val currentActiveWallpaper = wallpaperHistoryDao.getActiveWallpaper()
             val effectiveExcludeId = excludeWallpaperId ?: currentActiveWallpaper?.wallpaperId
             
             if (effectiveExcludeId != null) {
-                android.util.Log.d("SelectNextWallpaper", "Excluding currently active wallpaper: $effectiveExcludeId")
+                if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Excluding currently active wallpaper: $effectiveExcludeId")
             }
             
-            // Step 1: Get user preferences, or create defaults if not initialized
-            // Use direct database read (not Flow) to avoid cached values
-            // CRITICAL FIX: Retry multiple times to handle multi-instance sync delay
-            // Check for both null AND stale default values (feedbackCount=0)
+            // Get user preferences, retry a few times if stale
             var preferences = preferenceRepository.getUserPreferencesOnce()
             var retryCount = 0
             
             // Retry if preferences are null OR if they have default/stale values
             while ((preferences == null || preferences.feedbackCount == 0) && retryCount < 5) {
-                android.util.Log.d("SelectNextWallpaper", "Preferences stale/null (feedbackCount=${preferences?.feedbackCount}) on attempt ${retryCount + 1}, retrying after delay...")
+                if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Preferences stale/null (feedbackCount=${preferences?.feedbackCount}) on attempt ${retryCount + 1}, retrying after delay...")
                 delay(300L)  // Longer delay for database sync
                 preferences = preferenceRepository.getUserPreferencesOnce()
                 retryCount++
-                android.util.Log.d("SelectNextWallpaper", "Retry $retryCount result: feedbackCount=${preferences?.feedbackCount}")
+                if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Retry $retryCount result: feedbackCount=${preferences?.feedbackCount}")
             }
             
             if (preferences == null) {
@@ -208,7 +159,7 @@ class SelectNextWallpaperUseCase @Inject constructor(
                 
                 // If the selected ID matches the excluded one, try getting the next one
                 if (nextId != null && nextId == effectiveExcludeId) {
-                    android.util.Log.d("SelectNextWallpaper", "Selected ID $nextId matches excluded ID, skipping to next...")
+                    if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Selected ID $nextId matches excluded ID, skipping to next...")
                     nextId = dailyPlaylistManager.getNextWallpaperId()
                 }
                 
@@ -218,14 +169,14 @@ class SelectNextWallpaperUseCase @Inject constructor(
                     val match = allWallpapersForPlaylist.find { it.id == nextId }
                     
                     if (match != null) {
-                        android.util.Log.d("SelectNextWallpaper", "Selected from Daily Playlist: ${match.id}")
+                        if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Selected from Daily Playlist: ${match.id}")
                         return Result.success(match)
                     } else {
                          android.util.Log.w("SelectNextWallpaper", "Playlist item $nextId not found in database")
                          // Fallback to normal selection if not found
                     }
                 } else {
-                    android.util.Log.d("SelectNextWallpaper", "Daily Playlist empty or not initialized")
+                    if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Daily Playlist empty or not initialized")
                 }
             }
             
@@ -234,51 +185,50 @@ class SelectNextWallpaperUseCase @Inject constructor(
             // This eliminates the "no downloaded wallpapers" issue completely
             val allWallpapers = wallpaperRepository.getAllWallpapers().first()
             
-            android.util.Log.d("SelectNextWallpaper", "Total wallpapers in catalog: ${allWallpapers.size}")
-            
+            if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Total wallpapers in catalog: ${allWallpapers.size}")
+
             if (allWallpapers.isEmpty()) {
                 android.util.Log.e("SelectNextWallpaper", "Database is empty! Please sync wallpaper catalog.")
                 return Result.failure(
                     IllegalStateException("No wallpapers in catalog. Please sync the wallpaper catalog first.")
                 )
             }
-            
+
             // Filter by enabled sources from settings
             val enabledSources = mutableSetOf<String>()
             if (settings.githubEnabled) enabledSources.add("github")
             if (settings.bingEnabled) enabledSources.add("bing")
+            if (settings.vanderwaalsCollectionEnabled) enabledSources.add("vanderwaals")
             
             // Default to GitHub if no sources enabled
             if (enabledSources.isEmpty()) {
                 enabledSources.add("github")
             }
             
-            android.util.Log.d("SelectNextWallpaper", "Enabled sources: $enabledSources")
+            if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Enabled sources: $enabledSources")
             
             // Filter wallpapers by source and exclude current wallpaper
             val filteredWallpapers = allWallpapers.filter { wallpaper ->
                 wallpaper.source.lowercase() in enabledSources && wallpaper.id != effectiveExcludeId
             }
             
-            android.util.Log.d("SelectNextWallpaper", "Filtered wallpapers (by source, excluding current): ${filteredWallpapers.size}")
-            
+            if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Filtered wallpapers (by source, excluding current): ${filteredWallpapers.size}")
+
             if (filteredWallpapers.isEmpty()) {
-                // Edge case: Only 1 wallpaper in DB and it's excluded, or source mismatch
                 val sourcesInDb = allWallpapers.map { it.source.lowercase() }.distinct()
                 android.util.Log.e("SelectNextWallpaper", "No wallpapers after filtering. Sources in DB: $sourcesInDb, enabled: $enabledSources")
                 return Result.failure(
                     IllegalStateException("No wallpapers available for selected sources (${enabledSources.joinToString()})")
                 )
             }
-            
-            // Use filtered wallpapers as candidates
+
+            // Use filtered Room wallpapers as the local candidate base
             val downloadedWallpapers = filteredWallpapers
             
             // Step 3: Get recent wallpaper history to avoid repeats
-            // CRITICAL FIX (Dec 2025): Use dynamic history size based on change frequency
-            // For 15-minute changes, we need a much larger window to prevent repeats
+            // Use dynamic history size based on change frequency
             val dynamicHistorySize = getHistorySizeForInterval(settings.changeInterval)
-            android.util.Log.d("SelectNextWallpaper", "Using dynamic history size: $dynamicHistorySize for interval: ${settings.changeInterval}")
+            if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Using dynamic history size: $dynamicHistorySize for interval: ${settings.changeInterval}")
             
             val recentHistoryList = wallpaperRepository.getHistory().first()
             val recentHistory = recentHistoryList
@@ -309,19 +259,21 @@ class SelectNextWallpaperUseCase @Inject constructor(
             }
             
             if (consecutiveDislikes > 0) {
-                 android.util.Log.d("SelectNextWallpaper", "User is unhappy (consecutive dislikes: $consecutiveDislikes). Boosting exploration by $explorationBoost")
+                 if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","User is unhappy (consecutive dislikes: $consecutiveDislikes). Boosting exploration by $explorationBoost")
             }
 
             // Step 4: Filter out recently shown wallpapers
             val availableWallpapers = downloadedWallpapers.filter { wallpaper ->
                 wallpaper.id !in recentHistory
             }
-            
-            // Step 5: If all wallpapers were shown recently, reset and use all
-            val candidateWallpapers = if (availableWallpapers.isEmpty()) {
-                downloadedWallpapers
-            } else {
-                availableWallpapers
+
+            // Step 5: If all Room wallpapers were shown recently, reset and use all
+            val candidateWallpapers = if (availableWallpapers.isEmpty()) downloadedWallpapers else availableWallpapers
+
+            if (candidateWallpapers.isEmpty()) {
+                return Result.failure(
+                    IllegalStateException("No wallpapers available for enabled sources (${enabledSources.joinToString()})")
+                )
             }
             
             // Step 6: Calculate scores for all candidates
@@ -334,7 +286,7 @@ class SelectNextWallpaperUseCase @Inject constructor(
             
             // Log current state for debugging
             val state = if (hasPreferenceVector) "LEARNED (similarity-based)" else "COLD START (diverse selection)"
-            android.util.Log.d("SelectNextWallpaper", "Selection state: $state, " +
+            if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Selection state: $state, " +
                     "mode=${preferences.mode}, " +
                     "feedbackCount=${preferences.feedbackCount}, " +
                     "preferenceVector non-zero=${preferences.preferenceVector.any { it != 0f }}, " +
@@ -354,19 +306,23 @@ class SelectNextWallpaperUseCase @Inject constructor(
                 // - Personalize Mode: From day 1 (initialized from upload)
                 // - Auto Mode: After first like (created from feedback)
                 // Combines: originalEmbedding + preferenceVector + category + color + composition
-                android.util.Log.d("SelectNextWallpaper", "Using LEARNED PREFERENCES (dual-anchor + category scoring)")
+                if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Using LEARNED PREFERENCES (dual-anchor + category scoring)")
                 
                 val hasOriginalEmbedding = preferences.originalEmbedding.isNotEmpty()
-                android.util.Log.d("SelectNextWallpaper", "Has original embedding: $hasOriginalEmbedding")
+                if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Has original embedding: $hasOriginalEmbedding")
                 
                 // ADAPTIVE LEARNING WEIGHTS: Calculate once outside loop
                 // Start: 40% original + 60% learned
-                // After 50 feedback: 20% original + 78% learned (trust user's taste more)
+                // After 50 feedback: ~20% original + ~80% learned (trust user's taste more)
+                // Renormalised so the two weights always sum to exactly 1.0.
                 val learningProgress = kotlin.math.min(preferences.feedbackCount / 50f, 1f)
-                val originalWeight = 0.4f * (1f - learningProgress * 0.5f)  // 40% → 20%
-                val learnedWeight = 0.6f * (1f + learningProgress * 0.3f)   // 60% → 78%
+                val rawOriginalWeight = 0.4f * (1f - learningProgress * 0.5f)  // 40% → 20%
+                val rawLearnedWeight = 0.6f * (1f + learningProgress * 0.3f)   // 60% → 78%
+                val weightSum = rawOriginalWeight + rawLearnedWeight
+                val originalWeight = rawOriginalWeight / weightSum
+                val learnedWeight = rawLearnedWeight / weightSum
                 
-                android.util.Log.d("SelectNextWallpaper", 
+                if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper",
                     "Adaptive weights: original=${String.format("%.1f%%", originalWeight * 100)}, " +
                     "learned=${String.format("%.1f%%", learnedWeight * 100)} " +
                     "(progress=${String.format("%.0f%%", learningProgress * 100)}, " +
@@ -402,30 +358,46 @@ class SelectNextWallpaperUseCase @Inject constructor(
                             0f // Fallback if original embedding missing (legacy data)
                         }
                         
-                        // DUAL-ANCHOR scoring with adaptive weights
-                        val baseSimilarity = if (hasOriginalEmbedding) {
-                            (originalSimilarity * originalWeight) + (preferenceSimilarity * learnedWeight)
+                        // DUAL-ANCHOR scoring with adaptive weights.
+                        val baseSimilarity = if (wallpaper.embedding.isNotEmpty()) {
+                            // Embedding available: use dual-anchor scoring
+                            if (hasOriginalEmbedding) {
+                                (originalSimilarity * originalWeight) + (preferenceSimilarity * learnedWeight)
+                            } else {
+                                preferenceSimilarity
+                            }
                         } else {
-                            preferenceSimilarity // Fallback for legacy data
+                            // No embedding: use moderate neutral score to stay competitive
+                            0.4f
                         }
                         
                         // CONTENT BOOST: Category boost OR color boost as fallback
                         val categoryScore = wallpaperScorer.getContentBoost(wallpaper)
                         
                         // COMPOSITION BOOST: Advanced layout/composition preference matching
-                        val compositionScore = wallpaperScorer.getCompositionBoost(wallpaper.id)
+                        val compositionScore = wallpaperScorer.getCompositionBoost(wallpaper)
                         
                         // TEMPORAL DIVERSITY BOOST: Prevent repetition, explore new categories
                         val diversityBoost = wallpaperScorer.getTemporalDiversityBoost(
                             category = wallpaper.category,
                             recentCategories = recentCategoriesList
                         )
-                        
-                        // Add device-specific variation
-                        val deviceVariation = ((deviceSeed + wallpaper.id.hashCode()).toLong() % 100) / 1000f
-                        
-                        // FINAL SCORE: similarity + content boost + composition + diversity + device variation
-                        val adjustedSimilarity = baseSimilarity + categoryScore + compositionScore + diversityBoost + deviceVariation
+
+                        // TIME-OF-DAY BOOST: nudges brightness preference based on the current
+                        // wall-clock hour. Night → prefer dark; morning → prefer bright; neutral
+                        // during the day. See WallpaperScorer.getTimeOfDayBoost for details.
+                        val timeOfDayBoost = wallpaperScorer.getTimeOfDayBoost(wallpaper)
+
+                        // SEMANTIC BOOST: mood/style tag affinity (Vanderwaals Collection).
+                        // Returns 0 for sources without mood/style tags — graceful degradation.
+                        val semanticBoost = wallpaperScorer.getSemanticBoost(
+                            wallpaper = wallpaper,
+                            moodAffinity = preferences.moodAffinity,
+                            styleAffinity = preferences.styleAffinity
+                        )
+
+                        // FINAL SCORE: similarity + content + composition + diversity + time-of-day + semantic
+                        val adjustedSimilarity = baseSimilarity + categoryScore + compositionScore + diversityBoost + timeOfDayBoost + semanticBoost
                         
                         RankedWallpaper(
                             wallpaper = wallpaper,
@@ -451,10 +423,10 @@ class SelectNextWallpaperUseCase @Inject constructor(
                 
                 // Log top 5 for debugging
                 topCandidates.take(5).forEachIndexed { index, wallpaper ->
-                    android.util.Log.d("SelectNextWallpaper", "Top ${index + 1}: ${wallpaper.wallpaper.id} (similarity=${String.format("%.4f", wallpaper.similarity)}, category=${wallpaper.wallpaper.category})")
+                    if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Top ${index + 1}: ${wallpaper.wallpaper.id} (similarity=${String.format("%.4f", wallpaper.similarity)}, category=${wallpaper.wallpaper.category})")
                 }
                 
-                android.util.Log.d("SelectNextWallpaper", "Chunked processing complete: ${candidateWallpapers.size} candidates → ${topCandidates.size} top matches")
+                if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Chunked processing complete: ${candidateWallpapers.size} candidates → ${topCandidates.size} top matches")
                 
                 topCandidates
             } else {
@@ -467,38 +439,74 @@ class SelectNextWallpaperUseCase @Inject constructor(
                 // 
                 // Strategy: Sample best wallpapers from each repo proportionally
                 // Prevents one repo from dominating while prioritizing quality
-                android.util.Log.d("SelectNextWallpaper", "Using COLD START (diverse selection, no preferences yet)")
+                if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Using COLD START (diverse selection, no preferences yet)")
                 selectDiverseWallpapers(candidateWallpapers, deviceSeed)
             }
             
-            // CRITICAL FIX: Create seeded random for true randomness on each invocation
+            // Create seeded random for each invocation
             val seededRandom = createSeededRandom()
             
-            // Step 8: Use YouTube-like selection algorithm for more engaging recommendations
-            // IMPROVED (Dec 2025): Replaced epsilon-greedy with YouTube-like algorithm that provides:
-            // - Serendipity (5% chance of surprise picks)
-            // - Adaptive exploration (more when user is unhappy)
-            // - Diminishing returns for overexposed categories
-            // - Diversity in final selection
-            // - Engagement prediction based on category history
+            // Use YouTube-like selection for diverse, engaging recommendations
+            // Replaced epsilon-greedy in Dec 2025 for better:
+            // serendipity, adaptive exploration, category diversity, engagement prediction
             
             // Build session context for YouTube-like recommender
             val likedCategories = mutableMapOf<String, Int>()
             val dislikedCategories = mutableMapOf<String, Int>()
-            
-            // Build category preference maps from history
+
+            // Build category preference maps from history.
+            val wallpaperById = (candidateWallpapers + downloadedWallpapers).associateBy { it.id }
             recentHistoryList.forEach { historyItem ->
-                val wallpaper = downloadedWallpapers.find { it.id == historyItem.wallpaperId }
-                if (wallpaper != null && wallpaper.category.isNotBlank()) {
+                val wallpaper = wallpaperById[historyItem.wallpaperId]
+                if (wallpaper != null) {
+                    val category = wallpaper.category
                     when (historyItem.userFeedback) {
-                        "like" -> likedCategories[wallpaper.category] = 
-                            likedCategories.getOrDefault(wallpaper.category, 0) + 1
-                        "dislike" -> dislikedCategories[wallpaper.category] = 
-                            dislikedCategories.getOrDefault(wallpaper.category, 0) + 1
+                        "like" -> {
+                            if (category.isNotBlank()) likedCategories[category] =
+                                likedCategories.getOrDefault(category, 0) + 1
+                        }
+                        "dislike" -> {
+                            if (category.isNotBlank()) dislikedCategories[category] =
+                                dislikedCategories.getOrDefault(category, 0) + 1
+                        }
                     }
                 }
             }
             
+            // ── New signals for advanced scoring ──────────────────────────────────────────
+
+            // Disliked embedding centroid: L2-normalised mean of disliked wallpaper embeddings.
+            // Fed into YouTubeLikeRecommender as a semantic dislike-penalty signal so that
+            // candidates similar to previously disliked content are downranked.
+            val dislikedCentroid: FloatArray? = run {
+                val dislikedIds = preferences.dislikedWallpaperIds.toSet()
+                if (dislikedIds.isEmpty()) return@run null
+                val embeddings = candidateWallpapers
+                    .filter { it.id in dislikedIds && it.embedding.isNotEmpty() }
+                    .map { it.embedding }
+                if (embeddings.isEmpty()) return@run null
+                val dim = embeddings.first().size
+                val sum = FloatArray(dim)
+                embeddings.forEach { e -> e.forEachIndexed { i, v -> sum[i] += v } }
+                val n = embeddings.size.toFloat()
+                val raw = FloatArray(dim) { i -> sum[i] / n }
+                val mag = kotlin.math.sqrt(raw.sumOf { (it * it).toDouble() }).toFloat()
+                if (mag == 0f) null else FloatArray(dim) { i -> raw[i] / mag }
+            }
+
+            // Category set-duration map: average minutes each category was displayed per history
+            // entry. Used as implicit engagement signal in YouTubeLikeRecommender.predictEngagement.
+            val categorySetDurations: Map<String, Long> = run {
+                val durationsByCat = mutableMapOf<String, MutableList<Long>>()
+                recentHistoryList.forEach { item ->
+                    val durationMins = (item.getDurationSeconds() ?: return@forEach) / 60L
+                    val category = wallpaperById[item.wallpaperId]?.category
+                        ?.takeIf { it.isNotBlank() } ?: return@forEach
+                    durationsByCat.getOrPut(category) { mutableListOf() }.add(durationMins)
+                }
+                durationsByCat.mapValues { (_, list) -> list.average().toLong() }
+            }
+
             val sessionContext = me.avinas.vanderwaals.algorithm.YouTubeLikeRecommender.SessionContext(
                 recentlyViewedIds = recentHistory,
                 recentCategories = recentCategories.toList(),
@@ -507,7 +515,9 @@ class SelectNextWallpaperUseCase @Inject constructor(
                 totalHistoryLikes = preferences.likedWallpaperIds.size,
                 totalHistoryDislikes = preferences.dislikedWallpaperIds.size,
                 likedCategories = likedCategories,
-                dislikedCategories = dislikedCategories
+                dislikedCategories = dislikedCategories,
+                categorySetDurations = categorySetDurations,
+                dislikedEmbeddingCentroid = dislikedCentroid
             )
             
             // Convert ranked wallpapers to format expected by YouTube-like recommender
@@ -527,7 +537,7 @@ class SelectNextWallpaperUseCase @Inject constructor(
                 rankedWallpapers.first().wallpaper
             }
             
-            android.util.Log.d("SelectNextWallpaper", "Selected via YouTube-like algorithm: ${selectedWallpaper.id} (category=${selectedWallpaper.category})")
+            if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Selected via YouTube-like algorithm: ${selectedWallpaper.id} (category=${selectedWallpaper.category})")
             
             // Step 9: Record category/color views
             if (selectedWallpaper.category.isNotBlank()) {
@@ -544,114 +554,6 @@ class SelectNextWallpaperUseCase @Inject constructor(
                 Exception("Failed to select next wallpaper: ${e.message}", e)
             )
         }
-    }
-    
-    /**
-     * Selects a wallpaper using enhanced epsilon-greedy algorithm with diversity awareness.
-     * 
-     * **Selection Strategy:**
-     * - With probability epsilon: Explore (diversity-aware random selection)
-     * - With probability (1-epsilon): Exploit (best match with category diversity check)
-     * 
-     * **Diversity Enforcement:**
-     * - Prevents showing same category back-to-back
-     * - Occasionally shows underexplored categories
-     * - Balances between quality and variety
-     * 
-     * **Exploration Pool:**
-     * - If < 100 wallpapers available: Use all
-     * - If >= 100 wallpapers: Use top 100 by similarity
-     * 
-     * This ensures exploration still favors reasonably good matches,
-     * not completely random wallpapers.
-     * 
-     * @param rankedWallpapers All candidate wallpapers sorted by similarity
-     * @param epsilon Exploration probability (0.0 to 1.0)
-     * @param recentCategories Categories of recently shown wallpapers (for diversity)
-     * @return Selected wallpaper
-     */
-    private fun selectWithEpsilonGreedy(
-        rankedWallpapers: List<RankedWallpaper>,
-        epsilon: Float,
-        recentCategories: Set<String> = emptySet(),
-        random: Random
-    ): WallpaperMetadata {
-        // Determine if we should explore or exploit using seeded random
-        val shouldExplore = random.nextFloat() < epsilon
-        
-        return if (shouldExplore) {
-            // EXPLORATION: Diversity-aware random selection
-            selectForExploration(rankedWallpapers, recentCategories, random)
-        } else {
-            // EXPLOITATION: Best match with category diversity check
-            selectForExploitation(rankedWallpapers, recentCategories, random)
-        }
-    }
-    
-    /**
-     * Selects wallpaper for exploration phase.
-     * Prioritizes diverse categories and underexplored content.
-     * 
-     * @param rankedWallpapers All candidates sorted by similarity
-     * @param recentCategories Recently shown categories
-     * @return Selected wallpaper
-     */
-    private fun selectForExploration(
-        rankedWallpapers: List<RankedWallpaper>,
-        recentCategories: Set<String>,
-        random: Random
-    ): WallpaperMetadata {
-        val explorationPoolSize = minOf(MAX_EXPLORATION_POOL, rankedWallpapers.size)
-        val explorationPool = rankedWallpapers.take(explorationPoolSize)
-        
-        // Try to find wallpaper from different category first (70% of time)
-        if (random.nextFloat() < 0.7f && recentCategories.isNotEmpty()) {
-            val differentCategory = explorationPool
-                .filter { it.wallpaper.category !in recentCategories }
-            
-            if (differentCategory.isNotEmpty()) {
-                return differentCategory.random(random).wallpaper
-            }
-        }
-        
-        // Fallback: Random from full exploration pool
-        return explorationPool.random(random).wallpaper
-    }
-    
-    // ========================================
-    // SCORING METHODS EXTRACTED TO WallpaperScorer
-    // ========================================
-    // The following methods have been moved to me.avinas.vanderwaals.algorithm.WallpaperScorer:
-    // - getContentBoost(), getCategoryBoost(), getColorBoost(), getCompositionBoost()
-    // - getTemporalDiversityBoost()
-    // - calculatePopularityScore(), calculateQualityScore()
-    // - colorDistance(), parseHexToColor(), calculateColorSimilarity()
-    //
-    // This improves:
-    // - Testability: Scoring logic can be unit tested independently
-    // - Reusability: Other components (search, similar wallpapers) can reuse scoring
-    // - Maintainability: ~500 lines removed from this already large file
-    // ========================================
-    
-    /**
-     * Selects wallpaper for exploitation phase (best match).
-     * Checks category diversity to avoid repetition.
-     */
-    private fun selectForExploitation(
-        rankedWallpapers: List<RankedWallpaper>,
-        recentCategories: Set<String>,
-        random: Random
-    ): WallpaperMetadata {
-        if (recentCategories.isNotEmpty()) {
-            val topCandidates = rankedWallpapers.take(10)
-            val differentCategory = topCandidates
-                .firstOrNull { it.wallpaper.category !in recentCategories }
-            
-            if (differentCategory != null) {
-                return differentCategory.wallpaper
-            }
-        }
-        return rankedWallpapers.first().wallpaper
     }
     
     /**
@@ -686,19 +588,11 @@ class SelectNextWallpaperUseCase @Inject constructor(
     
     /**
      * Internal data class for pairing wallpapers with similarity scores.
-     * Implements ScoredItem for ExplorationStrategy integration.
      */
     private data class RankedWallpaper(
         val wallpaper: WallpaperMetadata,
         val similarity: Float
-    ) : me.avinas.vanderwaals.algorithm.ExplorationStrategy.ScoredItem {
-        override val score: Float get() = similarity
-        override val category: String get() = wallpaper.category
-        
-        override fun withAdjustedScore(newScore: Float): me.avinas.vanderwaals.algorithm.ExplorationStrategy.ScoredItem {
-            return copy(similarity = newScore)
-        }
-    }
+    )
     
     companion object {
         /**
@@ -706,12 +600,7 @@ class SelectNextWallpaperUseCase @Inject constructor(
          * This is dynamically adjusted based on change frequency.
          */
         private const val BASE_RECENT_HISTORY_SIZE = 10
-        
-        /**
-         * Maximum candidates to consider for epsilon-greedy selection.
-         */
-        private const val MAX_EXPLORATION_POOL = 100
-        
+
         /**
          * Calculates dynamic history size based on change interval.
          * 
@@ -738,6 +627,8 @@ class SelectNextWallpaperUseCase @Inject constructor(
                 "6hours" -> 12   // 3 days of protection at 6-hour intervals
                 "12hours" -> 10  // 5 days of protection at 12-hour intervals
                 "daily" -> 14    // 2 weeks of protection
+                "3days" -> 7     // 3 weeks of protection at 3-day intervals
+                "7days" -> 4     // 4 weeks of protection at 7-day intervals
                 else -> BASE_RECENT_HISTORY_SIZE
             }
         }
@@ -756,18 +647,25 @@ class SelectNextWallpaperUseCase @Inject constructor(
     }
     
     /**
-     * Selects the next wallpaper after a user dislike with enhanced diversity.
-     * 
-     * **Key Differences from Regular Selection:**
-     * 1. **Category Exclusion**: Strongly avoids wallpapers from the disliked category
-     * 2. **High Exploration**: Uses 70% exploration rate (vs. 10% normal)
-     * 3. **Dissimilarity Boost**: Prefers wallpapers that are DIFFERENT from the disliked one
-     * 
-     * **Why This Matters:**
-     * When a user dislikes a wallpaper, they're signaling "show me something different."
-     * Regular selection just updates preferences slightly and picks the next best match,
-     * which often feels too similar. This method ensures a noticeable change.
-     * 
+     * Selects the next wallpaper after a user dislike.
+     *
+     * Routes through the same [YouTubeLikeRecommender] used by normal selection
+     * so post-dislike recommendations follow the same algorithm (MMR diversity,
+     * temperature-softmax exploration, saturation penalties) rather than a
+     * bespoke stale path.
+     *
+     * **Post-dislike adjustments** (applied via [SessionContext]):
+     * 1. The just-disliked wallpaper's category is added to `dislikedCategories`
+     *    so [YouTubeLikeRecommender.predictEngagement] downranks it.
+     * 2. The just-disliked embedding is merged into `dislikedEmbeddingCentroid`
+     *    so [YouTubeLikeRecommender.calculateDislikedPenalty] penalises
+     *    semantically similar candidates.
+     * 3. `sessionDislikes` is incremented so
+     *    [YouTubeLikeRecommender.calculateAdaptiveExplorationRate] raises the
+     *    exploration rate (user is unhappy → explore more broadly).
+     * 4. The disliked wallpaper id is added to `recentlyViewedIds` to prevent
+     *    immediate re-selection.
+     *
      * @param dislikedWallpaperId ID of the wallpaper the user just disliked
      * @param dislikedCategory Category of the disliked wallpaper
      * @param dislikedEmbedding Embedding vector of the disliked wallpaper
@@ -779,144 +677,150 @@ class SelectNextWallpaperUseCase @Inject constructor(
         dislikedEmbedding: FloatArray
     ): Result<WallpaperMetadata> {
         return try {
-            android.util.Log.d("SelectNextWallpaper", "=== POST-DISLIKE SELECTION ===")
-            android.util.Log.d("SelectNextWallpaper", "Disliked wallpaper: $dislikedWallpaperId (category: $dislikedCategory)")
-            
+            if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","=== POST-DISLIKE SELECTION ===")
+            if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","Disliked wallpaper: $dislikedWallpaperId (category: $dislikedCategory)")
+
             // Step 1: Get settings and preferences
             val settings = settingsDataStore.settings.first()
             val preferences = preferenceRepository.getUserPreferencesOnce()
-            
-            // Step 2: Get ALL wallpapers from database (download on-demand)
+
+            // Step 2: Get ALL wallpapers from database
             val allWallpapers = wallpaperRepository.getAllWallpapers().first()
-            
             if (allWallpapers.isEmpty()) {
                 return Result.failure(IllegalStateException("No wallpapers in catalog"))
             }
-            
+
             // Step 3: Filter by enabled sources
             val enabledSources = mutableSetOf<String>()
             if (settings.githubEnabled) enabledSources.add("github")
             if (settings.bingEnabled) enabledSources.add("bing")
+            if (settings.vanderwaalsCollectionEnabled) enabledSources.add("vanderwaals")
             if (enabledSources.isEmpty()) enabledSources.add("github")
-            
-            val downloadedWallpapers = allWallpapers.filter { wallpaper ->
+
+            val candidateWallpapers = allWallpapers.filter { wallpaper ->
                 wallpaper.source.lowercase() in enabledSources && wallpaper.id != dislikedWallpaperId
             }
-            
-            if (downloadedWallpapers.isEmpty()) {
+            if (candidateWallpapers.isEmpty()) {
                 return Result.failure(IllegalStateException("No alternative wallpapers available"))
             }
-            
+
             // Step 4: Get recent history to avoid immediate repeats
             val recentHistoryList = wallpaperRepository.getHistory().first()
-            val recentHistory = recentHistoryList.take(10).map { it.wallpaperId }.toSet()
-            
-            // Step 5: Filter out recently shown wallpapers and the disliked one
-            val availableWallpapers = downloadedWallpapers.filter { wallpaper ->
-                wallpaper.id !in recentHistory && wallpaper.id != dislikedWallpaperId
-            }.ifEmpty { downloadedWallpapers.filter { it.id != dislikedWallpaperId } }
-            
-            // CRITICAL: Separate wallpapers into different-category and same-category groups
-            val differentCategoryWallpapers = availableWallpapers.filter { 
-                it.category.isNotBlank() && it.category != dislikedCategory 
+            val recentHistory = recentHistoryList.take(10).map { it.wallpaperId }.toSet() + dislikedWallpaperId
+            val recentCategoriesList = recentHistoryList.take(10).mapNotNull { item ->
+                candidateWallpapers.find { it.id == item.wallpaperId }?.category
             }
-            val sameCategoryWallpapers = availableWallpapers.filter { 
-                it.category == dislikedCategory || it.category.isBlank()
+
+            // Step 5: Build category preference maps from history
+            val wallpaperById = candidateWallpapers.associateBy { it.id }
+            val likedCategories = mutableMapOf<String, Int>()
+            val dislikedCategories = mutableMapOf<String, Int>()
+            recentHistoryList.forEach { historyItem ->
+                val wallpaper = wallpaperById[historyItem.wallpaperId] ?: return@forEach
+                val category = wallpaper.category
+                if (category.isBlank()) return@forEach
+                when (historyItem.userFeedback) {
+                    "like" -> likedCategories[category] = likedCategories.getOrDefault(category, 0) + 1
+                    "dislike" -> dislikedCategories[category] = dislikedCategories.getOrDefault(category, 0) + 1
+                }
             }
-            
-            android.util.Log.d("SelectNextWallpaper", "Available: ${availableWallpapers.size} total, " +
-                "${differentCategoryWallpapers.size} different-category, " +
-                "${sameCategoryWallpapers.size} same-category")
-            
-            // Step 6: Score wallpapers with DISSIMILARITY boost
-            // For post-dislike, we want wallpapers that are DIFFERENT from the disliked one
-            val scoredWallpapers = availableWallpapers.map { wallpaper ->
-                // Calculate similarity to disliked wallpaper (we want LOW similarity)
-                val similarityToDisliked = if (dislikedEmbedding.isNotEmpty() && wallpaper.embedding.isNotEmpty()) {
-                    similarityCalculator.calculateSimilarity(dislikedEmbedding, wallpaper.embedding)
+            // Fold in the just-disliked category
+            if (dislikedCategory.isNotBlank()) {
+                dislikedCategories[dislikedCategory] = dislikedCategories.getOrDefault(dislikedCategory, 0) + 1
+            }
+
+            // Step 6: Build disliked embedding centroid (existing dislikes + just-disliked)
+            val dislikedCentroid: FloatArray? = run {
+                val dislikedIds = (preferences?.dislikedWallpaperIds ?: emptyList()).toSet() + dislikedWallpaperId
+                val embeddings = candidateWallpapers
+                    .filter { it.id in dislikedIds && it.embedding.isNotEmpty() }
+                    .map { it.embedding }
+                    .toMutableList()
+                // Include the just-disliked embedding even if not yet in the catalog filter
+                if (dislikedEmbedding.isNotEmpty()) embeddings.add(dislikedEmbedding)
+                if (embeddings.isEmpty()) return@run null
+                val dim = embeddings.first().size
+                val sum = FloatArray(dim)
+                embeddings.forEach { e -> e.forEachIndexed { i, v -> sum[i] += v } }
+                val n = embeddings.size.toFloat()
+                val raw = FloatArray(dim) { i -> sum[i] / n }
+                val mag = kotlin.math.sqrt(raw.sumOf { (it * it).toDouble() }).toFloat()
+                if (mag == 0f) null else FloatArray(dim) { i -> raw[i] / mag }
+            }
+
+            // Step 7: Score candidates (base similarity + content boosts)
+            val hasPreferenceVector = preferences?.preferenceVector?.isNotEmpty() == true
+            val scoredWallpapers = candidateWallpapers.map { wallpaper ->
+                val baseSimilarity = if (hasPreferenceVector && wallpaper.embedding.isNotEmpty()) {
+                    similarityCalculator.calculateSimilarity(preferences!!.preferenceVector, wallpaper.embedding)
                 } else {
-                    0.5f // Neutral if embeddings unavailable
+                    0.4f // Neutral for cold start
                 }
-                
-                // DISSIMILARITY SCORE: Invert similarity (1.0 - similarity) 
-                // Low similarity to disliked = high dissimilarity score
-                val dissimilarityScore = 1.0f - similarityToDisliked
-                
-                // CATEGORY DIVERSITY BONUS: Strong bonus for different category
-                val categoryBonus = if (wallpaper.category.isNotBlank() && 
-                                        wallpaper.category != dislikedCategory) {
-                    0.3f  // 30% bonus for different category
-                } else {
-                    0f
-                }
-                
-                // PREFERENCE ALIGNMENT: Still respect user's overall preferences (but reduced weight)
-                val preferenceScore = if (preferences?.preferenceVector?.isNotEmpty() == true && 
-                                          wallpaper.embedding.isNotEmpty()) {
-                    similarityCalculator.calculateSimilarity(
-                        preferences.preferenceVector, 
-                        wallpaper.embedding
-                    ) * 0.3f  // Only 30% weight to preferences (normally 70%)
-                } else {
-                    0f
-                }
-                
-                // COMPOSITE SCORE: Dissimilarity (50%) + Category Bonus (30%) + Preferences (20%)
-                val compositeScore = (dissimilarityScore * 0.5f) + categoryBonus + preferenceScore
-                
-                RankedWallpaper(wallpaper, compositeScore)
+                val categoryScore = wallpaperScorer.getContentBoost(wallpaper)
+                val compositionScore = wallpaperScorer.getCompositionBoost(wallpaper)
+                val diversityBoost = wallpaperScorer.getTemporalDiversityBoost(
+                    category = wallpaper.category,
+                    recentCategories = recentCategoriesList
+                )
+                val timeOfDayBoost = wallpaperScorer.getTimeOfDayBoost(wallpaper)
+                val semanticBoost = wallpaperScorer.getSemanticBoost(
+                    wallpaper = wallpaper,
+                    moodAffinity = preferences?.moodAffinity ?: emptyMap(),
+                    styleAffinity = preferences?.styleAffinity ?: emptyMap()
+                )
+                RankedWallpaper(
+                    wallpaper = wallpaper,
+                    similarity = baseSimilarity + categoryScore + compositionScore + diversityBoost + timeOfDayBoost + semanticBoost
+                )
             }.sortedByDescending { it.similarity }
-            
-            // Log top candidates for debugging
-            scoredWallpapers.take(5).forEachIndexed { index, ranked ->
-                android.util.Log.d("SelectNextWallpaper", 
-                    "Post-dislike candidate ${index + 1}: ${ranked.wallpaper.id} " +
-                    "(category: ${ranked.wallpaper.category}, score: ${String.format("%.3f", ranked.similarity)})")
+
+            if (me.avinas.vanderwaals.BuildConfig.DEBUG) {
+                scoredWallpapers.take(5).forEachIndexed { index, ranked ->
+                    android.util.Log.d("SelectNextWallpaper",
+                        "Post-dislike candidate ${index + 1}: ${ranked.wallpaper.id} " +
+                        "(category: ${ranked.wallpaper.category}, score: ${String.format("%.3f", ranked.similarity)})")
+                }
             }
-            
-            // Step 7: Select with HIGH exploration rate (70% vs normal 10%)
-            // This ensures we often pick something unexpected
+
+            // Step 8: Build session context with post-dislike signals folded in
+            val sessionContext = me.avinas.vanderwaals.algorithm.YouTubeLikeRecommender.SessionContext(
+                recentlyViewedIds = recentHistory,
+                recentCategories = recentCategoriesList,
+                sessionLikes = recentHistoryList.take(10).count { it.userFeedback == "like" },
+                // +1 for the just-registered dislike → raises exploration rate
+                sessionDislikes = recentHistoryList.take(10).count { it.userFeedback == "dislike" } + 1,
+                totalHistoryLikes = preferences?.likedWallpaperIds?.size ?: 0,
+                totalHistoryDislikes = (preferences?.dislikedWallpaperIds?.size ?: 0) + 1,
+                likedCategories = likedCategories,
+                dislikedCategories = dislikedCategories,
+                dislikedEmbeddingCentroid = dislikedCentroid
+            )
+
+            val candidatesWithScores = scoredWallpapers.map { Pair(it.wallpaper, it.similarity) }
             val seededRandom = createSeededRandom()
-            val explorationRate = 0.7f  // 70% exploration for post-dislike
-            
-            val selectedWallpaper = if (seededRandom.nextFloat() < explorationRate) {
-                // EXPLORATION: Pick from different-category wallpapers if available
-                if (differentCategoryWallpapers.isNotEmpty()) {
-                    val differentCategoryScored = scoredWallpapers.filter { ranked ->
-                        ranked.wallpaper.category.isNotBlank() && 
-                        ranked.wallpaper.category != dislikedCategory
-                    }
-                    if (differentCategoryScored.isNotEmpty()) {
-                        // Pick from top 20 different-category options
-                        val pool = differentCategoryScored.take(20)
-                        pool.random(seededRandom).wallpaper
-                    } else {
-                        scoredWallpapers.take(20).random(seededRandom).wallpaper
-                    }
-                } else {
-                    // No different-category wallpapers, pick from top scored
-                    scoredWallpapers.take(20).random(seededRandom).wallpaper
-                }
-            } else {
-                // EXPLOITATION: Best dissimilarity score (preferring different category)
-                val bestDifferentCategory = scoredWallpapers.firstOrNull { ranked ->
-                    ranked.wallpaper.category.isNotBlank() && 
-                    ranked.wallpaper.category != dislikedCategory
-                }
-                bestDifferentCategory?.wallpaper ?: scoredWallpapers.first().wallpaper
+
+            val selectedWallpaper = try {
+                youtubeLikeRecommender.selectWallpaper(
+                    candidates = candidatesWithScores,
+                    context = sessionContext,
+                    random = seededRandom
+                )
+            } catch (e: Exception) {
+                android.util.Log.w("SelectNextWallpaper", "Post-dislike selection failed, falling back to top match", e)
+                scoredWallpapers.first().wallpaper
             }
-            
-            android.util.Log.d("SelectNextWallpaper", 
+
+            if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper",
                 "Post-dislike selected: ${selectedWallpaper.id} (category: ${selectedWallpaper.category})")
-            android.util.Log.d("SelectNextWallpaper", "=== END POST-DISLIKE SELECTION ===")
-            
+            if (me.avinas.vanderwaals.BuildConfig.DEBUG) android.util.Log.d("SelectNextWallpaper","=== END POST-DISLIKE SELECTION ===")
+
             // Record category view
             if (selectedWallpaper.category.isNotBlank()) {
                 categoryPreferenceRepository.recordView(selectedWallpaper.category)
             }
-            
+
             Result.success(selectedWallpaper)
-            
+
         } catch (e: Exception) {
             android.util.Log.e("SelectNextWallpaper", "Post-dislike selection failed", e)
             Result.failure(Exception("Failed to select wallpaper after dislike: ${e.message}", e))

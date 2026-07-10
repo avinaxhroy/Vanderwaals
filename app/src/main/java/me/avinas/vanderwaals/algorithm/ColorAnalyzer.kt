@@ -88,14 +88,14 @@ object ColorAnalyzer {
         // Value (brightness) similarity (linear)
         val valueSimilarity = 1f - abs(palette1.averageValue - palette2.averageValue)
         
-        // Dominant color RGB distance (weighted heavily)
-        val dominantSimilarity = calculateRgbSimilarity(palette1.dominantColor, palette2.dominantColor)
-        
-        // Accent color matching (if both have accents)
+        // Dominant colour LAB-space distance (perceptually accurate; weighted heavily)
+        val dominantSimilarity = calculateLabSimilarity(palette1.dominantColor, palette2.dominantColor)
+
+        // Accent colour matching using LAB similarity
         val accentSimilarity = if (palette1.accentColors.isNotEmpty() && palette2.accentColors.isNotEmpty()) {
             val accent1 = palette1.accentColors.first()
             val accent2 = palette2.accentColors.first()
-            calculateRgbSimilarity(accent1, accent2)
+            calculateLabSimilarity(accent1, accent2)
         } else {
             0.5f // Neutral if no accents
         }
@@ -224,8 +224,8 @@ object ColorAnalyzer {
     
     private fun isWarmToned(hsvColors: List<HsvColor>): Boolean {
         val avgHue = hsvColors.map { it.hue }.average().toFloat()
-        // Warm tones: Red (0-60°) and Yellow-Orange (300-360°)
-        return avgHue < 60f || avgHue > 300f
+        // Warm tones: Red→Yellow (0-90°) and Magenta→Red (300-360°)
+        return avgHue < 90f || avgHue > 300f
     }
     
     private fun isVibrant(hsvColors: List<HsvColor>): Boolean {
@@ -254,16 +254,28 @@ object ColorAnalyzer {
         val circularDiff = min(diff, maxValue - diff)
         return 1f - (circularDiff / (maxValue / 2f))
     }
-    
-    private fun calculateRgbSimilarity(rgb1: RgbColor, rgb2: RgbColor): Float {
-        val dr = rgb1.r - rgb2.r
-        val dg = rgb1.g - rgb2.g
-        val db = rgb1.b - rgb2.b
-        val distance = sqrt((dr * dr + dg * dg + db * db).toFloat())
-        val maxDistance = sqrt(3f * 255f * 255f)
-        return 1f - (distance / maxDistance).coerceIn(0f, 1f)
-    }
-    
+
+    // ========== CIE76 ΔE (LAB colour space) ==========
+    // Conversions delegated to me.avinas.vanderwaals.core.ColorSpace (shared impl).
+
+    /**
+     * CIE76 ΔE between two [RgbColor]s.
+     *
+     * Operates in the perceptually-uniform CIELab colour space. Small ΔE values
+     * correspond to small perceived colour differences, unlike Euclidean RGB distance.
+     * Max ΔE ≈ 100 (pure black ↔ pure white).
+     */
+    fun deltaE76(rgb1: RgbColor, rgb2: RgbColor): Double =
+        me.avinas.vanderwaals.core.ColorSpace.rgbDeltaE(rgb1.r, rgb1.g, rgb1.b, rgb2.r, rgb2.g, rgb2.b)
+
+    /**
+     * LAB-space colour similarity in [0..1].
+     * Uses CIE76 ΔE normalised by the practical maximum of 100.
+     * More perceptually accurate than Euclidean RGB similarity.
+     */
+    fun calculateLabSimilarity(rgb1: RgbColor, rgb2: RgbColor): Float =
+        (1.0 - (deltaE76(rgb1, rgb2) / 100.0).coerceIn(0.0, 1.0)).toFloat()
+
     private fun calculatePreferredHueRange(hues: List<Float>): HueRange {
         val avgHue = hues.average().toFloat()
         val stdDev = sqrt(hues.map { (it - avgHue).pow(2) }.average()).toFloat()

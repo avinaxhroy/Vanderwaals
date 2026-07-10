@@ -1,184 +1,162 @@
 package me.avinas.vanderwaals.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
-import androidx.core.view.WindowCompat
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.background
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 
 /**
- * Vanderwaals Modern Dark Color Scheme
+ * Vanderwaals Premium Dark Color Scheme
  * 
- * Premium dark theme with:
- * - Vibrant purple brand colors
- * - Rich surface hierarchy for depth
- * - OLED-optimized deep blacks
- * - Enhanced contrast and accessibility
- * - Material 3 design principles
+ * Rich, modern dark theme with:
+ * - Near-pure black backgrounds for OLED
+ * - Electric blue/violet brand colors
+ * - Elevated card surfaces with subtle contrast
+ * - High contrast text hierarchy
  */
 private val VanderwaalsDarkColorScheme = darkColorScheme(
-    // ===== PRIMARY COLORS - Brand Purple =====
-    primary = VanderwaalsTan,
+    primary = BrandPrimary,
     onPrimary = Color.White,
-    primaryContainer = VanderwaalsTanDark,
-    onPrimaryContainer = VanderwaalsTanLight,
+    primaryContainer = BrandPrimaryDark,
+    onPrimaryContainer = BrandPrimaryLight,
     
-    // ===== SECONDARY COLORS - Indigo Accent =====
-    secondary = VanderwaalsTanDark,
+    secondary = BrandAccent,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFF2D2F6F),
-    onSecondaryContainer = Color(0xFF9CA3FF),
+    secondaryContainer = BrandAccent.copy(alpha = 0.2f),
+    onSecondaryContainer = BrandAccentLight,
     
-    // ===== TERTIARY COLORS - Pink Accent =====
-    tertiary = VanderwaalsAccent,
+    tertiary = Color(0xFFEC4899),
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFF5E1841),
-    onTertiaryContainer = VanderwaalsAccentLight,
+    tertiaryContainer = Color(0xFFEC4899).copy(alpha = 0.2f),
+    onTertiaryContainer = Color(0xFFF472B6),
     
-    // ===== ERROR COLORS =====
     error = ErrorColor,
     onError = Color.White,
-    errorContainer = ErrorColorDark,
-    onErrorContainer = Color(0xFFFFDAD6),
+    errorContainer = ErrorContainer,
+    onErrorContainer = Color(0xFFFCA5A5),
     
-    // ===== BACKGROUND HIERARCHY =====
     background = BackgroundDark,
     onBackground = TextPrimaryDark,
     
-    // ===== SURFACE HIERARCHY =====
     surface = SurfaceDark,
     onSurface = TextPrimaryDark,
-    surfaceVariant = SurfaceElevated,
+    surfaceVariant = SurfaceElevatedDark,
     onSurfaceVariant = TextSecondaryDark,
-    surfaceTint = VanderwaalsTan,
-    surfaceBright = SurfaceHighlight,
-    surfaceDim = Color(0xFF0F0F15),
+    surfaceTint = BrandPrimary,
+    surfaceBright = SurfaceHighlightDark,
+    surfaceDim = Color(0xFF0C0C0E),
     
-    // ===== SURFACE CONTAINERS - Elevation System =====
-    surfaceContainer = SurfaceDark,
-    surfaceContainerHigh = SurfaceElevated,
-    surfaceContainerHighest = SurfaceHighlight,
-    surfaceContainerLow = Color(0xFF121218),
+    surfaceContainer = SurfaceElevatedDark,
+    surfaceContainerHigh = SurfaceOverlayDark,
+    surfaceContainerHighest = SurfaceHighlightDark,
+    surfaceContainerLow = SurfaceDark,
     surfaceContainerLowest = BackgroundDark,
     
-    // ===== INVERSE COLORS - For Snackbars, Tooltips =====
     inverseSurface = TextPrimaryDark,
     inverseOnSurface = BackgroundDark,
-    inversePrimary = VanderwaalsTanDark,
+    inversePrimary = BrandPrimaryDark,
     
-    // ===== OUTLINE COLORS - Borders & Dividers =====
     outline = BorderDark,
-    outlineVariant = BorderHighlight,
+    outlineVariant = BorderSubtleDark,
     
-    // ===== SCRIM - Modal Overlays =====
-    scrim = ScrimColor
+    scrim = ScrimDark
 )
 
 /**
- * Vanderwaals Modern Light Color Scheme
+ * Vanderwaals Premium Light Color Scheme
  * 
- * Clean, airy light theme with:
- * - Warm white backgrounds
+ * Clean, modern light theme with:
+ * - Warm off-white backgrounds
+ * - Pure white elevated cards
  * - High contrast dark text
- * - Same brand accent colors
+ * - Same vibrant brand accent
  */
-private val VanderwaalsLightColorScheme = androidx.compose.material3.lightColorScheme(
-    // ===== PRIMARY COLORS - Brand Purple =====
-    primary = VanderwaalsTanDark, // Darker tan for better contrast on light
+private val VanderwaalsLightColorScheme = lightColorScheme(
+    primary = BrandPrimaryDark,
     onPrimary = Color.White,
-    primaryContainer = VanderwaalsTan,
+    primaryContainer = BrandPrimary,
     onPrimaryContainer = Color.White,
     
-    // ===== SECONDARY COLORS - Indigo Accent =====
-    secondary = VanderwaalsTan,
+    secondary = BrandAccent,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFE0E7FF),
-    onSecondaryContainer = Color(0xFF2D2F6F),
+    secondaryContainer = BrandAccent.copy(alpha = 0.1f),
+    onSecondaryContainer = BrandAccent.copy(alpha = 0.8f),
     
-    // ===== TERTIARY COLORS - Pink Accent =====
-    tertiary = VanderwaalsAccent,
+    tertiary = Color(0xFFEC4899),
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFFFD6E4),
-    onTertiaryContainer = Color(0xFF5E1841),
+    tertiaryContainer = Color(0xFFEC4899).copy(alpha = 0.1f),
+    onTertiaryContainer = Color(0xFFBE185D),
     
-    // ===== ERROR COLORS =====
-    error = ErrorColorLight,
+    error = ErrorColor,
     onError = Color.White,
-    errorContainer = Color(0xFFFEE2E2),
-    onErrorContainer = ErrorColorDark,
+    errorContainer = ErrorContainer,
+    onErrorContainer = Color(0xFF991B1B),
     
-    // ===== BACKGROUND HIERARCHY =====
     background = BackgroundLight,
     onBackground = TextPrimaryLight,
     
-    // ===== SURFACE HIERARCHY =====
     surface = SurfaceLight,
     onSurface = TextPrimaryLight,
-    surfaceVariant = SurfaceElevatedLight,
+    surfaceVariant = SurfaceOverlayLight,
     onSurfaceVariant = TextSecondaryLight,
-    surfaceTint = VanderwaalsTanDark,
+    surfaceTint = BrandPrimaryDark,
     surfaceBright = SurfaceHighlightLight,
-    surfaceDim = SurfaceElevatedLight,
+    surfaceDim = SurfaceOverlayLight,
     
-    // ===== SURFACE CONTAINERS - Elevation System =====
     surfaceContainer = SurfaceLight,
-    surfaceContainerHigh = SurfaceElevatedLight,
+    surfaceContainerHigh = SurfaceOverlayLight,
     surfaceContainerHighest = SurfaceHighlightLight,
     surfaceContainerLow = BackgroundLight,
     surfaceContainerLowest = Color.White,
     
-    // ===== INVERSE COLORS =====
-    inverseSurface = Color(0xFF2A2A3E), // Dark surface for inverse (tooltips on light bg)
-    inverseOnSurface = Color.White, // White text on dark inverse surface
-    inversePrimary = VanderwaalsTan,
+    inverseSurface = SurfaceDark,
+    inverseOnSurface = TextPrimaryDark,
+    inversePrimary = BrandPrimaryLight,
     
-    // ===== OUTLINE COLORS =====
-    outline = BorderHighlightLight,
-    outlineVariant = BorderLight,
+    outline = BorderLight,
+    outlineVariant = BorderSubtleLight,
     
-    // ===== SCRIM =====
-    scrim = ScrimColor
+    scrim = ScrimLight
 )
 
 /**
- * Vanderwaals Modern Theme
+ * Vanderwaals Premium Theme
  * 
- * Premium Material 3 theme featuring both Light and Dark modes:
+ * Modern, sophisticated design system featuring:
  * 
  * **Visual Design:**
- * - Exclusive dark mode with OLED optimization
- * - Clean, airy light mode
- * - Vibrant purple gradient brand identity
- * - Rich surface elevation system
- * - Smooth, modern rounded corners
- * - Enhanced depth and hierarchy
+ * - Rich dark mode with OLED optimization
+ * - Clean light mode with warm whites
+ * - Electric blue/violet brand identity
+ * - Elevated surface hierarchy
+ * - Premium card-based layouts
  * 
  * **Typography:**
- * - System sans-serif with refined weights
- * - Optimized for readability
- * - Proper line heights and letter spacing
+ * - System sans-serif for clarity
+ * - Optimized weights and spacing
+ * - Clear hierarchy and readability
  * 
  * **Shapes:**
- * - Consistent rounded corner system
- * - Friendly, modern aesthetic
- * - Varied shapes for different contexts
+ * - Consistent rounded corners
+ * - Modern, friendly aesthetic
+ * - Context-appropriate variants
  * 
  * **Accessibility:**
  * - High contrast ratios
  * - Clear visual hierarchy
- * - Proper touch target sizes
+ * - Proper touch targets
  * 
  * @param darkTheme Whether to use dark theme (default: follows system)
- * @param dynamicColor Use Material You colors on Android 12+ (default: false for brand consistency)
+ * @param dynamicColor Use Material You colors on Android 12+ (default: false)
  * @param content The composable content to be themed
  */
 @Composable
@@ -187,24 +165,15 @@ fun VanderwaalsTheme(
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    // Determine color scheme - prioritize brand colors over dynamic
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else androidx.compose.material3.dynamicLightColorScheme(context)
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
         darkTheme -> VanderwaalsDarkColorScheme
         else -> VanderwaalsLightColorScheme
     }
     
-    // Configure system UI (status bar, navigation bar)
-    val view = LocalView.current
-    if (!view.isInEditMode) {
-        // SideEffect removed: enableEdgeToEdge in MainActivity handles transparency
-        // and we want the app background to show through
-    }
-
-    // Apply Material Theme with our custom design system
     MaterialTheme(
         colorScheme = colorScheme,
         typography = VanderwaalsTypography,
@@ -220,9 +189,13 @@ fun VanderwaalsTheme(
 
 /**
  * CompositionLocal to provide the current theme mode (Dark/Light) to the app.
- * This allows components to know the actual app theme, which may differ from the system theme.
  */
 val LocalThemeIsDark = androidx.compose.runtime.compositionLocalOf { false }
+
+/**
+ * CompositionLocal to provide the unconsumed system navigation bar bottom padding.
+ */
+val LocalNavigationBarPadding = androidx.compose.runtime.compositionLocalOf { androidx.compose.ui.unit.Dp.Unspecified }
 
 /**
  * Preview-friendly version of VanderwaalsTheme for Compose previews
@@ -240,47 +213,21 @@ fun VanderwaalsThemePreview(
 }
 
 /**
- * A container that applies the "Liquid Glass" pre-rendered background.
- * This should be used as the root container for secondary screens (Settings, Onboarding, etc.).
- * 
- * It automatically selects the correct asset (Light vs Dark) based on the current theme.
- * When LiquidGlassProvider is present, uses dynamically generated backgrounds with
- * blur, distortion, and chromatic aberration effects (Smart Launcher style).
- * Falls back to static assets when dynamic backgrounds are not available.
+ * A simple background container that uses the theme's background color.
+ * Replaces the old LiquidGlassBackground with a clean, solid background.
  */
 @Composable
 fun LiquidGlassBackground(
     modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier,
     content: @Composable () -> Unit
 ) {
-    val glassState = me.avinas.vanderwaals.ui.theme.glass.LocalLiquidGlassState.current
     val isDark = LocalThemeIsDark.current
-
-    androidx.compose.foundation.layout.Box(modifier = modifier.fillMaxSize()) {
-        // Use dynamic background if available and matches current theme
-        if (glassState != null && glassState.isReady && glassState.isDarkMode == isDark) {
-            // Use dynamically generated liquid glass background
-            androidx.compose.foundation.Image(
-                bitmap = glassState.background,
-                contentDescription = null,
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                modifier = androidx.compose.ui.Modifier.fillMaxSize()
-            )
-        } else {
-            // Fallback to static assets
-            val backgroundRes = if (isDark) {
-                me.avinas.vanderwaals.R.drawable.bg_liquid_glass_dark
-            } else {
-                me.avinas.vanderwaals.R.drawable.bg_liquid_glass_light
-            }
-            androidx.compose.foundation.Image(
-                painter = androidx.compose.ui.res.painterResource(id = backgroundRes),
-                contentDescription = null,
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                modifier = androidx.compose.ui.Modifier.fillMaxSize()
-            )
-        }
+    
+    androidx.compose.foundation.layout.Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(if (isDark) BackgroundDark else BackgroundLight)
+    ) {
         content()
     }
 }
-

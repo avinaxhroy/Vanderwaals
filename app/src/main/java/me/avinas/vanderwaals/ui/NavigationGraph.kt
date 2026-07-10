@@ -31,6 +31,7 @@ import me.avinas.vanderwaals.ui.settings.SettingsScreen
  */
 sealed class Screen(val route: String) {
     // Onboarding flow
+    object Welcome : Screen("welcome")
     object SourceSelection : Screen("source_selection")
     object InitialSync : Screen("initial_sync")
     object ModeSelection : Screen("mode_selection")
@@ -50,7 +51,7 @@ sealed class Screen(val route: String) {
  * 
  * Determines start destination based on onboarding completion flag.
  * If user has completed onboarding → Main
- * If new user → SourceSelection
+ * If new user → Welcome
  * 
  * @param onboardingComplete Whether user has completed onboarding
  * @param navController Optional NavController (defaults to rememberNavController)
@@ -60,23 +61,50 @@ fun VanderwaalsNavGraph(
     onboardingComplete: Boolean,
     navController: NavHostController = rememberNavController()
 ) {
+    // Shared ViewModel across all onboarding screens to track mode selection
+    val modeSelectionViewModel: ModeSelectionViewModel = hiltViewModel()
+    val selectedMode by modeSelectionViewModel.selectedMode.collectAsState()
+    val isAuto = selectedMode == OnboardingMode.AUTO
+    val totalSteps = if (isAuto) 4 else 6
+
     NavHost(
         navController = navController,
-        // Start with SourceSelection for new users
-        startDestination = if (onboardingComplete) Screen.Main.route else Screen.SourceSelection.route
+        // Start with Welcome for new users
+        startDestination = if (onboardingComplete) Screen.Main.route else Screen.Welcome.route
     ) {
         // ========== ONBOARDING FLOW ==========
         
-        // Step 0: Source Selection (New)
-        composable(Screen.SourceSelection.route) {
-            WallpaperSourceSelectionScreen(
-                onContinue = {
-                    navController.navigate(Screen.InitialSync.route)
+        // Step 0: Welcome Screen (Introductory)
+        composable(Screen.Welcome.route) {
+            WelcomeScreen(
+                onGetStarted = {
+                    navController.navigate(Screen.SourceSelection.route) {
+                        popUpTo(Screen.Welcome.route) { inclusive = true }
+                    }
+                },
+                onSkip = {
+                    navController.navigate(Screen.SourceSelection.route) {
+                        popUpTo(Screen.Welcome.route) { inclusive = true }
+                    }
                 }
             )
         }
         
-        // Step 1: Initial Sync (Manual download)
+        // Step 1: Source Selection
+        composable(Screen.SourceSelection.route) {
+            WallpaperSourceSelectionScreen(
+                onContinue = {
+                    navController.navigate(Screen.InitialSync.route)
+                },
+                onBack = {
+                    navController.popBackStack()
+                },
+                currentStep = 1,
+                totalSteps = 4
+            )
+        }
+        
+        // Step 2: Initial Sync (Manual download)
         composable(Screen.InitialSync.route) {
             InitialSyncScreen(
                 onSyncComplete = {
@@ -84,19 +112,19 @@ fun VanderwaalsNavGraph(
                     navController.navigate(Screen.ModeSelection.route) {
                         popUpTo(Screen.SourceSelection.route) { inclusive = true }
                     }
-                }
+                },
+                currentStep = 2,
+                totalSteps = 4
             )
         }
         
-        // Step 2: Mode Selection
+        // Step 3: Mode Selection
         composable(Screen.ModeSelection.route) {
             ModeSelectionScreen(
                 onModeSelected = { mode ->
                     when (mode) {
                         OnboardingMode.AUTO -> {
-                             // Auto mode: Go to Application Settings (Source selection already done in Step 0)
-                             // Wait, Source Selection -> Step 1 Init -> Step 2 Mode.
-                             // Logic in NavGraph: "Auto: ApplicationSettings"
+                             // Auto mode: Go to Application Settings
                              navController.navigate(Screen.ApplicationSettings.route)
                         }
                         OnboardingMode.PERSONALIZE -> {
@@ -104,7 +132,11 @@ fun VanderwaalsNavGraph(
                              navController.navigate(Screen.UploadWallpaper.route)
                         }
                     }
-                }
+                },
+                onBack = { navController.popBackStack() },
+                viewModel = modeSelectionViewModel,
+                currentStep = 3,
+                totalSteps = totalSteps
             )
         }
         
@@ -127,7 +159,9 @@ fun VanderwaalsNavGraph(
                         navController.popBackStack()
                     }
                 },
-                viewModel = uploadViewModel
+                viewModel = uploadViewModel,
+                currentStep = 4,
+                totalSteps = 6
             )
         }
         
@@ -166,7 +200,9 @@ fun VanderwaalsNavGraph(
                     // Always go back to upload wallpaper screen
                     navController.popBackStack()
                 },
-                viewModel = confirmationViewModel
+                viewModel = confirmationViewModel,
+                currentStep = 5,
+                totalSteps = 6
             )
         }
         
@@ -180,8 +216,18 @@ fun VanderwaalsNavGraph(
                 },
                 onBackPressed = {
                     android.util.Log.d("NavigationGraph", "APPLICATION_SETTINGS (main) back pressed")
+                    val previousRoute = navController.previousBackStackEntry?.destination?.route
+                    if (previousRoute == Screen.ConfirmationGallery.route) {
+                        val confirmEntry = runCatching { navController.getBackStackEntry(Screen.ConfirmationGallery.route) }.getOrNull()
+                        if (confirmEntry != null) {
+                            confirmEntry.savedStateHandle["resetFinishState"] = true
+                        }
+                    }
                     navController.popBackStack()
-                }
+                },
+                selectedMode = selectedMode,
+                currentStep = if (isAuto) 4 else 6,
+                totalSteps = totalSteps
             )
         }
         

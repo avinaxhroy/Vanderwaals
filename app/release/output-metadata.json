@@ -11,9 +11,9 @@
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 410,
-      "versionName": "4.1.0",
-      "outputFile": "vanderwaals-v4.1.0.apk"
+      "versionCode": 461,
+      "versionName": "4.6.1",
+      "outputFile": "vanderwaals-v4.6.1.apk"
     }
   ],
   "elementType": "File",
@@ -22,14 +22,14 @@
       "minApi": 28,
       "maxApi": 30,
       "baselineProfiles": [
-        "baselineProfiles/1/vanderwaals-v4.1.0.dm"
+        "baselineProfiles/1/vanderwaals-v4.6.1.dm"
       ]
     },
     {
       "minApi": 31,
       "maxApi": 2147483647,
       "baselineProfiles": [
-        "baselineProfiles/0/vanderwaals-v4.1.0.dm"
+        "baselineProfiles/0/vanderwaals-v4.6.1.dm"
       ]
     }
   ],

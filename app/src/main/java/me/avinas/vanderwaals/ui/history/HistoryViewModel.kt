@@ -2,6 +2,7 @@ package me.avinas.vanderwaals.ui.history
 
 import android.content.Context
 import android.os.Environment
+import android.util.Log
 import androidx.compose.material3.SnackbarHostState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -171,12 +172,11 @@ class HistoryViewModel @Inject constructor(
                         onSuccess()
                     },
                     onFailure = { error ->
-                        // Log error or show toast
-                        println("Failed to update preferences: ${error.message}")
+                        Log.e("HistoryViewModel", "Failed to update preferences from history action", error)
                     }
                 )
             } catch (e: Exception) {
-                println("Error updating feedback: ${e.message}")
+                Log.e("HistoryViewModel", "Error updating history feedback", e)
             }
         }
     }
@@ -231,8 +231,7 @@ class HistoryViewModel @Inject constructor(
                     onError("Download failed: ${it.message}")
                 }
             } catch (e: Exception) {
-                println("Error downloading wallpaper: ${e.message}")
-                e.printStackTrace()
+                Log.e("HistoryViewModel", "Error downloading wallpaper from history", e)
                 onError("Error: ${e.message}")
             }
         }

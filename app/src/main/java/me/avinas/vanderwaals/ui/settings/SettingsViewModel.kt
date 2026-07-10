@@ -1,6 +1,7 @@
 package me.avinas.vanderwaals.ui.settings
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.OneTimeWorkRequestBuilder
@@ -12,6 +13,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
 import me.avinas.vanderwaals.data.repository.WallpaperRepository
 import me.avinas.vanderwaals.worker.CatalogSyncWorker
 import me.avinas.vanderwaals.worker.WorkScheduler
@@ -68,6 +70,7 @@ class SettingsViewModel @Inject constructor(
     private val syncWallpaperCatalogUseCase: me.avinas.vanderwaals.domain.usecase.SyncWallpaperCatalogUseCase,
     private val userPreferenceDao: me.avinas.vanderwaals.data.dao.UserPreferenceDao,
     private val bingManifestRepository: me.avinas.vanderwaals.data.repository.BingManifestRepository,
+    private val vanderwaalsCollectionRepository: me.avinas.vanderwaals.data.repository.VanderwaalsCollectionRepository,
     @param:ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -76,12 +79,7 @@ class SettingsViewModel @Inject constructor(
     private val _interval = MutableStateFlow(ChangeInterval.DAILY)
     private val _dailyTime = MutableStateFlow(DailyTime(8, 0))
     private val _applyTo = MutableStateFlow(ApplyTo.BOTH)
-    private val _sourcesEnabled = MutableStateFlow(
-        mapOf(
-            "GitHub Collections" to true,
-            "Bing Wallpapers" to false  // Only enabled in auto mode
-        )
-    )
+    private val _sourcesEnabled = MutableStateFlow(buildSourceState(true, false, false))
     private val _lastSyncTimestamp = MutableStateFlow(0L)
     private val _cacheRefreshTrigger = MutableStateFlow(0L) // Trigger for cache size recalculation
     private val _isSyncing = MutableStateFlow(false)
@@ -99,7 +97,14 @@ class SettingsViewModel @Inject constructor(
     private val _bingSyncMessage = MutableStateFlow("")
     private val _bingWallpaperCount = MutableStateFlow(0)
     private val _bingManifestType = MutableStateFlow("lite")  // "lite" or "full"
-    private val _showBingTypeDialog = MutableStateFlow(false)  // For manifest type selection when enabling Bing
+    private val _showBingTypeDialog = MutableStateFlow(false)
+
+    // Vanderwaals Collection sync state
+    private val _isVanderwaalsCollectionSyncing = MutableStateFlow(false)
+    private val _vanderwaalsCollectionSyncProgress = MutableStateFlow(0f)
+    private val _vanderwaalsCollectionSyncMessage = MutableStateFlow("")
+    private val _vanderwaalsCollectionWallpaperCount = MutableStateFlow(0)
+    private val _vanderwaalsCollectionManifestType = MutableStateFlow("lite")
     
     // Public toast message flow
     val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
@@ -116,6 +121,13 @@ class SettingsViewModel @Inject constructor(
     val bingWallpaperCount: StateFlow<Int> = _bingWallpaperCount.asStateFlow()
     val bingManifestType: StateFlow<String> = _bingManifestType.asStateFlow()
     val showBingTypeDialog: StateFlow<Boolean> = _showBingTypeDialog.asStateFlow()
+
+    // Public Vanderwaals Collection sync state flows
+    val isVanderwaalsCollectionSyncing: StateFlow<Boolean> = _isVanderwaalsCollectionSyncing.asStateFlow()
+    val vanderwaalsCollectionSyncProgress: StateFlow<Float> = _vanderwaalsCollectionSyncProgress.asStateFlow()
+    val vanderwaalsCollectionSyncMessage: StateFlow<String> = _vanderwaalsCollectionSyncMessage.asStateFlow()
+    val vanderwaalsCollectionWallpaperCount: StateFlow<Int> = _vanderwaalsCollectionWallpaperCount.asStateFlow()
+    val vanderwaalsCollectionManifestType: StateFlow<String> = _vanderwaalsCollectionManifestType.asStateFlow()
     
     /**
      * Clears the toast message after it's been shown.
@@ -228,6 +240,8 @@ class SettingsViewModel @Inject constructor(
                     "6hours" -> ChangeInterval.SIX_HOURS
                     "12hours" -> ChangeInterval.TWELVE_HOURS
                     "daily" -> ChangeInterval.DAILY
+                    "3days" -> ChangeInterval.THREE_DAYS
+                    "7days" -> ChangeInterval.SEVEN_DAYS
                     "never" -> ChangeInterval.NEVER
                     else -> ChangeInterval.DAILY
                 }
@@ -245,9 +259,10 @@ class SettingsViewModel @Inject constructor(
                 }
                 
                 // Load from DataStore instead of hardcoding
-                _sourcesEnabled.value = mapOf(
-                    "GitHub Collections" to settings.githubEnabled,
-                    "Bing Wallpapers" to settings.bingEnabled
+                _sourcesEnabled.value = buildSourceState(
+                    githubEnabled = settings.githubEnabled,
+                    bingEnabled = settings.bingEnabled,
+                    vanderwaalsCollectionEnabled = settings.vanderwaalsCollectionEnabled
                 )
                 
                 // Load last sync timestamp
@@ -263,11 +278,17 @@ class SettingsViewModel @Inject constructor(
                 
                 // Load Bing manifest type
                 _bingManifestType.value = settings.bingManifestType
+
+                // Load Vanderwaals Collection manifest type
+                _vanderwaalsCollectionManifestType.value = settings.vanderwaalsCollectionManifestType
             }
         }
         
         // Load Bing wallpaper count
         loadBingWallpaperCount()
+
+        // Load Vanderwaals Collection wallpaper count
+        loadVanderwaalsCollectionWallpaperCount()
         
         // Observe Daily Playlist Worker status (both scheduled and manual)
         viewModelScope.launch {
@@ -384,10 +405,7 @@ class SettingsViewModel @Inject constructor(
             interval = ChangeInterval.DAILY,
             dailyTime = DailyTime(8, 0),
             applyTo = ApplyTo.BOTH,
-            sourcesEnabled = mapOf(
-                "GitHub Collections" to true,
-                "Bing Wallpapers" to false  // Only enabled in auto mode
-            ),
+            sourcesEnabled = buildSourceState(true, false, false),
             cacheSize = "Calculating...",
             lastSynced = "Never synced",
             themeMode = ThemeMode.SYSTEM,
@@ -430,6 +448,8 @@ class SettingsViewModel @Inject constructor(
                 ChangeInterval.SIX_HOURS -> "6hours"
                 ChangeInterval.TWELVE_HOURS -> "12hours"
                 ChangeInterval.DAILY -> "daily"
+                ChangeInterval.THREE_DAYS -> "3days"
+                ChangeInterval.SEVEN_DAYS -> "7days"
                 ChangeInterval.NEVER -> "never"
             }
             settingsDataStore.updateInterval(intervalString, if (interval == ChangeInterval.DAILY) java.time.LocalTime.of(_dailyTime.value.hour, _dailyTime.value.minute) else null)
@@ -484,20 +504,40 @@ class SettingsViewModel @Inject constructor(
      */
     fun toggleSource(source: String, enabled: Boolean) {
         viewModelScope.launch {
-            val sourceKey = if (source.contains("GitHub")) "github" else "bing"
-            
+            val sourceKey = when {
+                source.contains("GitHub") -> "github"
+                source.contains("Bing") -> "bing"
+                source.contains("Vanderwaals") -> "vanderwaals"
+                else -> {
+                    android.util.Log.e("SettingsViewModel", "toggleSource: unknown source key '$source'")
+                    return@launch
+                }
+            }
+
             // If enabling Bing, check if we need to show type selection dialog
             if (sourceKey == "bing" && enabled) {
-                // Check if Bing has never been synced (no wallpapers)
                 val bingCount = bingManifestRepository.getBingWallpaperCount()
                 if (bingCount == 0) {
-                    // Show type selection dialog - don't enable yet
                     _showBingTypeDialog.value = true
                     return@launch
                 }
             }
-            
-            // For GitHub or disabling Bing, proceed normally
+
+            // If enabling Vanderwaals Collection with no wallpapers, start sync
+            if (sourceKey == "vanderwaals" && enabled) {
+                val vcCount = vanderwaalsCollectionRepository.getVanderwaalsCollectionWallpaperCount()
+                if (vcCount == 0) {
+                    // Enable source and start sync immediately
+                    val updated = _sourcesEnabled.value.toMutableMap()
+                    updated[source] = enabled
+                    _sourcesEnabled.value = updated
+                    settingsDataStore.toggleSource(sourceKey, enabled)
+                    syncVanderwaalsCollectionWallpapers(forceUpdate = true)
+                    return@launch
+                }
+            }
+
+            // For all sources, proceed normally
             val updated = _sourcesEnabled.value.toMutableMap()
             updated[source] = enabled
             _sourcesEnabled.value = updated
@@ -602,6 +642,71 @@ class SettingsViewModel @Inject constructor(
             _bingWallpaperCount.value = bingManifestRepository.getBingWallpaperCount()
         }
     }
+
+    /**
+     * Syncs Vanderwaals Collection wallpapers with progress tracking.
+     * @param forceUpdate If true, downloads fresh manifest ignoring If-Modified-Since
+     */
+    fun syncVanderwaalsCollectionWallpapers(forceUpdate: Boolean = false) {
+        viewModelScope.launch {
+            _isVanderwaalsCollectionSyncing.value = true
+            _vanderwaalsCollectionSyncProgress.value = 0f
+            _vanderwaalsCollectionSyncMessage.value = "Starting sync..."
+
+            vanderwaalsCollectionRepository.syncVanderwaalsCollectionManifest(
+                manifestType = _vanderwaalsCollectionManifestType.value,
+                onProgress = { message, progress, count ->
+                    _vanderwaalsCollectionSyncMessage.value = message
+                    _vanderwaalsCollectionSyncProgress.value = progress
+                    _vanderwaalsCollectionWallpaperCount.value = count
+                },
+                forceUpdate = forceUpdate
+            ).fold(
+                onSuccess = { count ->
+                    _vanderwaalsCollectionWallpaperCount.value = count
+                    _isVanderwaalsCollectionSyncing.value = false
+                    _vanderwaalsCollectionSyncProgress.value = 1f
+                    _vanderwaalsCollectionSyncMessage.value = "Sync complete!"
+                    _toastMessage.value = "Synced $count Vanderwaals Collection wallpapers"
+                },
+                onFailure = { error ->
+                    _isVanderwaalsCollectionSyncing.value = false
+                    _vanderwaalsCollectionSyncProgress.value = 0f
+                    _vanderwaalsCollectionSyncMessage.value = "Sync failed"
+                    _toastMessage.value = "Vanderwaals Collection sync failed: ${error.message}"
+                }
+            )
+        }
+    }
+
+    /**
+     * Updates the Vanderwaals Collection manifest type (lite vs full).
+     * If VC is enabled and type changes, will trigger a resync.
+     */
+    fun updateVanderwaalsCollectionManifestType(type: String) {
+        viewModelScope.launch {
+            val oldType = _vanderwaalsCollectionManifestType.value
+            _vanderwaalsCollectionManifestType.value = type
+            settingsDataStore.updateVanderwaalsCollectionManifestType(type)
+
+            // If VC is enabled and type changed, resync
+            val vcEnabled = _sourcesEnabled.value["Vanderwaals Collection"] == true
+            if (vcEnabled && oldType != type) {
+                vanderwaalsCollectionRepository.clearVanderwaalsCollectionWallpapers()
+                syncVanderwaalsCollectionWallpapers(forceUpdate = true)
+            }
+        }
+    }
+
+    /**
+     * Loads Vanderwaals Collection wallpaper count on init.
+     */
+    private fun loadVanderwaalsCollectionWallpaperCount() {
+        viewModelScope.launch {
+            _vanderwaalsCollectionWallpaperCount.value =
+                vanderwaalsCollectionRepository.getVanderwaalsCollectionWallpaperCount()
+        }
+    }
     
     /**
      * Updates the app theme mode.
@@ -685,20 +790,20 @@ class SettingsViewModel @Inject constructor(
                         settingsDataStore.updateLastSyncTimestamp(timestamp)
                         _isSyncing.value = false
                         _toastMessage.value = "Sync successful: $count wallpapers"
-                        println("Sync successful: $count wallpapers")
+                        Log.i("SettingsViewModel", "Catalog sync completed: $count wallpapers")
                     },
                     onFailure = { error ->
                         _isSyncing.value = false
                         _syncError.value = error.message
                         _toastMessage.value = "Sync failed: ${error.message}"
-                        println("Sync failed: ${error.message}")
+                        Log.e("SettingsViewModel", "Catalog sync failed", error)
                     }
                 )
             } catch (e: Exception) {
                 _isSyncing.value = false
                 _syncError.value = e.message
                 _toastMessage.value = "Error syncing: ${e.message}"
-                println("Error syncing: ${e.message}")
+                Log.e("SettingsViewModel", "Unexpected error during catalog sync", e)
             }
         }
     }
@@ -730,7 +835,7 @@ class SettingsViewModel @Inject constructor(
                 
             } catch (e: Exception) {
                 _toastMessage.value = "Error clearing cache: ${e.message}"
-                println("Error clearing cache: ${e.message}")
+                Log.e("SettingsViewModel", "Error clearing wallpaper cache", e)
             }
         }
     }
@@ -755,6 +860,18 @@ class SettingsViewModel @Inject constructor(
             "${String.format("%.0f", sizeMB)} MB, $count wallpapers"
         } catch (e: Exception) {
             "Unknown"
+        }
+    }
+
+    private fun buildSourceState(
+        githubEnabled: Boolean,
+        bingEnabled: Boolean,
+        vanderwaalsCollectionEnabled: Boolean = false
+    ): Map<String, Boolean> {
+        return buildMap {
+            put("GitHub Collections", githubEnabled)
+            put("Bing Wallpapers", bingEnabled)
+            put("Vanderwaals Collection", vanderwaalsCollectionEnabled)
         }
     }
 
@@ -803,6 +920,8 @@ class SettingsViewModel @Inject constructor(
                 ChangeInterval.SIX_HOURS -> me.avinas.vanderwaals.worker.ChangeInterval.SIX_HOURS
                 ChangeInterval.TWELVE_HOURS -> me.avinas.vanderwaals.worker.ChangeInterval.TWELVE_HOURS
                 ChangeInterval.DAILY -> me.avinas.vanderwaals.worker.ChangeInterval.DAILY
+                ChangeInterval.THREE_DAYS -> me.avinas.vanderwaals.worker.ChangeInterval.THREE_DAYS
+                ChangeInterval.SEVEN_DAYS -> me.avinas.vanderwaals.worker.ChangeInterval.SEVEN_DAYS
                 ChangeInterval.NEVER -> me.avinas.vanderwaals.worker.ChangeInterval.NEVER
             }
             
@@ -831,6 +950,13 @@ class SettingsViewModel @Inject constructor(
                     )
                 }
                 ChangeInterval.FIFTEEN_MINUTES -> {
+                    workScheduler.scheduleWallpaperChange(
+                        interval = workerInterval,
+                        targetScreen = targetScreen
+                    )
+                }
+                ChangeInterval.THREE_DAYS,
+                ChangeInterval.SEVEN_DAYS -> {
                     workScheduler.scheduleWallpaperChange(
                         interval = workerInterval,
                         targetScreen = targetScreen
@@ -905,6 +1031,8 @@ enum class ChangeInterval(val displayName: String) {
     SIX_HOURS("6 Hours"),
     TWELVE_HOURS("12 Hours"),
     DAILY("Daily"),
+    THREE_DAYS("3 Days"),
+    SEVEN_DAYS("7 Days"),
     NEVER("Never")
 }
 

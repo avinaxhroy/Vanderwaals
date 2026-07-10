@@ -10,25 +10,8 @@ import android.provider.Settings
 import android.util.Log
 
 /**
- * Helper class for opening brand-specific settings pages to disable live wallpapers.
- * 
- * **Why This Matters:**
- * - Each Android manufacturer has different settings paths for live wallpapers
- * - Direct intent navigation improves user experience (vs manual navigation)
- * - Fallback mechanisms ensure users can always find the right settings
- * 
- * **Supported Brands:**
- * - Xiaomi/Redmi: Lock screen settings or Glance settings
- * - Samsung: Wallpaper Services menu
- * - Realme/OPPO: App management for Glance
- * - Vivo: Lock screen poster settings
- * - Generic: Live wallpaper picker or wallpaper settings
- * 
- * **Pattern:**
- * Similar to BatteryOptimizationHelper, provides brand-specific intent handling
- * with fallback mechanism for robustness.
- * 
- * @see BatteryOptimizationHelper
+ * Opens manufacturer-specific settings to disable live wallpapers.
+ * Covers Xiaomi, Samsung, Realme/OPPO, Vivo with generic fallback.
  */
 object BrandSettingsIntents {
     

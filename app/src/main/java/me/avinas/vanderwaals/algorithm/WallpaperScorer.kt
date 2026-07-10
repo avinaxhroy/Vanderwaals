@@ -6,6 +6,7 @@ import me.avinas.vanderwaals.data.repository.CategoryPreferenceRepository
 import me.avinas.vanderwaals.data.repository.ColorPreferenceRepository
 import me.avinas.vanderwaals.data.repository.CompositionPreferenceRepository
 import java.io.File
+import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
@@ -125,25 +126,26 @@ class WallpaperScorer @Inject constructor(
     
     /**
      * Calculates composition preference boost using CompositionAnalyzer.
-     * 
+     *
      * Analyzes wallpaper layout using:
      * - 3x3 grid (rule of thirds)
      * - Symmetry (horizontal, vertical)
      * - Center weight vs edge density
      * - Complexity (busy vs simple)
-     * 
-     * @param wallpaperId Wallpaper ID to analyze
+     *
+     * @param wallpaper Wallpaper metadata
      * @return Boost value from -0.08 (disliked composition) to +0.08 (liked composition)
      */
-    suspend fun getCompositionBoost(wallpaperId: String): Float {
+    suspend fun getCompositionBoost(wallpaper: WallpaperMetadata): Float {
         return try {
+            // Analyze composition from local downloaded file
             val preferences = compositionPreferenceRepository.getCompositionPreferencesOnce()
             if (preferences == null || preferences.sampleCount == 0) {
                 return 0f
             }
             
-            val wallpaperFile = File(context.filesDir, "wallpapers/$wallpaperId.jpg")
-            if (!wallpaperFile.exists()) {
+            val wallpaperFile = me.avinas.vanderwaals.core.resolveWallpaperFile(context, wallpaper.id)
+            if (wallpaperFile == null) {
                 return 0f
             }
             
@@ -171,7 +173,7 @@ class WallpaperScorer @Inject constructor(
             
             weightedScore * 0.08f
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Error calculating composition boost for $wallpaperId", e)
+            android.util.Log.e(TAG, "Error calculating composition boost for ${wallpaper.id}", e)
             0f
         }
     }
@@ -227,11 +229,12 @@ class WallpaperScorer @Inject constructor(
     fun calculatePopularityScore(wallpaper: WallpaperMetadata, deviceSeed: Int): Float {
         val sourceBase = when (wallpaper.source.lowercase()) {
             "bing" -> 0.75f
+            "vanderwaals" -> 0.55f
             else -> 0.40f
         }
         
         val qualityScore = calculateQualityScore(wallpaper)
-        val deviceVariation = ((deviceSeed + wallpaper.id.hashCode()).toLong() % 100) / 1000f
+        val deviceVariation = Math.floorMod((deviceSeed + wallpaper.id.hashCode()).toLong(), 100) / 1000f
         
         return sourceBase + qualityScore + deviceVariation
     }
@@ -291,35 +294,23 @@ class WallpaperScorer @Inject constructor(
             else -> 0.01f
         }
         
-        // Category hint bonus
+        // Category hint bonus — only positive boosts for broadly-appealing
+        // categories; no penalties so cold-start does not bake in developer
+        // taste.  Personalisation is left to the feedback loop.
         score += when (wallpaper.category.lowercase()) {
             "nature", "aesthetic", "minimal", "space", "landscape" -> 0.07f
             "abstract", "dark", "city", "gradient", "architecture" -> 0.05f
             "art", "design", "pattern", "texture" -> 0.03f
-            "anime", "gaming", "nord", "gruvbox", "cartoon" -> -0.02f
             else -> 0.0f
         }
         
-        return score.coerceIn(0f, 0.3f)
-    }
-    
-    /**
-     * Calculates Euclidean distance between two RGB colors.
-     */
-    fun colorDistance(color1: Int, color2: Int): Float {
-        val r1 = (color1 shr 16) and 0xFF
-        val g1 = (color1 shr 8) and 0xFF
-        val b1 = color1 and 0xFF
-        
-        val r2 = (color2 shr 16) and 0xFF
-        val g2 = (color2 shr 8) and 0xFF
-        val b2 = color2 and 0xFF
-        
-        val dr = r1 - r2
-        val dg = g1 - g2
-        val db = b1 - b2
-        
-        return kotlin.math.sqrt((dr * dr + dg * dg + db * db).toFloat())
+        // Aesthetic score (Vanderwaals Collection only) — pre-computed quality
+        // signal from server-side model. Scores typically 5–10; mapped [5,10]→[0,0.10].
+        if (wallpaper.aestheticScore > 0f) {
+            score += ((wallpaper.aestheticScore - 5f) / 5f).coerceIn(0f, 1f) * 0.10f
+        }
+
+        return score.coerceIn(0f, 0.35f)
     }
     
     /**
@@ -335,31 +326,101 @@ class WallpaperScorer @Inject constructor(
     }
     
     /**
-     * Calculates color similarity using RGB Euclidean distance.
+     * Returns a context-aware brightness boost based on the current wall-clock hour.
+     *
+     * Rationale: At night users typically prefer dark wallpapers (less eye-strain on
+     * lock screens); in the morning bright/energising images feel more natural; in the
+     * evening moderate brightness suits ambient lighting; daytime is neutral.
+     *
+     * Uses [WallpaperMetadata.brightness] (0–100 scale).
+     *
+     * Returns a value in [-0.04, +0.05] so it nudges rankings without dominating them.
+     *
+     * @param wallpaper Wallpaper to evaluate
+     * @return Time-of-day boost in [-0.04, +0.05]
      */
-    fun calculateColorSimilarity(
-        wallpaperColors: List<Int>,
-        preferredColors: List<Int>
-    ): Float {
-        if (wallpaperColors.isEmpty() || preferredColors.isEmpty()) {
-            return 0.5f
-        }
+    fun getTimeOfDayBoost(wallpaper: WallpaperMetadata): Float {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        val brightness = wallpaper.brightness  // 0–100
         
-        var minDistance = Float.MAX_VALUE
-        
-        wallpaperColors.forEach { wColor ->
-            preferredColors.forEach { pColor ->
-                val distance = colorDistance(wColor, pColor)
-                if (distance < minDistance) {
-                    minDistance = distance
-                }
+        return when {
+            // Night: 22:00-05:59
+            hour in 22..23 || hour in 0..5 -> when {
+                brightness < 30  ->  0.05f
+                brightness < 45  ->  0.02f
+                brightness > 65  -> -0.04f
+                else             ->  0f
             }
+            // Morning: 06:00-09:59
+            hour in 6..9 -> when {
+                brightness > 65  ->  0.04f
+                brightness > 50  ->  0.02f
+                brightness < 30  -> -0.03f
+                else             ->  0f
+            }
+            // Daytime: 10:00-17:59
+            hour in 10..17 -> 0f
+            // Evening: 18:00-21:59
+            hour in 18..21 -> when {
+                brightness in 35..65 ->  0.02f
+                brightness > 75      -> -0.02f
+                brightness < 25      -> -0.01f
+                else                 ->  0f
+            }
+            else -> 0f
         }
-        
-        val maxDistance = 441f
-        return 1f - (minDistance / maxDistance).coerceIn(0f, 1f)
     }
     
+    /**
+     * Calculates semantic preference boost from mood/style tag affinity.
+     *
+     * Uses learned mood/style affinity maps (tag → affinity in [-1,+1]) to
+     * boost or penalise wallpapers whose semantic tags match user preferences.
+     *
+     * **Graceful degradation:** Returns 0f when either the wallpaper has no
+     * mood/style tags (GitHub/Bing sources) or the user has no learned
+     * affinity yet, so non-Vanderwaals wallpapers are never penalised.
+     *
+     * @param wallpaper Wallpaper to evaluate
+     * @param moodAffinity Learned mood tag affinity map
+     * @param styleAffinity Learned style tag affinity map
+     * @return Boost value from -0.08 (strongly disliked tags) to +0.08 (strongly liked tags)
+     */
+    fun getSemanticBoost(
+        wallpaper: WallpaperMetadata,
+        moodAffinity: Map<String, Float>,
+        styleAffinity: Map<String, Float>
+    ): Float {
+        val hasWallpaperTags = wallpaper.mood.isNotEmpty() || wallpaper.style.isNotEmpty()
+        val hasUserAffinity = moodAffinity.isNotEmpty() || styleAffinity.isNotEmpty()
+        if (!hasWallpaperTags || !hasUserAffinity) return 0f
+
+        val moodScore = if (wallpaper.mood.isNotEmpty() && moodAffinity.isNotEmpty()) {
+            val sum = wallpaper.mood.sumOf { (moodAffinity[it] ?: 0f).toDouble() }.toFloat()
+            (sum / wallpaper.mood.size).coerceIn(-1f, 1f)
+        } else {
+            0f
+        }
+
+        val styleScore = if (wallpaper.style.isNotEmpty() && styleAffinity.isNotEmpty()) {
+            val sum = wallpaper.style.sumOf { (styleAffinity[it] ?: 0f).toDouble() }.toFloat()
+            (sum / wallpaper.style.size).coerceIn(-1f, 1f)
+        } else {
+            0f
+        }
+
+        val hasMoodData = wallpaper.mood.isNotEmpty() && moodAffinity.isNotEmpty()
+        val hasStyleData = wallpaper.style.isNotEmpty() && styleAffinity.isNotEmpty()
+        val combined = when {
+            hasMoodData && hasStyleData -> (moodScore + styleScore) / 2f
+            hasMoodData -> moodScore
+            hasStyleData -> styleScore
+            else -> 0f
+        }
+
+        return combined * 0.08f
+    }
+
     companion object {
         private const val TAG = "WallpaperScorer"
     }

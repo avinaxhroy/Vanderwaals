@@ -30,6 +30,7 @@ import javax.inject.Inject
 class InitializationViewModel @Inject constructor(
     private val manifestRepository: ManifestRepository,
     private val bingManifestRepository: me.avinas.vanderwaals.data.repository.BingManifestRepository,
+    private val vanderwaalsCollectionRepository: me.avinas.vanderwaals.data.repository.VanderwaalsCollectionRepository,
     private val workManager: WorkManager,
     private val downloadProgressManager: me.avinas.vanderwaals.network.DownloadProgressManager,
     private val settingsDataStore: SettingsDataStore
@@ -111,24 +112,37 @@ class InitializationViewModel @Inject constructor(
             _migrationMessage.value = "Connecting to server..."
             
             try {
-                // Get settings to check if Bing is enabled
+                // Get settings to check which sources are enabled
                 val settings = settingsDataStore.settings.first()
                 val bingEnabled = settings.bingEnabled
                 val bingManifestType = settings.bingManifestType
-                
+                val vanderwaalsCollectionEnabled = settings.vanderwaalsCollectionEnabled
+                val vanderwaalsCollectionManifestType = settings.vanderwaalsCollectionManifestType
+
                 var totalWallpapers = 0
                 var githubSuccess = false
                 var bingSuccess = false
-                
+                var vanderwaalsSuccess = false
+
+                // Compute per-source progress slices
+                val activeSources = listOfNotNull(
+                    "github".takeIf { settings.githubEnabled },
+                    "bing".takeIf { bingEnabled },
+                    "vanderwaals".takeIf { vanderwaalsCollectionEnabled }
+                )
+                val slice = 1f / activeSources.size
+                fun scaledProgress(source: String, subProgress: Float): Float {
+                    val offset = activeSources.indexOf(source) * slice
+                    return offset + (subProgress * slice)
+                }
+
                 // Phase 1: Sync GitHub manifest v3 (MobileNetV4)
                 if (settings.githubEnabled) {
                     _migrationMessage.value = "Updating Community wallpapers..."
                     manifestRepository.syncManifest(
                         onProgress = { message, progress, count ->
-                            // Scale progress: GitHub gets 0-50% if Bing enabled, else 0-100%
-                            val scaledProgress = if (bingEnabled) progress * 0.5f else progress
                             _migrationMessage.value = "Community: $message"
-                            _migrationProgress.value = scaledProgress
+                            _migrationProgress.value = scaledProgress("github", progress)
                         },
                         forceUpdate = true
                     ).fold(
@@ -139,22 +153,19 @@ class InitializationViewModel @Inject constructor(
                         },
                         onFailure = { error ->
                             Log.e(TAG, "GitHub manifest migration failed", error)
-                            // Continue with Bing even if GitHub fails
+                            // Continue with other sources even if GitHub fails
                         }
                     )
                 }
-                
+
                 // Phase 2: Sync Bing manifest v2 (MobileNetV4) if enabled
                 if (bingEnabled) {
                     _migrationMessage.value = "Updating Bing wallpapers..."
                     bingManifestRepository.syncBingManifest(
                         manifestType = bingManifestType,
                         onProgress = { message, progress, count ->
-                            // Scale progress: Bing gets 50-100% if both enabled
-                            val baseProgress = if (settings.githubEnabled) 0.5f else 0f
-                            val scaledProgress = baseProgress + (progress * (1f - baseProgress))
                             _migrationMessage.value = "Bing: $message"
-                            _migrationProgress.value = scaledProgress
+                            _migrationProgress.value = scaledProgress("bing", progress)
                         },
                         forceUpdate = true
                     ).fold(
@@ -168,9 +179,31 @@ class InitializationViewModel @Inject constructor(
                         }
                     )
                 }
-                
+
+                // Phase 3: Sync Vanderwaals Collection manifest if enabled
+                if (vanderwaalsCollectionEnabled) {
+                    _migrationMessage.value = "Updating Vanderwaals Collection wallpapers..."
+                    vanderwaalsCollectionRepository.syncVanderwaalsCollectionManifest(
+                        manifestType = vanderwaalsCollectionManifestType,
+                        onProgress = { message, progress, count ->
+                            _migrationMessage.value = "Vanderwaals: $message"
+                            _migrationProgress.value = scaledProgress("vanderwaals", progress)
+                        },
+                        forceUpdate = true
+                    ).fold(
+                        onSuccess = { count ->
+                            Log.i(TAG, "Vanderwaals Collection migration: $count wallpapers")
+                            totalWallpapers += count
+                            vanderwaalsSuccess = true
+                        },
+                        onFailure = { error ->
+                            Log.e(TAG, "Vanderwaals Collection migration failed", error)
+                        }
+                    )
+                }
+
                 // Check if at least one source succeeded
-                if (githubSuccess || bingSuccess) {
+                if (githubSuccess || bingSuccess || vanderwaalsSuccess) {
                     Log.i(TAG, "Migration completed: $totalWallpapers total wallpapers")
                     _migrationMessage.value = "Updated $totalWallpapers wallpapers!"
                     _migrationProgress.value = 1.0f

@@ -8,40 +8,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Use case for processing implicit feedback from wallpaper duration.
- * 
- * Learns user preferences based on how long a wallpaper stayed active:
- * - **Very Short Duration (< 5 min)**: Interpreted as DISLIKE - user changed quickly
- * - **Very Long Duration (> 24 hours)**: Interpreted as LIKE - user kept it long
- * - **Neutral Duration (5 min - 24 hours)**: No implicit feedback (normal usage)
- * 
- * **CRITICAL CONSTRAINT:**
- * Only processes implicit feedback for MANUAL wallpaper changes (via "Change Now" button).
- * Does NOT process for auto-change events (scheduled changes).
- * 
- * **Rationale:**
- * - Manual change = Active user decision → Strong signal
- * - Auto-change = Scheduled rotation → User may not have noticed → Weak/unreliable signal
- * 
- * **Learning Rate:**
- * Uses 30% of explicit feedback strength (0.3x multiplier) because:
- * - Implicit signals are less certain than explicit like/dislike
- * - Prevents over-fitting to duration patterns
- * - Balances with explicit feedback which has full strength
- * 
- * **Integration Flow:**
- * 1. WallpaperChangeWorker applies new wallpaper
- * 2. Worker marks previous wallpaper as removed (sets removedAt timestamp)
- * 3. Worker calls this use case ONLY if change was manual (not auto)
- * 4. This use case calculates duration and processes implicit feedback
- * 5. UpdatePreferencesUseCase updates preference vector with reduced learning rate
- * 
- * @property wallpaperRepository Repository for accessing wallpaper metadata
- * @property updatePreferencesUseCase Use case for updating preference vector
- * 
- * @see UpdatePreferencesUseCase
- * @see WallpaperHistory
- * @see me.avinas.vanderwaals.worker.WallpaperChangeWorker
+ * Processes implicit feedback from how long a wallpaper stayed active.
+ *
+ * - < 5 min: treated as dislike (user changed quickly)
+ * - > 24 hours: treated as like (user kept it long)
+ * - 5 min to 24 hours: no implicit feedback
+ *
+ * Only processes manual changes (not auto-scheduled ones).
+ * Uses 30% of explicit feedback strength to avoid over-fitting.
  */
 @Singleton
 class ProcessImplicitFeedbackUseCase @Inject constructor(

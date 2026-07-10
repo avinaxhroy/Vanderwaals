@@ -1,285 +1,398 @@
 package me.avinas.vanderwaals.ui.onboarding
 
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material3.*
-import androidx.compose.ui.graphics.Color
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import me.avinas.vanderwaals.ui.theme.LiquidGlassBackground
+import me.avinas.vanderwaals.ui.theme.BrandPrimary
+import me.avinas.vanderwaals.ui.theme.BrandAccent
+import me.avinas.vanderwaals.ui.theme.ErrorColor
+import me.avinas.vanderwaals.ui.theme.LocalThemeIsDark
+import me.avinas.vanderwaals.ui.theme.LuxeHeadlineStyle
+import me.avinas.vanderwaals.ui.theme.SuccessColor
 
-/**
- * Initial Sync Screen - First screen shown to new users.
- * 
- * Automatically downloads wallpaper catalog on first launch:
- * - Shows animated progress indicator
- * - Downloads ~3670 wallpapers metadata (~5MB)
- * - Takes 30-60 seconds depending on network speed
- * - Automatic navigation on success
- * - Retry button on error
- * 
- * **Why This Screen Exists:**
- * Personalization mode requires wallpaper catalog to find similar matches.
- * Without pre-synced catalog, users would see "No wallpapers" errors.
- * 
- * **UX Flow:**
- * 1. User installs app and opens it
- * 2. This screen appears automatically
- * 3. Downloads catalog in background
- * 4. Shows progress and wallpaper count
- * 5. Auto-navigates to ModeSelection when complete
- * 
- * **Error Handling:**
- * - Network errors: Shows retry button with helpful message
- * - Parse errors: Shows error with instructions to check connection
- * - Timeout: Auto-retries up to 3 times
- * 
- * @param onSyncComplete Callback when sync finishes successfully
- * @param viewModel ViewModel managing sync state
- */
 @Composable
 fun InitialSyncScreen(
     onSyncComplete: () -> Unit,
-    viewModel: InitialSyncViewModel = hiltViewModel()
+    viewModel: InitialSyncViewModel = hiltViewModel(),
+    currentStep: Int = 2,
+    totalSteps: Int = 4
 ) {
     val syncState by viewModel.syncState.collectAsState()
     val wallpaperCount by viewModel.wallpaperCount.collectAsState()
-    val isDark = isSystemInDarkTheme()
-    
-    // Auto-start sync on first composition
+    val isDark = LocalThemeIsDark.current
+    val metrics = rememberOnboardingLayoutMetrics()
+
     LaunchedEffect(Unit) {
         viewModel.startSync()
     }
-    
-    // Auto-navigate on success
+
     LaunchedEffect(syncState) {
         if (syncState is SyncState.Success) {
             onSyncComplete()
         }
     }
-    
-    // Animated cloud download icon
-    val infiniteTransition = rememberInfiniteTransition(label = "cloud_animation")
-    val cloudOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 10f,
+
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 2000, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "cloud_offset"
+        label = "pulse_scale"
     )
-    
-    LiquidGlassBackground {
-        Scaffold(
-            containerColor = Color.Transparent,
-            contentWindowInsets = WindowInsets(0, 0, 0, 0)
-        ) { paddingValues ->
+
+    Scaffold(
+        containerColor = Color.Transparent
+    ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
         ) {
-            // Premium Background removed
+            OnboardingBackdrop(
+                isDark = isDark,
+                modifier = Modifier.matchParentSize()
+            )
 
-
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
-                    .systemBarsPadding()
-                    .padding(vertical = 32.dp),
-                contentAlignment = Alignment.Center
+                    .padding(horizontal = metrics.horizontalPadding),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                me.avinas.vanderwaals.ui.theme.components.LiquidGlassCard(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(24.dp),
-                    contentPadding = PaddingValues(32.dp)
+                        .widthIn(max = metrics.maxContentWidth),
+                    horizontalAlignment = Alignment.Start
                 ) {
+                    Spacer(modifier = Modifier.height(paddingValues.calculateTopPadding() + 12.dp))
+
+                    OnboardingStepIndicator(
+                        currentStep = currentStep - 1,
+                        totalSteps = totalSteps,
+                        isDark = isDark,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    Text(
+                        text = "Step $currentStep of $totalSteps",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = BrandPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+
+                    // Sub-column centered horizontally and vertically in the remaining space
                     Column(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(24.dp)
+                        verticalArrangement = Arrangement.spacedBy(metrics.sectionSpacing + 4.dp, Alignment.CenterVertically)
                     ) {
                         when (val state = syncState) {
                             is SyncState.Loading -> {
-                                // Animated cloud icon
+                                // Premium animated sync indicator
                                 Box(
                                     modifier = Modifier
-                                        .size(120.dp)
-                                        .offset(y = cloudOffset.dp),
+                                        .size(if (metrics.compactWidth) 100.dp else 120.dp)
+                                        .scale(pulseScale)
+                                        .shadow(
+                                            elevation = 12.dp,
+                                            shape = RoundedCornerShape(36.dp),
+                                            ambientColor = BrandPrimary.copy(alpha = 0.2f),
+                                            spotColor = Color.Transparent
+                                        )
+                                        .clip(RoundedCornerShape(36.dp))
+                                        .background(getOnboardingCardBackground(isDark))
+                                        .border(
+                                            width = 1.5.dp,
+                                            color = getOnboardingCardBorder(isDark),
+                                            shape = RoundedCornerShape(36.dp)
+                                        ),
                                     contentAlignment = Alignment.Center
                                 ) {
+                                    // Inner glow
+                                    Box(
+                                        modifier = Modifier
+                                            .size(70.dp)
+                                            .clip(RoundedCornerShape(24.dp))
+                                            .background(
+                                                Brush.radialGradient(
+                                                    colors = listOf(
+                                                        BrandPrimary.copy(alpha = 0.12f),
+                                                        Color.Transparent
+                                                    )
+                                                )
+                                            )
+                                    )
+
                                     Icon(
                                         imageVector = Icons.Default.CloudDownload,
                                         contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        tint = if (isDark) Color.White else MaterialTheme.colorScheme.primary 
+                                        modifier = Modifier.size(52.dp),
+                                        tint = BrandPrimary
                                     )
                                 }
-                                
+
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Text(
-                                        text = "Setting Up Library",
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.Bold,
+                                        text = "Syncing Wallpapers",
+                                        style = LuxeHeadlineStyle,
                                         textAlign = TextAlign.Center,
-                                        color = if (isDark) Color.White else Color(0xFF111827)
+                                        color = getOnboardingTextPrimary(isDark)
                                     )
-                                    
+
                                     Text(
                                         text = state.message,
                                         style = MaterialTheme.typography.bodyLarge,
-                                        color = if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF4B5563),
+                                        color = getOnboardingTextSecondary(isDark),
                                         textAlign = TextAlign.Center
                                     )
                                 }
-                                
-                                // Progress indicator
+
                                 Column(
                                     modifier = Modifier.fillMaxWidth(),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(14.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     if (state.progress != null) {
-                                        LinearProgressIndicator(
-                                            progress = { state.progress },
+                                        // Premium progress bar
+                                        Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height(6.dp)
-                                                .clip(RoundedCornerShape(3.dp)),
-                                            color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary,
-                                            trackColor = if (isDark) Color.White.copy(alpha=0.1f) else MaterialTheme.colorScheme.surfaceVariant,
-                                        )
-                                        
+                                                .height(10.dp)
+                                                .clip(RoundedCornerShape(5.dp))
+                                                .background(if (isDark) Color(0xFF1F2937) else Color(0xFFE2E8F0))
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth(state.progress)
+                                                    .height(10.dp)
+                                                    .clip(RoundedCornerShape(5.dp))
+                                                    .background(
+                                                        Brush.horizontalGradient(
+                                                            colors = listOf(BrandPrimary, BrandAccent)
+                                                        )
+                                                    )
+                                            )
+                                        }
+
                                         Text(
                                             text = "${(state.progress * 100).toInt()}%",
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (isDark) Color.White.copy(alpha = 0.9f) else Color(0xFF111827)
+                                            color = BrandPrimary
                                         )
                                     } else {
                                         CircularProgressIndicator(
-                                            color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary
+                                            color = BrandPrimary,
+                                            modifier = Modifier.size(36.dp),
+                                            strokeWidth = 3.dp
                                         )
                                     }
                                 }
-                                
+
                                 if (wallpaperCount > 0) {
-                                    Text(
-                                        text = "$wallpaperCount wallpapers found",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold,
+                                    Box(
                                         modifier = Modifier
-                                            .background(
-                                                color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark.copy(alpha = 0.1f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                                shape = RoundedCornerShape(12.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(getOnboardingCardBackground(isDark))
+                                            .border(
+                                                width = 1.dp,
+                                                color = BrandPrimary.copy(alpha = 0.25f),
+                                                shape = RoundedCornerShape(14.dp)
                                             )
-                                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                                    )
+                                            .padding(horizontal = 18.dp, vertical = 12.dp)
+                                    ) {
+                                        Text(
+                                            text = "$wallpaperCount wallpapers found",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = BrandPrimary,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
                                 }
                             }
-                            
+
                             is SyncState.Error -> {
-                                Icon(
-                                    imageVector = Icons.Default.Error,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(80.dp),
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                                
+                                Box(
+                                    modifier = Modifier
+                                        .size(if (metrics.compactWidth) 100.dp else 120.dp)
+                                        .shadow(
+                                            elevation = 8.dp,
+                                            shape = RoundedCornerShape(36.dp),
+                                            ambientColor = ErrorColor.copy(alpha = 0.15f),
+                                            spotColor = Color.Transparent
+                                        )
+                                        .clip(RoundedCornerShape(36.dp))
+                                        .background(ErrorColor.copy(alpha = 0.08f))
+                                        .border(
+                                            width = 1.5.dp,
+                                            color = ErrorColor.copy(alpha = 0.3f),
+                                            shape = RoundedCornerShape(36.dp)
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Error,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(52.dp),
+                                        tint = ErrorColor
+                                    )
+                                }
+
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Text(
                                         text = "Sync Failed",
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.Bold,
+                                        style = LuxeHeadlineStyle,
                                         textAlign = TextAlign.Center,
-                                        color = MaterialTheme.colorScheme.error
+                                        color = ErrorColor
                                     )
-                                    
+
                                     Text(
                                         text = state.message,
                                         style = MaterialTheme.typography.bodyLarge,
                                         textAlign = TextAlign.Center,
-                                        color = if (isDark) Color.White.copy(alpha = 0.7f) else Color.Unspecified
+                                        color = getOnboardingTextSecondary(isDark)
                                     )
                                 }
-                                
-                                Spacer(modifier = Modifier.height(8.dp))
-                                
-                                me.avinas.vanderwaals.ui.theme.components.GradientButton(
-                                    text = "Try Again",
-                                    onClick = { viewModel.startSync() },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .shadow(16.dp, RoundedCornerShape(16.dp))
+                                        .height(metrics.buttonHeight)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(
+                                            Brush.horizontalGradient(
+                                                colors = listOf(BrandPrimary, BrandAccent)
+                                            )
+                                        )
+                                        .bounceClick { viewModel.startSync() },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        "Try Again",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
+                                    )
+                                }
+
                                 Text(
                                     text = "Please check your internet connection",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (isDark) Color.White.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = getOnboardingTextSecondary(isDark),
                                     textAlign = TextAlign.Center
                                 )
                             }
-                            
+
                             is SyncState.Success -> {
-                                // Brief success state before auto-navigation
-                                Icon(
-                                    imageVector = Icons.Default.CloudDownload,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(80.dp),
-                                    tint = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
-                                )
-                                
+                                Box(
+                                    modifier = Modifier
+                                        .size(if (metrics.compactWidth) 100.dp else 120.dp)
+                                        .shadow(
+                                            elevation = 8.dp,
+                                            shape = RoundedCornerShape(36.dp),
+                                            ambientColor = SuccessColor.copy(alpha = 0.15f),
+                                            spotColor = Color.Transparent
+                                        )
+                                        .clip(RoundedCornerShape(36.dp))
+                                        .background(SuccessColor.copy(alpha = 0.08f))
+                                        .border(
+                                            width = 1.5.dp,
+                                            color = SuccessColor.copy(alpha = 0.3f),
+                                            shape = RoundedCornerShape(36.dp)
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(52.dp),
+                                        tint = SuccessColor
+                                    )
+                                }
+
                                 Text(
                                     text = "Library Ready!",
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold,
+                                    style = LuxeHeadlineStyle,
                                     textAlign = TextAlign.Center,
-                                    color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary
+                                    color = SuccessColor
                                 )
-                                
+
                                 Text(
-                                    text = "${state.count} wallpapers downloaded",
+                                    text = if (state.count > 0) "${state.count} wallpapers downloaded"
+                                    else "Wallpapers load on demand",
                                     style = MaterialTheme.typography.bodyLarge,
                                     textAlign = TextAlign.Center,
-                                    color = if (isDark) Color.White.copy(alpha = 0.7f) else Color(0xFF4B5563)
+                                    color = getOnboardingTextSecondary(isDark)
                                 )
-                                
+
                                 CircularProgressIndicator(
-                                    color = if (isDark) me.avinas.vanderwaals.ui.theme.InfoColorDark else MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(32.dp)
+                                    color = BrandPrimary,
+                                    modifier = Modifier.size(28.dp),
+                                    strokeWidth = 3.dp
                                 )
                             }
-                            
+
                             is SyncState.Idle -> {
-                                CircularProgressIndicator()
+                                CircularProgressIndicator(
+                                    color = BrandPrimary,
+                                    modifier = Modifier.size(44.dp),
+                                    strokeWidth = 3.dp
+                                )
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding() + 24.dp))
                 }
             }
         }
-    }
     }
 }

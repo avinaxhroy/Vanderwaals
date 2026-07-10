@@ -1,7 +1,9 @@
 package me.avinas.vanderwaals.data.repository
 
 import android.util.Log
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import me.avinas.vanderwaals.data.dao.WallpaperMetadataDao
 import me.avinas.vanderwaals.data.datastore.SettingsDataStore
@@ -120,9 +122,9 @@ class BingManifestRepository @Inject constructor(
                 
                 onProgress?.invoke("Processing wallpapers...", 0.3f, 0)
                 
-                // Convert and insert wallpapers
-                val wallpapers = manifest.wallpapers.mapNotNull { dto ->
-                    convertToEntity(dto)
+                // Convert and insert wallpapers (off Main: heavy Base64/dequantize per entry)
+                var wallpapers = withContext(Dispatchers.Default) {
+                    manifest.wallpapers.mapNotNull { dto -> convertToEntity(dto) }
                 }
                 
                 Log.d(TAG, "Converted ${wallpapers.size} wallpapers")

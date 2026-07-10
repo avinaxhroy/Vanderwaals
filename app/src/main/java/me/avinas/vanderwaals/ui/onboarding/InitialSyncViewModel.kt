@@ -38,6 +38,7 @@ import javax.inject.Inject
 class InitialSyncViewModel @Inject constructor(
     private val manifestRepository: ManifestRepository,
     private val bingManifestRepository: me.avinas.vanderwaals.data.repository.BingManifestRepository,
+    private val vanderwaalsCollectionRepository: me.avinas.vanderwaals.data.repository.VanderwaalsCollectionRepository,
     private val settingsDataStore: me.avinas.vanderwaals.data.datastore.SettingsDataStore
 ) : ViewModel() {
     
@@ -65,29 +66,31 @@ class InitialSyncViewModel @Inject constructor(
                 val githubEnabled = settings.githubEnabled
                 val bingEnabled = settings.bingEnabled
                 val bingManifestType = settings.bingManifestType // "lite" or "full"
-                
-                // If nothing enabled (shouldn't happen due to UI validation), default to GitHub
-                if (!githubEnabled && !bingEnabled) {
+                val vanderwaalsCollectionEnabled = settings.vanderwaalsCollectionEnabled
+                val vanderwaalsCollectionManifestType = settings.vanderwaalsCollectionManifestType
+
+                // If nothing enabled (shouldn't happen due to UI validation), fail early
+                if (!githubEnabled && !bingEnabled && !vanderwaalsCollectionEnabled) {
                     _syncState.value = SyncState.Error("No wallpaper sources selected")
                     return@launch
                 }
-                
+
                 var totalCount = 0
-                
-                // Helper to update progress based on active phases
-                // If both enabled: GitHub (0-50%), Bing (50-100%)
-                // If single enabled: 0-100%
+
+                // Compute per-source progress slice so each enabled source fills its share
+                val activeSources = listOfNotNull(
+                    "github".takeIf { githubEnabled },
+                    "bing".takeIf { bingEnabled },
+                    "vanderwaals".takeIf { vanderwaalsCollectionEnabled }
+                )
+                val slice = 1f / activeSources.size
                 val updateUnifiedProgress = { source: String, msg: String, subProgress: Float ->
-                    val finalProgress = if (githubEnabled && bingEnabled) {
-                        if (source == "github") subProgress * 0.5f 
-                        else 0.5f + (subProgress * 0.5f)
-                    } else {
-                        subProgress
-                    }
+                    val offset = activeSources.indexOf(source) * slice
+                    val finalProgress = offset + (subProgress * slice)
                     _syncState.value = SyncState.Loading(msg, finalProgress)
                 }
 
-                // Phase 1: GitHub Manifest
+                // Phase 1: GitHub / Community Manifest
                 if (githubEnabled) {
                     Log.d(TAG, "Starting GitHub sync...")
                     val result = manifestRepository.syncManifest(
@@ -133,7 +136,31 @@ class InitialSyncViewModel @Inject constructor(
                         }
                     )
                 }
-                
+
+                // Phase 3: Vanderwaals Collection Manifest
+                if (vanderwaalsCollectionEnabled) {
+                    Log.d(TAG, "Starting Vanderwaals Collection sync ($vanderwaalsCollectionManifestType)...")
+                    val result = vanderwaalsCollectionRepository.syncVanderwaalsCollectionManifest(
+                        manifestType = vanderwaalsCollectionManifestType,
+                        onProgress = { message, progress, count ->
+                            updateUnifiedProgress("vanderwaals", "Vanderwaals: $message", progress)
+                            if (count > 0) _wallpaperCount.value = totalCount + count
+                        }
+                    )
+
+                    result.fold(
+                        onSuccess = { count ->
+                            totalCount += count
+                            Log.d(TAG, "Vanderwaals Collection sync complete: $count")
+                        },
+                        onFailure = { error ->
+                            Log.e(TAG, "Vanderwaals Collection sync failed", error)
+                            _syncState.value = SyncState.Error("Vanderwaals Collection sync failed: ${error.message}")
+                            return@launch
+                        }
+                    )
+                }
+
                 // Final Success
                 _wallpaperCount.value = totalCount
                 settingsDataStore.updateLastSyncTimestamp(System.currentTimeMillis())

@@ -89,10 +89,9 @@ When submitting your first pull request, please add a comment to the PR with the
 I have read and agree to the Contributor License Agreement (CLA) at:
 https://github.com/avinaxhroy/Vanderwaals/blob/main/CLA.md
 
-Full Name: [Your Full Name]
-GitHub Username: @[your-username]
-Email: [your-email@example.com]
-Date: [YYYY-MM-DD]
+Full Name: Avinash
+GitHub Username: @avinaxhroy
+Email: hi@avinas.me
 ```
 
 ### For Corporate Contributors

@@ -18,60 +18,9 @@ import me.avinas.vanderwaals.worker.WorkScheduler
 import me.avinas.vanderwaals.worker.ChangeInterval
 
 /**
- * Broadcast receiver that responds to device boot completion.
- * 
- * **Purpose:**
- * WorkManager's scheduled tasks are persisted across reboots, but on some
- * devices (especially with aggressive battery optimization), scheduled work
- * may not resume automatically. This receiver explicitly reschedules all
- * periodic workers to ensure reliability.
- * 
- * **Triggers:**
- * - ACTION_BOOT_COMPLETED: Device finished booting
- * - ACTION_MY_PACKAGE_REPLACED: App was updated
- * 
- * **Actions:**
- * 1. Read current settings from DataStore
- * 2. If auto-change is enabled, reschedule wallpaper change worker
- * 3. Reschedule periodic sync and cleanup workers
- * 4. Log diagnostic information
- * 
- * **CRITICAL: Uses EntryPointAccessors instead of @AndroidEntryPoint**
- * Manifest-declared broadcast receivers are instantiated by the Android system,
- * not by Hilt. Using @AndroidEntryPoint can fail when:
- * - App process was killed before reboot
- * - System boots early and Hilt hasn't initialized
- * 
- * The EntryPointAccessors pattern manually retrieves dependencies from the
- * Hilt component, which is more reliable for system-instantiated receivers.
- * 
- * **Manifest Registration:**
- * ```xml
- * <receiver android:name=".receiver.BootCompletedReceiver"
- *     android:enabled="true"
- *     android:exported="false">
- *     <intent-filter>
- *         <action android:name="android.intent.action.BOOT_COMPLETED" />
- *         <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
- *     </intent-filter>
- * </receiver>
- * ```
- * 
- * **Permissions Required:**
- * ```xml
- * <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
- * ```
- * 
- * **Testing:**
- * ```bash
- * # Simulate boot completed
- * adb shell am broadcast -a android.intent.action.BOOT_COMPLETED
- * 
- * # Check logs
- * adb logcat | grep BootCompletedReceiver
- * ```
- * 
- * @see WorkScheduler
+ * Reschedules periodic workers on BOOT_COMPLETED and MY_PACKAGE_REPLACED.
+ * Uses EntryPointAccessors (not @AndroidEntryPoint) because the system
+ * instantiates manifest-declared receivers before Hilt may be ready.
  */
 class BootCompletedReceiver : BroadcastReceiver() {
     
@@ -86,8 +35,6 @@ class BootCompletedReceiver : BroadcastReceiver() {
         fun workScheduler(): WorkScheduler
         fun settingsDataStore(): SettingsDataStore
     }
-    
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
     companion object {
         private const val TAG = "BootCompletedReceiver"
@@ -120,7 +67,7 @@ class BootCompletedReceiver : BroadcastReceiver() {
     private fun handleBootCompleted(context: Context) {
         // Use goAsync() to extend receiver lifetime for background work
         val pendingResult = goAsync()
-        
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope.launch {
             try {
                 Log.d(TAG, "Starting worker rescheduling...")
@@ -190,6 +137,18 @@ class BootCompletedReceiver : BroadcastReceiver() {
                             workScheduler.scheduleWallpaperChange(
                                 interval = ChangeInterval.DAILY,
                                 time = time,
+                                targetScreen = settings.applyTo
+                            )
+                        }
+                        "3days" -> {
+                            workScheduler.scheduleWallpaperChange(
+                                interval = ChangeInterval.THREE_DAYS,
+                                targetScreen = settings.applyTo
+                            )
+                        }
+                        "7days" -> {
+                            workScheduler.scheduleWallpaperChange(
+                                interval = ChangeInterval.SEVEN_DAYS,
                                 targetScreen = settings.applyTo
                             )
                         }

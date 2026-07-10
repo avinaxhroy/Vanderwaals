@@ -4,36 +4,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 
 /**
- * Main app composable with navigation integration.
- * 
- * Checks if user has completed onboarding:
- * - If not completed: Show onboarding flow (ModeSelection → ...)
- * - If completed: Show main app (MainScreen with navigation)
- * 
- * **Usage in Activity:**
- * ```kotlin
- * @AndroidEntryPoint
- * class MainActivity : ComponentActivity() {
- *     override fun onCreate(savedInstanceState: Bundle?) {
- *         super.onCreate(savedInstanceState)
- *         setContent {
- *             VanderwaalsTheme {
- *                 VanderwaalsApp()
- *             }
- *         }
- *     }
- * }
- * ```
- * 
- * **Onboarding Persistence:**
- * Onboarding completion status is stored in SharedPreferences.
- * To reset onboarding (for testing):
- * ```kotlin
- * context.getSharedPreferences("vanderwaals_prefs", Context.MODE_PRIVATE)
- *     .edit()
- *     .putBoolean("onboarding_completed", false)
- *     .apply()
- * ```
+ * Root composable. Shows onboarding if not yet completed, otherwise MainScreen.
  */
 @Composable
 fun VanderwaalsApp() {

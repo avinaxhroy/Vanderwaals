@@ -5,21 +5,24 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowCircleRight
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -77,48 +80,52 @@ fun NotificationScreen(
         }
     }
 
-    Scaffold(
-        content = { it
-            Column (modifier = Modifier
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
                 .systemBarsPadding()
-                .padding(32.dp)) {
-                Spacer(modifier = Modifier.height(120.dp))
-                Text(text = stringResource(id = R.string.notifications), style = MaterialTheme.typography.headlineLarge)
-                Spacer(modifier = Modifier.height(16.dp))
-                LottieAnimation(
-                    composition = composition,
-                    progress = { progress },
-                    modifier = Modifier
-                        .fillMaxHeight(0.5f)
-                        .align(Alignment.CenterHorizontally)
-                        .semantics { contentDescription = context.getString(R.string.notification_bell_animation) },
-                    safeMode = true,
-                    enableMergePaths = true
-                )
-                Icon(
-                    imageVector = Icons.Outlined.Info,
-                    contentDescription = stringResource(R.string.agree),
-                    modifier = Modifier.padding(PaddingValues(vertical = 16.dp))
-                )
-                Text(
-                    text = stringResource(R.string.notification_info_message),
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                modifier = Modifier.padding(8.dp),
-                onClick = { askPermission.value = true },
-                icon = {
-                    Icon(
-                        imageVector = Icons.Outlined.ArrowCircleRight,
-                        contentDescription = stringResource(R.string.continue_button),
-                    )
-                },
-                text = { Text(text = stringResource(R.string.continue_button)) },
+                .padding(32.dp)
+        ) {
+            Spacer(modifier = Modifier.height(120.dp))
+            Text(text = stringResource(id = R.string.notifications), style = MaterialTheme.typography.headlineLarge)
+            Spacer(modifier = Modifier.height(16.dp))
+            LottieAnimation(
+                composition = composition,
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxHeight(0.5f)
+                    .align(Alignment.CenterHorizontally)
+                    .semantics { contentDescription = context.getString(R.string.notification_bell_animation) },
+                safeMode = true,
+                enableMergePaths = true
+            )
+            Icon(
+                imageVector = Icons.Outlined.Info,
+                contentDescription = stringResource(R.string.agree),
+                modifier = Modifier.padding(PaddingValues(vertical = 16.dp))
+            )
+            Text(
+                text = stringResource(R.string.notification_info_message),
+                style = MaterialTheme.typography.bodySmall
             )
         }
-    )
+
+        ExtendedFloatingActionButton(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(start = 16.dp, end = 16.dp)
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(bottom = 16.dp),
+            onClick = { askPermission.value = true },
+            icon = {
+                Icon(
+                    imageVector = Icons.Outlined.ArrowCircleRight,
+                    contentDescription = stringResource(R.string.continue_button),
+                )
+            },
+            text = { Text(text = stringResource(R.string.continue_button)) },
+        )
+    }
 }
 

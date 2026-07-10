@@ -196,27 +196,28 @@ class PreferenceUpdater {
         for (value in vector) {
             magnitude += value * value
         }
-        
+
         if (magnitude == 0f) {
-            return vector
+            // Return a uniform unit vector so the preference is not stuck
+            // at zero (which would trap the user in cold-start forever).
+            val n = vector.size
+            return if (n == 0) vector else FloatArray(n) { 1f / sqrt(n.toFloat()) }
         }
-        
+
         magnitude = sqrt(magnitude)
-        
+
         val normalized = FloatArray(vector.size)
         for (i in vector.indices) {
             normalized[i] = vector[i] / magnitude
         }
-        
+
         return normalized
     }
     
     /**
      * Applies preference decay to prevent overfitting to old feedback.
      * Gradually reduces the influence of preferences over time.
-     * 
-     * This is useful when user's tastes change over time.
-     * 
+     *
      * @param currentVector Current preference vector
      * @param decayRate Decay rate (0.0 = no decay, 1.0 = complete reset)
      * @return Decayed preference vector
@@ -225,13 +226,111 @@ class PreferenceUpdater {
         currentVector: FloatArray,
         decayRate: Float
     ): FloatArray {
-        if (decayRate <= 0f) return currentVector
-        
-        val decayed = FloatArray(currentVector.size) { i ->
-            currentVector[i] * (1f - decayRate)
+        if (decayRate <= 0f || currentVector.isEmpty()) return currentVector
+
+        val n = currentVector.size
+        val uniform = 1f / sqrt(n.toFloat())
+        val blend = decayRate.coerceIn(0f, 1f)
+
+        val decayed = FloatArray(n) { i ->
+            (1f - blend) * currentVector[i] + blend * uniform
         }
-        
+
         return normalizeVector(decayed)
+    }
+
+    /**
+     * Applies time-aware exponential decay to the preference vector.
+     *
+     * When a user has not given feedback for a prolonged period their stored preference
+     * vector may no longer reflect their current taste. This method softens the vector
+     * toward a uniform (less opinionated) state using an exponential half-life so that
+     * staleness is penalised proportionally to elapsed time.
+     *
+     * ```
+     * decay_factor = exp(-ln(2) × daysSinceLastFeedback / halfLifeDays)
+     * ```
+     *
+     * Examples with halfLifeDays = 30:
+     *  - 0 days   → factor = 1.00 (no change)
+     *  - 15 days  → factor ≈ 0.71 (mild softening)
+     *  - 30 days  → factor = 0.50 (half strength)
+     *  - 60 days  → factor ≈ 0.25 (strong softening toward neutral)
+     *
+     * @param currentVector         Current preference vector to decay
+     * @param daysSinceLastFeedback Days elapsed since the last explicit feedback event
+     * @param halfLifeDays          Half-life for the decay curve (default: 30 days)
+     * @return Time-decayed and re-normalised preference vector
+     */
+    fun applyTemporalDecay(
+        currentVector: FloatArray,
+        daysSinceLastFeedback: Double,
+        halfLifeDays: Double = 30.0
+    ): FloatArray {
+        if (daysSinceLastFeedback <= 0.0 || currentVector.isEmpty()) return currentVector
+        val decayFactor = kotlin.math.exp(
+            -kotlin.math.ln(2.0) * daysSinceLastFeedback / halfLifeDays
+        ).toFloat()
+        // decayFactor ∈ (0, 1]: 1 = no change, → 0 = full neutralisation.
+        // Blend toward a uniform vector so the preference softens toward a
+        // less opinionated state rather than just scaling (which normalises
+        // back to the same unit vector).
+        val n = currentVector.size
+        val uniform = 1f / sqrt(n.toFloat())
+        val blend = 1f - decayFactor
+
+        val decayed = FloatArray(n) { i ->
+            decayFactor * currentVector[i] + blend * uniform
+        }
+
+        return normalizeVector(decayed)
+    }
+
+    /**
+     * Updates the preference vector with a confidence-weighted learning rate.
+     *
+     * When the user already has strong, confident preferences for a category (high
+     * [categoryConfidence]), the effective learning rate is reduced so that a single
+     * new data point does not over-correct well-established taste. When preferences are
+     * still uncertain (low confidence), the full [baseLearningRate] is applied for
+     * faster convergence.
+     *
+     * ```
+     * effectiveLearningRate = baseLearningRate × (1 − ATTENUATION × categoryConfidence)
+     * ```
+     *
+     * With ATTENUATION = 0.60:
+     *  - confidence 0.0 → effective rate = baseLearningRate × 1.00 (full rate)
+     *  - confidence 0.5 → effective rate = baseLearningRate × 0.70 (30% reduction)
+     *  - confidence 1.0 → effective rate = baseLearningRate × 0.40 (60% reduction)
+     *
+     * @param currentVector       Current preference vector
+     * @param targetEmbedding     Embedding of the wallpaper that received feedback
+     * @param baseLearningRate    Nominal learning rate before confidence scaling (0.0–1.0)
+     * @param categoryConfidence  Confidence in current preferences for this category (0.0–1.0)
+     * @param momentum            Previous velocity vector for momentum smoothing (null = none)
+     * @param isPositive          True for a like, false for a dislike
+     * @return Pair of (updated preference vector, new velocity vector)
+     */
+    fun updateWithConfidenceWeighting(
+        currentVector: FloatArray,
+        targetEmbedding: FloatArray,
+        baseLearningRate: Float,
+        categoryConfidence: Float,
+        momentum: FloatArray? = null,
+        isPositive: Boolean
+    ): Pair<FloatArray, FloatArray> {
+        // Attenuate the learning rate proportionally to preference confidence.
+        // A fully-confident category (1.0) uses 40% of the base rate;
+        // an unknown category (0.0) uses the full base rate.
+        val confidenceAttenuation = 0.60f
+        val effectiveRate = baseLearningRate *
+            (1f - confidenceAttenuation * categoryConfidence.coerceIn(0f, 1f))
+        return if (isPositive) {
+            updateWithPositiveFeedback(currentVector, targetEmbedding, effectiveRate, momentum)
+        } else {
+            updateWithNegativeFeedback(currentVector, targetEmbedding, effectiveRate, momentum)
+        }
     }
 }
 

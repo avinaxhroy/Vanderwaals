@@ -96,7 +96,6 @@ TargetSdk: 36   # Android 15
 RequiresPermission:
   - android.permission.INTERNET
   - android.permission.SET_WALLPAPER
-  - android.permission.READ_MEDIA_IMAGES
   - android.permission.ACCESS_NETWORK_STATE
   - android.permission.POST_NOTIFICATIONS
   - android.permission.FOREGROUND_SERVICE

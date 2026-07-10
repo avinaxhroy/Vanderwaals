@@ -4,28 +4,9 @@ import android.util.Log
 import me.avinas.vanderwaals.BuildConfig
 
 /**
- * Structured logging utility for Vanderwaals.
- * 
- * Provides consistent, searchable log format with metadata support.
- * Logs are automatically filtered in release builds for performance.
- * 
- * **Usage:**
- * ```kotlin
- * Logger.info("WallpaperWorker", "Starting wallpaper change", mapOf(
- *     "wallpaperId" to "12345",
- *     "targetScreen" to "both"
- * ))
- * 
- * Logger.error("NetworkSync", "Failed to download manifest", e, mapOf(
- *     "attempt" to 2,
- *     "url" to manifestUrl
- * ))
- * ```
- * 
- * **Log Format:**
- * ```
- * [TAG] message | metadata: key1=value1, key2=value2
- * ```
+ * Structured logging utility. Formats output as:
+ * [TAG] message | key1=value1, key2=value2
+ * Suppressed in release builds.
  */
 object Logger {
     
@@ -140,8 +121,9 @@ object Logger {
         message: String,
         metadata: Map<String, Any> = emptyMap()
     ) {
-        // TODO: Integrate with crash reporting SDK (Firebase Crashlytics or Sentry)
-        // For now, just log in debug builds
+        // Privacy-by-design: breadcrumbs are debug-only. Do NOT forward to any
+        // third-party crash-reporting/analytics SDK, as metadata may contain
+        // user context. Kept local to avoid leaking data off-device.
         if (BuildConfig.DEBUG) {
             debug("Breadcrumb[$category]", message, metadata)
         }

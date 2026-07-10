@@ -8,32 +8,8 @@ import java.net.UnknownHostException
 import javax.net.ssl.SSLException
 
 /**
- * Centralized error handling for Vanderwaals backend operations.
- * 
- * Provides:
- * - Consistent error classification across all backend components
- * - Smart recovery strategies based on error type
- * - Retry logic with exponential backoff
- * - Structured error logging with context
- * 
- * **Usage:**
- * ```kotlin
- * try {
- *     // Risky operation
- *     downloadWallpaper(url)
- * } catch (e: Exception) {
- *     val error = ErrorHandler.classify(e, "WallpaperDownload")
- *     val action = ErrorHandler.determineRecoveryAction(error, attemptCount)
- *     
- *     when (action) {
- *         is ErrorRecoveryAction.Retry -> Result.retry()
- *         is ErrorRecoveryAction.RetryWithBackoff -> 
- *             Result.retry().copy(backoffDelayMillis = action.delayMs)
- *         is ErrorRecoveryAction.FallbackToCache -> useCachedWallpaper()
- *         is ErrorRecoveryAction.Fail -> Result.failure()
- *     }
- * }
- * ```
+ * Classifies exceptions into categories and determines recovery actions
+ * (retry, backoff, fallback to cache, or fail).
  */
 object ErrorHandler {
     

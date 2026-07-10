@@ -49,7 +49,7 @@ https://github.com/avinaxhroy/Vanderwaals/blob/main/CLA.md
 
 Full Name: [Your Full Name]
 GitHub Username: @[your-username]
-Email: [your-email@example.com]
+Email: hi@avinas.me
 Date: [YYYY-MM-DD]
 ```
 

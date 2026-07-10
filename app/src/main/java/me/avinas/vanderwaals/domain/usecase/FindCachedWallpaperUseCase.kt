@@ -10,29 +10,8 @@ import java.io.File
 import javax.inject.Inject
 
 /**
- * UseCase for finding a cached wallpaper to use as offline fallback.
- * 
- * When wallpaper download fails due to network issues, this UseCase searches
- * for wallpapers that are already downloaded with valid files on disk.
- * 
- * **Strategy:**
- * 1. Get all wallpapers marked as downloaded in the queue
- * 2. Filter out recently shown wallpapers to maintain variety
- * 3. Verify files actually exist on disk
- * 4. Return best available cached wallpaper
- * 
- * **Usage:**
- * ```kotlin
- * val result = findCachedWallpaperUseCase(
- *     excludeWallpaperId = failedWallpaperId
- * )
- * result?.let { (wallpaper, file) ->
- *     // Use cached wallpaper
- * }
- * ```
- * 
- * @property context Application context for accessing cache directory
- * @property wallpaperRepository Repository for wallpaper data
+ * Finds an already-downloaded wallpaper to use as offline fallback
+ * when network download fails. Verifies files exist on disk.
  */
 class FindCachedWallpaperUseCase @Inject constructor(
     @param:ApplicationContext private val context: Context,

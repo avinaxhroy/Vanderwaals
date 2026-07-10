@@ -15,22 +15,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Handles the physical application of wallpapers to the device.
- * 
- * Extracted from WallpaperChangeWorker to improve:
- * - **Single Responsibility**: Wallpaper application is isolated
- * - **Testability**: Can be unit tested with mock WallpaperManager
- * - **Reusability**: Can be used from previews, widgets, etc.
- * 
- * **Algorithm Overview:**
- * 1. Load bitmap safely with OOM protection
- * 2. Apply SmartCrop to match device screen
- * 3. Save cropped file for preview consistency
- * 4. Apply to WallpaperManager for target screen(s)
- * 5. Verify application wasn't blocked by live wallpaper
- * 
- * @see WallpaperChangeWorker
- * @see SmartCrop
+ * Loads a wallpaper bitmap, applies SmartCrop for the device screen,
+ * saves the cropped file, and sets it via WallpaperManager.
  */
 @Singleton
 class WallpaperApplicator @Inject constructor(
@@ -88,14 +74,14 @@ class WallpaperApplicator @Inject constructor(
             originalBitmap = BitmapManager.loadBitmap(wallpaperFile)
             
             if (originalBitmap == null) {
-                Log.e(TAG, "Failed to decode wallpaper file: ${wallpaperFile.absolutePath}")
+                Log.e(TAG, "Failed to decode wallpaper file: ${wallpaperFile.name}")
                 return ApplyResult.DecodeFailed("Failed to decode wallpaper file")
             }
             
             // Step 2: Apply SmartCrop to actual screen dimensions
             val screenSize = getDeviceScreenSize(context)
             
-            processedBitmap = SmartCrop.smartCropBitmap(
+            processedBitmap = SmartCrop.smartCropBitmapAsync(
                 source = originalBitmap,
                 targetWidth = screenSize.width,
                 targetHeight = screenSize.height,
@@ -206,16 +192,17 @@ class WallpaperApplicator @Inject constructor(
     
     /**
      * Saves the cropped bitmap to a file for preview consistency.
-     * Uses PNG format for lossless quality preservation.
+     * Uses JPEG at 90% quality — visually indistinguishable for wallpapers
+     * but ~10x faster than PNG for large bitmaps (3024x4032, 3840x2160).
      */
     private fun saveCroppedWallpaper(originalFile: File, croppedBitmap: Bitmap) {
         val parentDir = originalFile.parentFile ?: return // Guard: skip if no parent directory
-        val croppedFile = File(parentDir, "${originalFile.nameWithoutExtension}_cropped.png")
+        val croppedFile = File(parentDir, "${originalFile.nameWithoutExtension}_cropped.jpg")
         try {
             croppedFile.outputStream().use { out ->
-                croppedBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                croppedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
             }
-            Log.d(TAG, "Saved cropped wallpaper to: ${croppedFile.absolutePath}")
+            Log.d(TAG, "Saved cropped wallpaper: ${croppedFile.name}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save cropped wallpaper", e)
             // Non-fatal - we still have the bitmap in memory

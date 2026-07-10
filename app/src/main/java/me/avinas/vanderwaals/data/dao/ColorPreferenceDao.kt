@@ -9,38 +9,8 @@ import kotlinx.coroutines.flow.Flow
 import me.avinas.vanderwaals.data.entity.ColorPreference
 
 /**
- * Data Access Object for color preference tracking.
- * 
- * Provides queries to:
- * - Track user preferences for specific colors (hex codes)
- * - Record likes, dislikes, and views per color
- * - Calculate color scores for personalization
- * - Enable fallback personalization when categories are missing
- * 
- * **Usage in Algorithm:**
- * 1. Extract top 3 colors from wallpaper metadata
- * 2. Increment views when wallpaper shown
- * 3. Increment likes/dislikes on user feedback for all colors in palette
- * 4. Use color similarity to boost/penalize wallpapers without categories
- * 5. Apply lower weight (10%) than category boost (15%)
- * 
- * **Example:**
- * ```kotlin
- * // When showing wallpaper with colors ["#FF5733", "#3498DB", "#2ECC71"]
- * wallpaper.colors.forEach { color ->
- *     colorPreferenceDao.incrementViews(color)
- * }
- * 
- * // When user likes wallpaper
- * wallpaper.colors.forEach { color ->
- *     colorPreferenceDao.incrementLikes(color)
- * }
- * 
- * // Get color score for ranking
- * val score = colorPreferenceDao.getByColor(colorHex)?.calculateScore() ?: 0f
- * ```
- * 
- * @see ColorPreference
+ * DAO for tracking per-color preference scores (likes, dislikes, views).
+ * Used as a fallback signal when category data is missing.
  */
 @Dao
 interface ColorPreferenceDao {

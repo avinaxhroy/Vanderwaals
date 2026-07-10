@@ -136,9 +136,10 @@ object AppModule {
         @ApplicationContext context: Context,
         engagementTracker: me.avinas.vanderwaals.domain.usecase.UserEngagementTracker,
         networkStateTracker: me.avinas.vanderwaals.network.NetworkStateTracker,
-        alarmScheduler: me.avinas.vanderwaals.worker.AlarmScheduler
+        alarmScheduler: me.avinas.vanderwaals.worker.AlarmScheduler,
+        settingsDataStore: me.avinas.vanderwaals.data.datastore.SettingsDataStore
     ): me.avinas.vanderwaals.worker.WorkScheduler {
-        return me.avinas.vanderwaals.worker.WorkScheduler(context, engagementTracker, networkStateTracker, alarmScheduler)
+        return me.avinas.vanderwaals.worker.WorkScheduler(context, engagementTracker, networkStateTracker, alarmScheduler, settingsDataStore)
     }
     
     @Provides
@@ -159,4 +160,5 @@ object AppModule {
     fun provideSegmentedDownloader(okHttpClient: OkHttpClient): me.avinas.vanderwaals.network.SegmentedDownloader {
         return me.avinas.vanderwaals.network.SegmentedDownloader(okHttpClient)
     }
-}
+
+    }

@@ -10,30 +10,8 @@ import android.provider.Settings
 import androidx.core.content.getSystemService
 
 /**
- * Helper class for managing battery optimization settings.
- * 
- * Battery optimization can prevent WorkManager from running scheduled tasks
- * after device restart or when app is in background for extended periods.
- * 
- * **Why This Matters:**
- * - Android Doze mode restricts background work for battery optimization
- * - WorkManager tasks may be deferred or skipped entirely
- * - Auto-change wallpaper feature requires reliable background execution
- * - After phone restart, scheduled work may not resume unless exempted
- * 
- * **How It Works:**
- * 1. Check if app is exempt from battery optimization
- * 2. If not exempt, show dialog explaining the need
- * 3. Open system settings for user to whitelist the app
- * 4. Persist user's decision to avoid repeated prompts
- * 
- * **Best Practices:**
- * - Only request when auto-change is enabled
- * - Explain clearly why exemption is needed
- * - Respect user's choice (don't ask repeatedly)
- * - Provide manual trigger in settings
- * 
- * @property context Application context for system service access
+ * Prompts the user to exempt the app from Doze battery optimization
+ * so WorkManager jobs run reliably. Remembers if the user declined.
  */
 object BatteryOptimizationHelper {
     
