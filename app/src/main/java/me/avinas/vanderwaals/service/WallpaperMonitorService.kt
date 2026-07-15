@@ -120,6 +120,23 @@ class WallpaperMonitorService : Service() {
         super.onCreate()
         Log.d(TAG, "Service created - Lifecycle: onCreate()")
         
+        createNotificationChannel()
+        currentState = ServiceState.IDLE
+
+        // CRITICAL: Call startForeground() as early as possible in onCreate.
+        // Android requires startForeground() within 5s of startForegroundService();
+        // any work before this (Samsung checks, wakelock, receiver registration)
+        // can cause ForegroundServiceDidNotStartInTimeException.
+        // Android 15+ (API 35+): dataSync FGS from BOOT_COMPLETED also throws
+        // ForegroundServiceStartNotAllowedException here.
+        try {
+            startForeground(NOTIFICATION_ID, createNotification("Monitoring device unlock"))
+        } catch (e: Exception) {
+            Log.e(TAG, "startForeground() failed in onCreate — stopping service", e)
+            stopSelf()
+            return
+        }
+
         // Log Samsung device info for debugging
         SamsungPowerHelper.logDeviceInfo()
         
@@ -128,10 +145,6 @@ class WallpaperMonitorService : Service() {
             Log.w(TAG, "⚠️ SAMSUNG BATTERY RESTRICTION DETECTED - unlock events may be delayed or missed!")
             Log.w(TAG, SamsungPowerHelper.getSamsungPowerInstructions())
         }
-        
-        createNotificationChannel()
-        currentState = ServiceState.IDLE
-        startForeground(NOTIFICATION_ID, createNotification("Monitoring device unlock"))
         
         // SAMSUNG FIX: Acquire wakelock to prevent CPU sleep
         acquireWakeLock()
@@ -179,7 +192,13 @@ class WallpaperMonitorService : Service() {
         }
         
         // Ensure we are in foreground with updated notification
-        startForeground(NOTIFICATION_ID, createNotification("Monitoring device unlock"))
+        // (startForeground already called in onCreate; just update notification here)
+        try {
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.notify(NOTIFICATION_ID, createNotification("Monitoring device unlock"))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update notification in onStartCommand", e)
+        }
         
         // Return START_STICKY to restart service if killed
         return START_STICKY

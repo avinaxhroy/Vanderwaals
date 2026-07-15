@@ -1,29 +1,49 @@
 package me.avinas.vanderwaals.core
 
+import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import android.net.Uri
 import android.util.Log
-import java.io.BufferedInputStream
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
 import java.io.File
 import java.io.InputStream
 
 /**
- * Safe bitmap loading with OOM protection, size optimization,
- * and proper recycling. Use [AutoRecycleBitmap] for scoped cleanup.
+ * Safe bitmap loading via Glide with automatic downsampling, memory pooling,
+ * and OOM retry. Use [AutoRecycleBitmap] for scoped cleanup.
+ *
+ * Must be initialized via [init] from [VanderwaalsApplication.onCreate].
  */
 object BitmapManager {
-    
+
     private const val TAG = "BitmapManager"
-    
-    // Maximum bitmap dimensions to prevent OOM
+
     private const val MAX_BITMAP_WIDTH = 4096
     private const val MAX_BITMAP_HEIGHT = 4096
-    
+
+    @Volatile
+    private var appContext: Context? = null
+
     /**
-     * Loads a bitmap from a file with OOM protection and size optimization.
-     * 
-     * Automatically downsamples if image is too large to prevent OutOfMemoryError.
-     * 
+     * Initializes BitmapManager with the application context.
+     * Must be called from [VanderwaalsApplication.onCreate].
+     */
+    fun init(context: Context) {
+        appContext = context.applicationContext
+    }
+
+    private fun context(): Context =
+        appContext ?: throw IllegalStateException(
+            "BitmapManager not initialized. Call init() from Application.onCreate()"
+        )
+
+    /**
+     * Loads a bitmap from a file with automatic downsampling and OOM protection.
+     *
+     * Glide handles accurate downsampling (exact target size, not just power-of-2),
+     * bitmap pool reuse, and OOM retry with progressively smaller decodes.
+     *
      * @param file Image file to load
      * @param maxWidth Maximum width (default: 4096)
      * @param maxHeight Maximum height (default: 4096)
@@ -39,58 +59,63 @@ object BitmapManager {
                 Log.w(TAG, "File does not exist or is empty: ${file.name}")
                 return null
             }
-            
-            // First, decode bounds to check image size
-            val options = BitmapFactory.Options().apply {
-                inJustDecodeBounds = true
-            }
-            BitmapFactory.decodeFile(file.absolutePath, options)
-            
-            if (options.outWidth <= 0 || options.outHeight <= 0) {
-                Log.e(TAG, "Invalid image dimensions: ${options.outWidth}x${options.outHeight}")
-                return null
-            }
-            
-            // Calculate sample size to downsample large images
-            val sampleSize = calculateSampleSize(
-                options.outWidth,
-                options.outHeight,
-                maxWidth,
-                maxHeight
-            )
-            
-            // Decode actual bitmap with sampling
-            val bitmapOptions = BitmapFactory.Options().apply {
-                inSampleSize = sampleSize
-                inPreferredConfig = Bitmap.Config.ARGB_8888
-                inJustDecodeBounds = false
-            }
-            
-            val bitmap = BitmapFactory.decodeFile(file.absolutePath, bitmapOptions)
-            
-            if (bitmap != null) {
-                Log.d(TAG, "Loaded bitmap: ${bitmap.width}x${bitmap.height}, " +
-                        "sample size: $sampleSize, file: ${file.name}")
-            } else {
-                Log.e(TAG, "Failed to decode bitmap from file: ${file.name}")
-            }
-            
-            bitmap
-            
+            Glide.with(context())
+                .asBitmap()
+                .load(file)
+                .override(maxWidth, maxHeight)
+                .skipMemoryCache(true)
+                .diskCacheStrategy(DiskCacheStrategy.NONE)
+                .submit()
+                .get()
         } catch (e: OutOfMemoryError) {
             Log.e(TAG, "OutOfMemoryError loading bitmap from ${file.name}", e)
-            // Try to recover memory
-            System.gc()
             null
         } catch (e: Exception) {
             Log.e(TAG, "Error loading bitmap from ${file.name}", e)
             null
         }
     }
-    
+
     /**
-     * Loads a bitmap from an InputStream with OOM protection.
-     * 
+     * Loads a bitmap from a Uri with automatic downsampling and OOM protection.
+     *
+     * Preferred over [loadBitmapFromStream] when a Uri is available — Glide handles
+     * content provider access internally without an intermediate byte copy.
+     *
+     * @param uri Image source Uri (content://, file://, etc.)
+     * @param maxWidth Maximum width (default: 4096)
+     * @param maxHeight Maximum height (default: 4096)
+     * @return Decoded bitmap or null if loading failed
+     */
+    fun loadBitmap(
+        uri: Uri,
+        maxWidth: Int = MAX_BITMAP_WIDTH,
+        maxHeight: Int = MAX_BITMAP_HEIGHT
+    ): Bitmap? {
+        return try {
+            Glide.with(context())
+                .asBitmap()
+                .load(uri)
+                .override(maxWidth, maxHeight)
+                .skipMemoryCache(true)
+                .diskCacheStrategy(DiskCacheStrategy.NONE)
+                .submit()
+                .get()
+        } catch (e: OutOfMemoryError) {
+            Log.e(TAG, "OutOfMemoryError loading bitmap from uri: $uri", e)
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading bitmap from uri: $uri", e)
+            null
+        }
+    }
+
+    /**
+     * Loads a bitmap from an InputStream with automatic downsampling and OOM protection.
+     *
+     * The stream is read into a byte array for Glide to decode. Prefer [loadBitmap]
+     * with a [Uri] when available to avoid the intermediate copy.
+     *
      * @param inputStream Input stream containing image data
      * @param maxWidth Maximum width (default: 4096)
      * @param maxHeight Maximum height (default: 4096)
@@ -102,67 +127,27 @@ object BitmapManager {
         maxHeight: Int = MAX_BITMAP_HEIGHT
     ): Bitmap? {
         return try {
-            // Wrap in BufferedInputStream to ensure mark/reset support
-            // Some InputStreams (like from ContentResolver) don't support mark/reset
-            val bufferedStream = if (inputStream is BufferedInputStream) {
-                inputStream
-            } else {
-                BufferedInputStream(inputStream)
-            }
-            
-            // First, decode bounds to check image size
-            val options = BitmapFactory.Options().apply {
-                inJustDecodeBounds = true
-            }
-            
-            // Mark the stream to allow reset after bounds decoding
-            bufferedStream.mark(Int.MAX_VALUE)
-            BitmapFactory.decodeStream(bufferedStream, null, options)
-            bufferedStream.reset()
-            
-            if (options.outWidth <= 0 || options.outHeight <= 0) {
-                Log.e(TAG, "Invalid image dimensions from stream: ${options.outWidth}x${options.outHeight}")
-                return null
-            }
-            
-            // Calculate sample size
-            val sampleSize = calculateSampleSize(
-                options.outWidth,
-                options.outHeight,
-                maxWidth,
-                maxHeight
-            )
-            
-            // Decode actual bitmap
-            val bitmapOptions = BitmapFactory.Options().apply {
-                inSampleSize = sampleSize
-                inPreferredConfig = Bitmap.Config.ARGB_8888
-                inJustDecodeBounds = false
-            }
-            
-            val bitmap = BitmapFactory.decodeStream(bufferedStream, null, bitmapOptions)
-            
-            if (bitmap != null) {
-                Log.d(TAG, "Loaded bitmap from stream: ${bitmap.width}x${bitmap.height}, sample size: $sampleSize")
-            } else {
-                Log.e(TAG, "Failed to decode bitmap from stream")
-            }
-            
-            bitmap
-            
+            val bytes = inputStream.readBytes()
+            Glide.with(context())
+                .asBitmap()
+                .load(bytes)
+                .override(maxWidth, maxHeight)
+                .skipMemoryCache(true)
+                .diskCacheStrategy(DiskCacheStrategy.NONE)
+                .submit()
+                .get()
         } catch (e: OutOfMemoryError) {
             Log.e(TAG, "OutOfMemoryError loading bitmap from stream", e)
-            System.gc()
             null
         } catch (e: Exception) {
             Log.e(TAG, "Error loading bitmap from stream", e)
             null
         }
     }
-    
+
     /**
      * Safely recycles a bitmap with null check and exception handling.
-     * 
+     *
      * @param bitmap Bitmap to recycle (can be null)
      */
     fun recycleSafely(bitmap: Bitmap?) {
@@ -175,39 +160,12 @@ object BitmapManager {
             }
         }
     }
-    
-    /**
-     * Calculates optimal sample size for downsampling large images.
-     * 
-     * Uses power-of-2 sampling (1, 2, 4, 8...) which is most efficient
-     * for BitmapFactory.
-     * 
-     * @param width Original image width
-     * @param height Original image height
-     * @param maxWidth Target maximum width
-     * @param maxHeight Target maximum height
-     * @return Sample size (power of 2)
-     */
-    private fun calculateSampleSize(
-        width: Int,
-        height: Int,
-        maxWidth: Int,
-        maxHeight: Int
-    ): Int {
-        var sampleSize = 1
-        
-        while (width / sampleSize > maxWidth || height / sampleSize > maxHeight) {
-            sampleSize *= 2
-        }
-        
-        return sampleSize
-    }
-    
+
     /**
      * Auto-cleanup wrapper for bitmaps using Kotlin's use() pattern.
-     * 
+     *
      * Ensures bitmap is recycled even if exception occurs.
-     * 
+     *
      * Example:
      * ```kotlin
      * AutoRecycleBitmap(file).use { wrapper ->
@@ -223,14 +181,14 @@ object BitmapManager {
         maxWidth: Int = MAX_BITMAP_WIDTH,
         maxHeight: Int = MAX_BITMAP_HEIGHT
     ) : AutoCloseable {
-        
+
         val bitmap: Bitmap? = loadBitmap(file, maxWidth, maxHeight)
-        
+
         override fun close() {
             recycleSafely(bitmap)
         }
     }
-    
+
     /**
      * Auto-cleanup wrapper for bitmaps loaded from streams.
      */
@@ -239,9 +197,9 @@ object BitmapManager {
         maxWidth: Int = MAX_BITMAP_WIDTH,
         maxHeight: Int = MAX_BITMAP_HEIGHT
     ) : AutoCloseable {
-        
+
         val bitmap: Bitmap? = loadBitmapFromStream(inputStream, maxWidth, maxHeight)
-        
+
         override fun close() {
             recycleSafely(bitmap)
         }

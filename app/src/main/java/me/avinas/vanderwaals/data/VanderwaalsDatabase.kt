@@ -372,6 +372,62 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
         }
 
         /**
+         * Migration from database version 8 to version 9.
+         *
+         * Changes:
+         * - Created `vdw_cached_wallpapers` table for the Vanderwaals Collection
+         *   on-demand wallpaper source (a TTL cache for API responses).
+         *
+         * Migration path: v8 → v9 (VDW cache table added)
+         *
+         * For existing data:
+         * - New table starts empty (populated on-demand from API responses).
+         * - No user data is modified.
+         *
+         * NOTE: This table is dropped again in MIGRATION_9_10, but Room requires
+         * every version step to be present so the schema matches at each checkpoint.
+         */
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS vdw_cached_wallpapers (
+                        id TEXT NOT NULL,
+                        url TEXT NOT NULL,
+                        thumbnailUrl TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        category TEXT NOT NULL,
+                        colors TEXT NOT NULL,
+                        brightness INTEGER NOT NULL,
+                        contrast INTEGER NOT NULL,
+                        embedding TEXT NOT NULL,
+                        resolution TEXT NOT NULL,
+                        attribution TEXT,
+                        cachedAt INTEGER NOT NULL,
+                        mood TEXT NOT NULL,
+                        style TEXT NOT NULL,
+                        aestheticScore REAL,
+                        qualityTier TEXT,
+                        isDark INTEGER,
+                        subCategory TEXT,
+                        compositionScore REAL,
+                        focalPointX REAL,
+                        focalPointY REAL,
+                        PRIMARY KEY(id)
+                    )
+                """)
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_vdw_cached_wallpapers_source ON vdw_cached_wallpapers(source)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_vdw_cached_wallpapers_category ON vdw_cached_wallpapers(category)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_vdw_cached_wallpapers_cachedAt ON vdw_cached_wallpapers(cachedAt)"
+                )
+            }
+        }
+
+        /**
          * Migration from database version 9 to version 10.
          *
          * Changes:
@@ -452,6 +508,7 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
             MIGRATION_5_6,
             MIGRATION_6_7,
             MIGRATION_7_8,
+            MIGRATION_8_9,
             MIGRATION_9_10,
             MIGRATION_10_11
         )
@@ -469,6 +526,10 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
                 DATABASE_NAME
             )
                 .addMigrations(*MIGRATIONS)
+                .addTypeConverter(me.avinas.vanderwaals.data.entity.Converters(
+                    com.google.gson.Gson()
+                ))
+                .fallbackToDestructiveMigration(true)
                 .build()
         }
         

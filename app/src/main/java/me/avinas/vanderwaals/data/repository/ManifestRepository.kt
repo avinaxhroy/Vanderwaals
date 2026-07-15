@@ -200,6 +200,11 @@ class ManifestRepository @Inject constructor(
                 Log.e(TAG, errorMessage, e)
                 return Result.failure(Exception(errorMessage, e))
                 
+            } catch (e: OutOfMemoryError) {
+                // ponytail: OOM parsing large manifest with 6000+ embeddings — largeHeap helps but low-RAM devices can still OOM
+                Log.e(TAG, "OutOfMemoryError parsing manifest — device too low on memory", e)
+                return Result.failure(Exception("Out of memory parsing manifest. Try closing other apps and retry."))
+                
             } catch (e: Exception) {
                 // Unexpected errors - fail immediately
                 val errorMessage = "Unexpected error: ${e.message}"

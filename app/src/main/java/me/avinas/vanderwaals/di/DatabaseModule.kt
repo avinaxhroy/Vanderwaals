@@ -83,7 +83,10 @@ object DatabaseModule {
         // CRITICAL: Set WAL journal mode with TRUNCATE for better multi-process sync
         .setJournalMode(androidx.room.RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
         // Prevent crash on database downgrade (e.g. user reverts to older app version)
-        .fallbackToDestructiveMigrationOnDowngrade()
+        .fallbackToDestructiveMigrationOnDowngrade(true)
+        // ponytail: destructive fallback on upgrade — wallpaper metadata is re-syncable cache,
+        // user prefs/history loss is acceptable vs crashing on every launch
+        .fallbackToDestructiveMigration(true)
         .build()
     }
     

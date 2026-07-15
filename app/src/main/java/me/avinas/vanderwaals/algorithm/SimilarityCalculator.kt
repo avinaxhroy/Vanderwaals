@@ -181,6 +181,10 @@ class SimilarityCalculator {
      * @return Normalized similarity score (0.0 to 1.0)
      */
     private fun cosineSimilarity(vector1: FloatArray, vector2: FloatArray): Float {
+        if (vector1.isEmpty() || vector2.isEmpty() || vector1.size != vector2.size) {
+            return 0f
+        }
+
         // Calculate dot product and magnitudes
         var dotProduct = 0f
         var magnitude1 = 0f

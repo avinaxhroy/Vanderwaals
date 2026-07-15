@@ -1,7 +1,6 @@
 package me.avinas.vanderwaals.domain.usecase
 
 import android.content.Context
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -89,45 +88,15 @@ class ExtractEmbeddingUseCase @Inject constructor(
      */
     private fun loadBitmapFromUri(uri: Uri): android.graphics.Bitmap? {
         return try {
-            context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                // Use BitmapManager for safe bitmap loading with OOM protection
-                me.avinas.vanderwaals.core.BitmapManager.loadBitmapFromStream(
-                    inputStream = inputStream,
-                    maxWidth = 1024,
-                    maxHeight = 1024
-                )
-            }
+            me.avinas.vanderwaals.core.BitmapManager.loadBitmap(
+                uri = uri,
+                maxWidth = 1024,
+                maxHeight = 1024
+            )
         } catch (e: Exception) {
             Log.e("ExtractEmbeddingUseCase", "Error loading bitmap from URI", e)
             null
         }
-    }
-    
-    /**
-     * Calculates optimal sample size for downsampling large images.
-     * 
-     * Uses power-of-2 sampling (1, 2, 4, 8...) which is most efficient
-     * for BitmapFactory.
-     * 
-     * @param width Original image width
-     * @param height Original image height
-     * @param maxWidth Target maximum width
-     * @param maxHeight Target maximum height
-     * @return Sample size (power of 2)
-     */
-    private fun calculateSampleSize(
-        width: Int,
-        height: Int,
-        maxWidth: Int,
-        maxHeight: Int
-    ): Int {
-        var sampleSize = 1
-        
-        while (width / sampleSize > maxWidth || height / sampleSize > maxHeight) {
-            sampleSize *= 2
-        }
-        
-        return sampleSize
     }
     
     /**

@@ -13,6 +13,10 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +25,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import me.avinas.vanderwaals.R
 import me.avinas.vanderwaals.data.datastore.SettingsDataStore
 import me.avinas.vanderwaals.data.repository.WallpaperRepository
@@ -28,6 +33,8 @@ import me.avinas.vanderwaals.domain.usecase.FindCachedWallpaperUseCase
 import me.avinas.vanderwaals.domain.usecase.SelectNextWallpaperUseCase
 import me.avinas.vanderwaals.domain.usecase.UserEngagementTracker
 import me.avinas.vanderwaals.feature.wallpaper.presentation.MainActivity
+import me.avinas.vanderwaals.worker.WallpaperAlarmReceiver
+import me.avinas.vanderwaals.worker.WallpaperChangeWorker
 import java.io.File
 import javax.inject.Inject
 
@@ -83,6 +90,7 @@ class WallpaperChangeService : Service() {
         private const val CHANNEL_ID = me.avinas.vanderwaals.core.NotificationConstants.CHANNEL_WALLPAPER_CHANGE
         private const val NOTIFICATION_ID = me.avinas.vanderwaals.core.NotificationConstants.NOTIFICATION_ID_CHANGE
         private const val WAKELOCK_TIMEOUT_MS = 60_000L // 1 minute max
+        private const val CHANGE_TIMEOUT_MS = 45_000L // 45s max — prevents ForegroundServiceDidNotStopInTimeException
         
         // Intent action
         const val ACTION_CHANGE_WALLPAPER = "me.avinas.vanderwaals.ACTION_CHANGE_WALLPAPER"
@@ -102,14 +110,21 @@ class WallpaperChangeService : Service() {
         super.onCreate()
         Log.d(TAG, "Service created")
         createNotificationChannel()
+        // CRITICAL: Call startForeground() in onCreate, not onStartCommand.
+        // Android requires startForeground() within 5s of startForegroundService();
+        // onStartCommand may be delayed, causing ForegroundServiceDidNotStartInTimeException.
+        try {
+            startForeground(NOTIFICATION_ID, createNotification("Changing wallpaper..."))
+        } catch (e: Exception) {
+            Log.e(TAG, "startForeground() failed in onCreate — stopping service", e)
+            stopSelf()
+            return
+        }
         acquireWakeLock()
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "Service started - action: ${intent?.action}")
-        
-        // CRITICAL: Must call startForeground within 5 seconds of startForegroundService()
-        startForeground(NOTIFICATION_ID, createNotification("Changing wallpaper..."))
         
         if (intent?.action == ACTION_CHANGE_WALLPAPER) {
             val targetScreen = intent.getStringExtra(EXTRA_TARGET_SCREEN) ?: TARGET_BOTH
@@ -119,8 +134,14 @@ class WallpaperChangeService : Service() {
             
             serviceScope.launch {
                 try {
-                    changeWallpaper(targetScreen)
+                    // ponytail: withTimeout guarantees stopSelf() is reached even if
+                    // downloadWallpaper hangs on network I/O — prevents FGS timeout crash
+                    withTimeout(CHANGE_TIMEOUT_MS) {
+                        changeWallpaper(targetScreen)
+                    }
                     Log.d(TAG, "Wallpaper change completed successfully")
+                } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                    Log.e(TAG, "Wallpaper change timed out after ${CHANGE_TIMEOUT_MS}ms")
                 } catch (e: Exception) {
                     Log.e(TAG, "Wallpaper change failed", e)
                 } finally {
@@ -347,6 +368,26 @@ class WallpaperChangeService : Service() {
     }
     
     // ==================== Notification ====================
+    
+    private fun enqueueFallbackWork(targetScreen: String, mode: String) {
+        try {
+            val work = OneTimeWorkRequestBuilder<WallpaperChangeWorker>()
+                .setInputData(workDataOf(
+                    WallpaperChangeWorker.KEY_TARGET_SCREEN to targetScreen,
+                    WallpaperChangeWorker.KEY_MODE to mode,
+                    WallpaperChangeWorker.KEY_IS_MANUAL_CHANGE to false
+                ))
+                .build()
+            WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+                WallpaperAlarmReceiver.ALARM_TRIGGERED_WORK_NAME,
+                ExistingWorkPolicy.REPLACE,
+                work
+            )
+            Log.d(TAG, "Fallback WallpaperChangeWorker enqueued")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to enqueue fallback work", e)
+        }
+    }
     
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

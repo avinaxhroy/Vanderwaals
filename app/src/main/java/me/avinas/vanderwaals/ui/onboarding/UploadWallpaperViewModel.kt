@@ -85,9 +85,7 @@ class UploadWallpaperViewModel @Inject constructor(
             try {
                 // Load bitmap for enhanced analysis using BitmapManager
                 bitmap = withContext(Dispatchers.IO) {
-                    context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                        me.avinas.vanderwaals.core.BitmapManager.loadBitmapFromStream(inputStream)
-                    }
+                    me.avinas.vanderwaals.core.BitmapManager.loadBitmap(uri)
                 }
                 
                 if (bitmap == null) {

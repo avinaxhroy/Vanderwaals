@@ -94,6 +94,8 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
             defaultHandler?.uncaughtException(thread, throwable)
         }
         
+        me.avinas.vanderwaals.core.BitmapManager.init(this)
+
         initializeLogging()
         
         increaseCursorWindowSize()

@@ -161,6 +161,9 @@ class VanderwaalsCollectionRepository @Inject constructor(
 
                 return Result.success(wallpapers.size)
 
+            } catch (e: OutOfMemoryError) {
+                Log.e(TAG, "OutOfMemoryError parsing Vanderwaals Collection manifest", e)
+                return Result.failure(Exception("Out of memory parsing manifest"))
             } catch (e: Exception) {
                 Log.e(TAG, "Sync attempt $attempt failed: ${e.message}", e)
 
