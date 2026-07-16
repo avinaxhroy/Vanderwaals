@@ -57,6 +57,7 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToOnboarding: () -> Unit,
     onNavigateToAnalytics: () -> Unit = {},
+    onNavigateToPrivacyPolicy: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsState()
@@ -1059,6 +1060,17 @@ fun SettingsScreen(
                             leadingIcon = Icons.Default.Star,
                             iconAccentColor = Color(0xFFF59E0B),
                             trailingIcon = Icons.AutoMirrored.Filled.OpenInNew
+                        )
+                        
+                        SettingsDivider(isDark = isDark)
+                        
+                        SettingsNavigationRow(
+                            title = "Privacy Policy",
+                            subtitle = "How your data is (not) handled",
+                            onClick = onNavigateToPrivacyPolicy,
+                            isDark = isDark,
+                            leadingIcon = Icons.Default.PrivacyTip,
+                            iconAccentColor = BrandPrimary
                         )
                     }
                 }

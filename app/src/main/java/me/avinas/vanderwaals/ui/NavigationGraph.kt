@@ -44,6 +44,7 @@ sealed class Screen(val route: String) {
     object History : Screen("history")
     object Settings : Screen("settings")
     object Analytics : Screen("analytics")
+    object PrivacyPolicy : Screen("privacy_policy")
 }
 
 /**
@@ -267,12 +268,23 @@ fun VanderwaalsNavGraph(
                 },
                 onNavigateToAnalytics = {
                     navController.navigate(Screen.Analytics.route)
+                },
+                onNavigateToPrivacyPolicy = {
+                    navController.navigate(Screen.PrivacyPolicy.route)
                 }
             )
         }
         
         composable(Screen.Analytics.route) {
             me.avinas.vanderwaals.ui.analytics.AnalyticsScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        composable(Screen.PrivacyPolicy.route) {
+            me.avinas.vanderwaals.ui.settings.PrivacyPolicyScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

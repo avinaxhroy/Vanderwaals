@@ -79,6 +79,10 @@ scripts/.DS_Store
 /app/release
 app/release/output-metadata.json
 
+# Build logs and model conversion artifacts (regenerable via scripts/)
+build_output.txt
+model_conversion_output/
+
 # Manifest files (managed by GitHub Actions, not synced locally)
 # GitHub Actions uses 'git add -f' to force-commit these despite being ignored
 app/src/main/assets/manifest_v2.json
@@ -93,7 +97,7 @@ app/src/main/assets/bing_manifest_full.json.gz
 index.html
 landing_page_template.html
 .fdroid/COMPLETION_CHECKLIST.txt
-.superpowers/brainstorm/33826-1778910038/content/onboarding-vision.html
+.superpowers/
 ALGORITHM_REVIEW_ISSUES.md
 /thoughts
 VC/lite.json
