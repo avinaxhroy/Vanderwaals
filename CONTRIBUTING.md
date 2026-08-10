@@ -1,47 +1,35 @@
 # Contributing to Vanderwaals
 
-Thank you for your interest in contributing to Vanderwaals! We welcome contributions from the community to help make this app better. Together, we can build something amazing while maintaining transparency and trust.
+Guidelines for submitting bug reports, feature requests, code contributions, and licensing agreements.
 
-This document provides guidelines and instructions for contributing.
+## Code of conduct
 
-## Code of Conduct
+- Be respectful and constructive.
+- Focus on technical feedback and problem solving.
+- Help maintain a supportive community.
 
-- Be respectful and inclusive
-- Welcome newcomers and encourage diverse perspectives
-- Focus on constructive criticism
-- Help create a positive community
+---
 
-## ⚖️ Licensing and Contributor Agreement
+## Licensing and contributor agreement
 
-### Important: Please Read Before Contributing
+### Contributor License Agreement (CLA)
 
-By contributing to Vanderwaals, you agree to our **Contributor License Agreement (CLA)**. This ensures:
+By submitting code or documentation to Vanderwaals, you agree to the terms of the [Contributor License Agreement (CLA)](CLA.md).
 
-- **You retain ownership** of your contributions
-- **The project can use** your contributions under both AGPL-3.0 and commercial licenses
-- **Legal protection** for both you and the project
-- **Clear rights** for everyone involved
+Key CLA points:
+- You retain copyright ownership of your contributions.
+- You grant the project a perpetual, worldwide, royalty-free license to use, distribute, and sublicense your contributions under AGPL-3.0 and Commercial licenses.
+- You confirm that your contributions are your original creation.
 
-#### Dual Licensing
+### Dual licensing
 
-Vanderwaals uses a **dual licensing model**:
+Vanderwaals uses a dual licensing model:
+1. **AGPL-3.0** for open-source community distribution.
+2. **Commercial License** for proprietary applications, enterprise distribution, and commercial monetization.
 
-1. **AGPL-3.0** for open-source community use (transparency and collaboration)
-2. **Commercial License** for proprietary/commercial use (sustainability)
+### Accepting the CLA
 
-Your contributions will be available under both licenses. This allows:
-- The community to benefit from open-source improvements
-- Commercial users to support the project's development
-- The project to remain sustainable long-term
-
-For more details, see:
-- [Contributor License Agreement (CLA.md)](CLA.md)
-- [Commercial License Terms (COMMERCIAL_LICENSE.md)](COMMERCIAL_LICENSE.md)
-- [Trademark Policy (TRADEMARK.md)](TRADEMARK.md)
-
-### How to Accept the CLA
-
-**First-time contributors**: When submitting your first pull request, please add a comment with:
+When opening your first pull request, include the following statement in your description:
 
 ```
 I have read and agree to the Contributor License Agreement (CLA) at:
@@ -49,220 +37,86 @@ https://github.com/avinaxhroy/Vanderwaals/blob/main/CLA.md
 
 Full Name: [Your Full Name]
 GitHub Username: @[your-username]
-Email: hi@avinas.me
+Email: [your-email]
 Date: [YYYY-MM-DD]
 ```
 
-**Returning contributors**: You only need to accept once (unless the CLA is substantially updated).
+---
 
-**Corporate contributors**: If contributing on behalf of your employer, please have an authorized representative sign our Corporate CLA by opening an issue tagged `corporate-cla`.
+## Workflow guidelines
 
-## How to Contribute
+### Reporting bugs
 
-### Reporting Bugs
+1. Search existing [GitHub Issues](https://github.com/avinaxhroy/Vanderwaals/issues) to avoid duplicate reports.
+2. Open a new issue including:
+   - Expected versus actual behavior
+   - Android OS version, device model, and app version
+   - Reproduction steps and relevant logcat output
 
-1. Check if the bug has already been reported in [Issues](https://github.com/avinaxhroy/Vanderwaals/issues)
-2. If not, create a new issue with:
-   - Clear, descriptive title
-   - Steps to reproduce
-   - Expected vs actual behavior
-   - Device info (Android version, device model)
-   - Screenshots or logs if applicable
+### Suggesting features
 
-### Suggesting Features
+1. Search existing issues and discussions.
+2. Open a new issue detailing:
+   - The core problem or feature requirement
+   - Proposed design or technical implementation approach
 
-1. Check [Issues](https://github.com/avinaxhroy/Vanderwaals/issues) for existing feature requests
-2. Create a new issue with:
-   - Clear description of the feature
-   - Use case and benefits
-   - Possible implementation approach (optional)
+### Submitting pull requests
 
-### Pull Requests
-
-1. **Fork the repository** and create a new branch from `master`:
+1. Fork the repository and create a branch from `main`:
    ```bash
    git checkout -b feature/your-feature-name
    ```
-
-2. **Make your changes**:
-   - Follow the existing code style (Kotlin conventions)
-   - Write clear, descriptive commit messages
-   - Add comments for complex logic
-   - Test your changes thoroughly
-
-3. **Ensure your code builds**:
+2. Make targeted changes following Kotlin coding conventions.
+3. Verify that the build and tests pass:
    ```bash
-   ./gradlew clean build
+   ./gradlew clean test assembleDebug
    ```
+4. Push to your fork and submit a pull request referencing any related issue IDs.
 
-4. **Run tests** (if applicable):
-   ```bash
-   ./gradlew test
-   ```
+---
 
-5. **Push to your fork** and create a Pull Request:
-   - Reference any related issues
-   - Describe what changes you made and why
-   - Include screenshots for UI changes
+## Development environment
 
-## Development Setup
+### Requirements
 
-### Prerequisites
+- Java 17 JDK
+- Android Studio Ladybug (2024.2.1) or higher
+- Android SDK 36 (Minimum SDK 30, Target SDK 36)
+- Git
 
-- **Java 17** or later
-- **Android Studio Ladybug | 2024.2.1** or later
-- **Android SDK 31+** (minimum SDK 31)
-- **Git**
-
-### Setup Steps
+### Setup steps
 
 1. Clone your fork:
    ```bash
    git clone https://github.com/avinaxhroy/Vanderwaals.git
-   cd Vanderwaals/Vanderwaals
+   cd Vanderwaals
+   ```
+2. Open `Vanderwaals` in Android Studio and wait for Gradle sync to complete.
+3. Run debug build:
+   ```bash
+   ./gradlew installDebug
    ```
 
-2. Open in Android Studio:
-   - File → Open → Select the `Vanderwaals` folder
-   - Wait for Gradle sync to complete
+---
 
-3. Build the project:
-   - Build → Make Project (⌘F9 / Ctrl+F9)
+## Code style and conventions
 
-4. Run on device/emulator:
-   - Run → Run 'app' (⇧F10 / Shift+F10)
+- Follow official [Kotlin coding conventions](https://kotlinlang.org/docs/coding-conventions.html).
+- Use sentence case for documentation headings and UI strings.
+- Avoid decorative emojis and marketing buzzwords in code comments or documentation.
+- Provide KDoc for public API functions and use cases.
 
-## Project Structure
+### Commit message format
 
-```
-Vanderwaals/
-├── app/
-│   ├── src/main/
-│   │   ├── java/me/avinas/vanderwaals/
-│   │   │   ├── algorithm/      # ML algorithms
-│   │   │   ├── data/           # Database, DAOs, entities
-│   │   │   ├── domain/         # Use cases
-│   │   │   ├── network/        # API services
-│   │   │   ├── ui/             # Compose screens
-│   │   │   └── worker/         # Background workers
-│   │   ├── res/                # Resources
-│   │   └── assets/             # TFLite models
-│   └── build.gradle.kts
-├── docs/                        # Documentation
-├── scripts/                     # Build scripts
-└── README.md
-```
-
-## Areas for Contribution
-
-### 🤖 Algorithm Improvements
-- Better feature extraction (CLIP embeddings, vision transformers)
-- Adaptive learning rates based on feedback patterns
-- Multi-modal learning (text + image)
-- Category weighting optimization
-
-### 📚 Data Sources
-- Integration with Unsplash API
-- Reddit wallpaper scraping
-- Wallhaven API support
-- User-submitted collections
-
-### ⚡ Performance
-- TFLite GPU delegation
-- Database query optimization
-- Faster similarity calculations
-- Image loading improvements
-
-### 🎨 UI/UX
-- Material You dynamic theming
-- Smooth animations and transitions
-- Accessibility improvements (TalkBack, screen readers)
-- Tablet and landscape support
-- Widget support
-
-### 🧪 Testing
-- Unit tests for algorithms
-- UI tests with Compose Test
-- Integration tests
-- Performance benchmarks
-
-### 📖 Documentation
-- Code documentation and KDoc
-- Architecture decision records
-- User guides and tutorials
-- API documentation
-
-## Code Style
-
-- Follow [Kotlin coding conventions](https://kotlinlang.org/docs/coding-conventions.html)
-- Use meaningful variable and function names
-- Keep functions small and focused
-- Add KDoc comments for public APIs
-- Use Jetpack Compose best practices
-
-### Example
-
-```kotlin
-/**
- * Calculates cosine similarity between two embedding vectors.
- *
- * @param embedding1 First embedding vector (normalized)
- * @param embedding2 Second embedding vector (normalized)
- * @return Similarity score in range [0, 1]
- */
-fun calculateCosineSimilarity(
-    embedding1: FloatArray,
-    embedding2: FloatArray
-): Float {
-    require(embedding1.size == embedding2.size) {
-        "Embeddings must have same dimension"
-    }
-    
-    return embedding1.zip(embedding2)
-        .sumOf { (a, b) -> (a * b).toDouble() }
-        .toFloat()
-        .coerceIn(0f, 1f)
-}
-```
-
-## Commit Message Guidelines
-
-Use clear, descriptive commit messages:
-
-- `feat: Add GPU delegation for TFLite inference`
-- `fix: Resolve crash on Android 12 devices`
+Use standard structured commit subjects:
+- `feat: Add GPU delegate support for TFLite inference`
+- `fix: Resolve background service crash on Android 15`
 - `refactor: Extract similarity calculation into use case`
-- `docs: Update README with new features`
-- `style: Format code with ktlint`
+- `docs: Update API documentation for version 4.6.3`
 - `test: Add unit tests for PreferenceUpdater`
-- `perf: Optimize database queries with indexes`
 
-## Testing Your Changes
+---
 
-Before submitting a PR:
+## Questions
 
-1. ✅ Build succeeds without errors
-2. ✅ App runs on physical device or emulator
-3. ✅ No new crashes or ANRs
-4. ✅ UI looks correct on different screen sizes
-5. ✅ Existing features still work
-6. ✅ Performance is acceptable
-
-## License
-
-By contributing, you agree that your contributions will be licensed under:
-
-- **AGPL-3.0** (GNU Affero General Public License v3.0) for open-source use
-- Available for **commercial licensing** as per the dual licensing model
-
-See the [CLA.md](CLA.md) for complete details on the rights you grant and retain.
-
-## Questions About Contributing?
-
-- **General questions**: Open an issue with the tag `question`
-- **CLA questions**: Open an issue with the tag `cla-question`
-- **Trademark questions**: Open an issue with the tag `trademark-question`
-- **Commercial licensing**: Open an issue with the tag `commercial-license`
-
-We appreciate your contributions and look forward to building Vanderwaals together! 🚀
-
+For licensing or contribution questions, open an issue tagged `question` or contact `hi@avinas.me`.
