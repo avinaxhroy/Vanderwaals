@@ -4,9 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 
-/**
- * Opens an email intent to contact the developer.
- */
 fun SendContactIntent(context: Context) {
     val authorEmail = "hi@avinas.me"
     val cc = ""

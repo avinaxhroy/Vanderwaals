@@ -1,15 +1,23 @@
 package me.avinas.vanderwaals.ui.onboarding
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -23,46 +31,48 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.material.icons.filled.Wallpaper
+import androidx.compose.material3.*
+import androidx.compose.material3.ripple
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
 import me.avinas.vanderwaals.data.entity.WallpaperMetadata
-import me.avinas.vanderwaals.ui.theme.*
+import me.avinas.vanderwaals.ui.settings.RadicalIconBadge
+import me.avinas.vanderwaals.ui.settings.RadicalPalette
+import me.avinas.vanderwaals.ui.settings.RadicalTactileBackdrop
+import me.avinas.vanderwaals.ui.settings.RadicalTactileCard
+import me.avinas.vanderwaals.ui.theme.LocalThemeIsDark
+import me.avinas.vanderwaals.ui.theme.PlayfairDisplayFamily
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConfirmationGalleryScreen(
     onContinue: () -> Unit,
@@ -80,12 +90,11 @@ fun ConfirmationGalleryScreen(
     val isDark = LocalThemeIsDark.current
     val metrics = rememberOnboardingLayoutMetrics()
     val scrollState = rememberLazyGridState()
-    val progress = (likedWallpapers.size.toFloat() / 4f).coerceAtMost(1f)
+    val likedCount = likedWallpapers.size
+    val haptic = LocalHapticFeedback.current
 
     LaunchedEffect(finishState) {
-        if (finishState is FinishState.Success) {
-            onContinue()
-        }
+        if (finishState is FinishState.Success) onContinue()
     }
 
     Scaffold(
@@ -93,7 +102,6 @@ fun ConfirmationGalleryScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color.Transparent,
         topBar = {
-            // Transparent top navigation with back button and refresh button
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -106,23 +114,96 @@ fun ConfirmationGalleryScreen(
                         .fillMaxWidth()
                         .widthIn(max = metrics.maxContentWidth)
                         .padding(horizontal = metrics.horizontalPadding),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    IconButton(onClick = onBack) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .shadow(
+                                elevation = if (isDark) 4.dp else 2.dp,
+                                shape = CircleShape,
+                                ambientColor = Color.Black.copy(alpha = 0.25f),
+                                spotColor = Color.Black.copy(alpha = 0.20f)
+                            )
+                            .clip(CircleShape)
+                            .background(
+                                if (isDark) {
+                                    Brush.verticalGradient(listOf(Color(0xFF1E2433), Color(0xFF111622)))
+                                } else {
+                                    Brush.verticalGradient(listOf(Color.White, Color(0xFFF1F5F9)))
+                                }
+                            )
+                            .border(
+                                1.dp,
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color.White.copy(alpha = if (isDark) 0.25f else 0.9f),
+                                        if (isDark) Color.Black.copy(alpha = 0.5f) else Color(0xFFCBD5E1)
+                                    )
+                                ),
+                                CircleShape
+                            )
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = ripple(bounded = true),
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onBack()
+                                }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = getOnboardingTextPrimary(isDark)
+                            tint = if (isDark) Color.White else Color(0xFF0F172A),
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    IconButton(onClick = { viewModel.refreshWallpapers() }) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .shadow(
+                                elevation = if (isDark) 4.dp else 2.dp,
+                                shape = CircleShape,
+                                ambientColor = Color.Black.copy(alpha = 0.25f),
+                                spotColor = Color.Black.copy(alpha = 0.20f)
+                            )
+                            .clip(CircleShape)
+                            .background(
+                                if (isDark) {
+                                    Brush.verticalGradient(listOf(Color(0xFF1E2433), Color(0xFF111622)))
+                                } else {
+                                    Brush.verticalGradient(listOf(Color.White, Color(0xFFF1F5F9)))
+                                }
+                            )
+                            .border(
+                                1.dp,
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color.White.copy(alpha = if (isDark) 0.25f else 0.9f),
+                                        if (isDark) Color.Black.copy(alpha = 0.5f) else Color(0xFFCBD5E1)
+                                    )
+                                ),
+                                CircleShape
+                            )
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = ripple(bounded = true),
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    viewModel.refreshWallpapers()
+                                }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh",
-                            tint = getOnboardingTextPrimary(isDark)
+                            contentDescription = "Shuffle",
+                            tint = RadicalPalette.EmeraldJade,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
@@ -133,39 +214,72 @@ fun ConfirmationGalleryScreen(
                 isDark = isDark,
                 metrics = metrics,
                 buttonEnabled = canContinue && finishState !is FinishState.Initializing,
-                buttonText = "Finish Setup",
-                showBorderGradient = canContinue,
+                buttonText = if (likedCount >= 4) "Complete Taste Setup" else "Like ${4 - likedCount} more to continue",
                 showLoading = finishState is FinishState.Initializing,
+                loadingText = "Saving taste profile…",
+                accentColor = RadicalPalette.EmeraldJade,
                 onButtonClick = { viewModel.finishOnboarding() }
             )
         }
     ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-        ) {
-            OnboardingBackdrop(
-                isDark = isDark,
-                modifier = Modifier.fillMaxSize()
-            )
+        Box(Modifier.fillMaxSize()) {
+            RadicalTactileBackdrop(isDark = isDark, modifier = Modifier.matchParentSize())
 
             if (displayedWallpapers.isEmpty()) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = metrics.horizontalPadding)
+                        .padding(top = paddingValues.calculateTopPadding()),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(
-                        color = BrandPrimary,
-                        modifier = Modifier.size(36.dp)
-                    )
+                    RadicalTactileCard(
+                        isDark = isDark,
+                        modifier = Modifier.widthIn(max = 360.dp)
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                            modifier = Modifier.padding(24.dp)
+                        ) {
+                            RadicalIconBadge(
+                                icon = Icons.Default.Wallpaper,
+                                accentColor = RadicalPalette.EmeraldJade,
+                                isDark = isDark,
+                                size = 52.dp,
+                                iconSize = 26.dp
+                            )
+
+                            Text(
+                                text = "Finding Matches",
+                                fontFamily = PlayfairDisplayFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
+                                color = if (isDark) RadicalPalette.DarkCardTextPrimary else RadicalPalette.LightCardTextPrimary
+                            )
+
+                            Text(
+                                text = "Finding wallpapers that match your style…",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isDark) RadicalPalette.DarkCardTextSecondary else RadicalPalette.LightCardTextSecondary,
+                                textAlign = TextAlign.Center
+                            )
+
+                            CircularProgressIndicator(
+                                color = RadicalPalette.EmeraldJade,
+                                strokeWidth = 2.5.dp,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
                 }
             } else {
                 LazyVerticalGrid(
                     state = scrollState,
                     columns = GridCells.Adaptive(minSize = metrics.galleryMinCellSize),
                     contentPadding = PaddingValues(
-                        top = paddingValues.calculateTopPadding() + 12.dp,
-                        bottom = paddingValues.calculateBottomPadding() + 24.dp,
+                        top = paddingValues.calculateTopPadding() + 8.dp,
+                        bottom = paddingValues.calculateBottomPadding() + 28.dp,
                         start = metrics.horizontalPadding,
                         end = metrics.horizontalPadding
                     ),
@@ -177,103 +291,37 @@ fun ConfirmationGalleryScreen(
                         .align(Alignment.TopCenter)
                 ) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth(),
-                            horizontalAlignment = Alignment.Start
-                        ) {
+                        Column(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                             OnboardingStepIndicator(
                                 currentStep = currentStep - 1,
                                 totalSteps = totalSteps,
                                 isDark = isDark,
+                                accentColor = RadicalPalette.CoralRose,
                                 modifier = Modifier.padding(bottom = 12.dp)
                             )
-
-                            // Step number above title
-                            Text(
-                                text = "${likedWallpapers.size}/4 likes needed · Step $currentStep of $totalSteps",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (likedWallpapers.size >= 4) BrandPrimary else getOnboardingTextSecondary(isDark),
-                                fontWeight = if (likedWallpapers.size >= 4) FontWeight.SemiBold else FontWeight.Normal,
-                                modifier = Modifier.padding(bottom = 4.dp)
-                            )
-
-                            // Title
-                            Text(
-                                text = "We Found Matches",
-                                style = LuxeHeadlineStyle,
-                                color = getOnboardingTextPrimary(isDark),
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
-
-                            // Subheadline
-                            Text(
-                                text = "Like the ones that speak to you",
-                                style = LuxeBodyStyle,
-                                color = getOnboardingTextSecondary(isDark)
+                            OnboardingHeader(
+                                stepLabel = if (likedCount >= 4) "STAGE 0$currentStep / 0$totalSteps · $likedCount LIKED (READY)" else "STAGE 0$currentStep / 0$totalSteps · $likedCount OF 4 LIKED",
+                                title = "Refine your taste matches",
+                                subtitle = "Tap wallpapers to like them, or tap shuffle for more suggestions.",
+                                isDark = isDark,
+                                accentColor = RadicalPalette.CoralRose
                             )
                         }
                     }
-
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        Spacer(modifier = Modifier.height(metrics.sectionSpacing))
-                    }
-
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 12.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(RoundedCornerShape(3.dp))
-                                    .background(if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.08f))
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(progress)
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp))
-                                        .background(
-                                            Brush.horizontalGradient(
-                                                colors = listOf(BrandPrimary, Color(0xFFF97316))
-                                            )
-                                        )
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Tap to like, hold to hide.",
-                                style = LuxeBodyStyle,
-                                color = getOnboardingTextSecondary(isDark),
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    }
-
-                    items(displayedWallpapers) { wallpaper ->
+                    items(displayedWallpapers, key = { it.id }) { wallpaper ->
                         val isLiked = likedWallpapers.contains(wallpaper.id)
                         val isDisliked = dislikedWallpapers.contains(wallpaper.id)
-                        val rating = when {
+                        val rating: Boolean? = when {
                             isLiked -> true
                             isDisliked -> false
                             else -> null
                         }
 
-                        GalleryWallpaperCard(
+                        TactileGalleryWallpaperCard(
                             wallpaper = wallpaper,
                             rating = rating,
-                            onRate = { liked ->
-                                if (liked) {
-                                    viewModel.toggleLike(wallpaper.id)
-                                } else {
-                                    viewModel.markDislike(wallpaper.id)
-                                }
-                            },
+                            onLike = { viewModel.toggleLike(wallpaper.id) },
+                            onHide = { viewModel.markDislike(wallpaper.id) },
                             metrics = metrics
                         )
                     }
@@ -283,168 +331,295 @@ fun ConfirmationGalleryScreen(
     }
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun GalleryWallpaperCard(
+private fun TactileGalleryWallpaperCard(
     wallpaper: WallpaperMetadata,
     rating: Boolean?,
-    onRate: (Boolean) -> Unit,
+    onLike: () -> Unit,
+    onHide: () -> Unit,
     metrics: OnboardingLayoutMetrics
 ) {
     val isDark = LocalThemeIsDark.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    
-    // Spring-based scale response on touch
+    val haptic = LocalHapticFeedback.current
+
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "bounceScale"
+        targetValue = if (isPressed) 0.975f else 1f,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMedium),
+        label = "wallpaperPressScale"
     )
 
-    // Animated glow elevation
-    val glowElevation by animateFloatAsState(
-        targetValue = if (rating == true) 16f else 0f,
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
-        label = "glowElevation"
-    )
+    val activeBorderColor = when (rating) {
+        true -> RadicalPalette.EmeraldJade
+        false -> Color.Black.copy(alpha = 0.35f)
+        else -> if (isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.12f)
+    }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(if (metrics.compactWidth) 0.72f else 0.65f)
+            .aspectRatio(if (metrics.compactWidth) 0.74f else 0.70f)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
             .shadow(
-                elevation = glowElevation.dp,
+                elevation = if (rating == true) 6.dp else 2.dp,
                 shape = RoundedCornerShape(metrics.cardCornerRadius),
-                ambientColor = if (rating == true) BrandPrimary.copy(alpha = 0.3f) else Color.Transparent,
-                spotColor = if (rating == true) BrandAccent.copy(alpha = 0.25f) else Color.Transparent
+                ambientColor = if (rating == true) RadicalPalette.EmeraldJade.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.12f),
+                spotColor = if (rating == true) RadicalPalette.EmeraldJade.copy(alpha = 0.4f) else Color.Black.copy(alpha = 0.14f)
             )
             .clip(RoundedCornerShape(metrics.cardCornerRadius))
-            .background(getOnboardingCardBackground(isDark))
+            .background(if (isDark) Color(0xFF141822) else Color(0xFFE2E8F0))
             .border(
                 width = if (rating == true) 2.dp else 1.dp,
-                color = when {
-                    rating == true -> BrandPrimary.copy(alpha = 0.8f)
-                    rating == false -> Color.Black.copy(alpha = 0.3f)
-                    else -> getOnboardingCardBorder(isDark)
-                },
+                color = activeBorderColor,
                 shape = RoundedCornerShape(metrics.cardCornerRadius)
             )
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = { onRate(true) },
-                onLongClick = { onRate(false) }
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onLike()
+                },
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onHide()
+                }
             )
+            .semantics {
+                role = Role.Button
+                contentDescription = when (rating) {
+                    true -> "Liked wallpaper, tap to unlike, long press to hide"
+                    false -> "Hidden wallpaper, tap to restore"
+                    else -> "Wallpaper, tap to like, long press to hide"
+                }
+            }
     ) {
-        AsyncImage(
+        SubcomposeAsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(wallpaper.url)
                 .crossfade(true)
                 .build(),
             contentDescription = null,
-            modifier = Modifier
-                .fillMaxSize()
-                .then(if (rating == false) Modifier.background(Color.Black.copy(alpha = 0.7f)) else Modifier),
+            modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
-            alpha = when {
-                rating == false -> 0.25f
-                else -> 1f
-            }
+            loading = {
+                WallpaperCardLoadingPlaceholder(isDark = isDark)
+            },
+            error = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(if (isDark) Color(0xFF171B26) else Color(0xFFE2E8F0)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BrokenImage,
+                            contentDescription = "Failed to load",
+                            tint = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8),
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = "Failed to load",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 10.sp,
+                            color = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)
+                        )
+                    }
+                }
+            },
+            success = {
+                SubcomposeAsyncImageContent()
+            },
+            alpha = if (rating == false) 0.20f else 1f
         )
 
-        // Premium gradient overlay for liked state
-        if (rating == true) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                BrandPrimary.copy(alpha = 0.15f)
-                            )
-                        )
-                    )
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .border(
-                        width = 2.5.dp,
-                        brush = Brush.linearGradient(
-                            colors = listOf(BrandPrimary, BrandAccent)
-                        ),
-                        shape = RoundedCornerShape(metrics.cardCornerRadius)
-                    )
-            )
+        if (rating == false) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.65f)))
         }
 
-        // Premium action indicator at top right
+        // Vignette gradient for text & control legibility
         Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.20f),
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.55f)
+                        )
+                    )
+                )
+        )
+
+        AnimatedVisibility(
+            visible = rating == true,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut(),
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(10.dp)
         ) {
-            AnimatedVisibility(
-                visible = rating != null,
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.linearGradient(
-                                colors = if (rating == true) {
-                                    listOf(Color(0xFFEC4899), Color(0xFFBE185D))
-                                } else {
-                                    listOf(Color.Black.copy(alpha = 0.6f), Color.Black.copy(alpha = 0.4f))
-                                }
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (rating == true) Icons.Default.Favorite else Icons.Default.Close,
-                        contentDescription = null,
-                        tint = if (rating == true) Color.White else Color.White.copy(alpha = 0.9f),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-        }
-
-        // Tap hint indicator (visible only when no rating)
-        AnimatedVisibility(
-            visible = rating == null,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.Center)
-        ) {
             Box(
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(28.dp)
+                    .shadow(3.dp, CircleShape)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.4f)),
+                    .background(RadicalPalette.EmeraldJade)
+                    .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.FavoriteBorder,
+                    imageVector = Icons.Default.Favorite,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.size(26.dp)
+                    tint = Color.White,
+                    modifier = Modifier.size(15.dp)
                 )
             }
+        }
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val isLiked = rating == true
+            val isHidden = rating == false
+
+            val likeBg = if (isLiked) {
+                Brush.horizontalGradient(
+                    listOf(RadicalPalette.EmeraldJade, RadicalPalette.EmeraldJade.copy(alpha = 0.85f))
+                )
+            } else {
+                Brush.horizontalGradient(
+                    listOf(Color.Black.copy(alpha = 0.60f), Color.Black.copy(alpha = 0.50f))
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(32.dp)
+                    .clip(RoundedCornerShape(99.dp))
+                    .background(likeBg)
+                    .border(
+                        1.dp,
+                        Color.White.copy(alpha = if (isLiked) 0.5f else 0.20f),
+                        RoundedCornerShape(99.dp)
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = Color.White.copy(alpha = 0.3f)),
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onLike()
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = Color.White
+                    )
+                    Text(
+                        text = if (isLiked) "Liked" else "Like",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(if (isHidden) Color(0xFF1E2430) else Color.Black.copy(alpha = 0.60f))
+                    .border(1.dp, Color.White.copy(alpha = 0.20f), CircleShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = Color.White.copy(alpha = 0.3f)),
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onHide()
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Hide",
+                    tint = Color.White,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WallpaperCardLoadingPlaceholder(isDark: Boolean) {
+    val infiniteTransition = rememberInfiniteTransition(label = "card_shimmer")
+    val shimmerTranslate by infiniteTransition.animateFloat(
+        initialValue = -200f,
+        targetValue = 600f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1300, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer_pos"
+    )
+
+    val baseColor = if (isDark) Color(0xFF141824) else Color(0xFFE2E8F0)
+    val highlightColor = if (isDark) Color(0xFF222838) else Color(0xFFF1F5F9)
+
+    val shimmerBrush = Brush.linearGradient(
+        colors = listOf(baseColor, highlightColor, baseColor),
+        start = Offset(shimmerTranslate, shimmerTranslate),
+        end = Offset(shimmerTranslate + 200f, shimmerTranslate + 200f)
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(shimmerBrush),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            CircularProgressIndicator(
+                color = RadicalPalette.EmeraldJade,
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(22.dp)
+            )
+
+            Text(
+                text = "Loading...",
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+            )
         }
     }
 }

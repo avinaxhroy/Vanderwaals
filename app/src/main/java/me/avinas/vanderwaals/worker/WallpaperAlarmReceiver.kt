@@ -63,7 +63,6 @@ class WallpaperAlarmReceiver : BroadcastReceiver() {
             android.util.Log.d(TAG, "Interval-based alarm - rescheduling for ${intervalMillis / 60000} minutes from now")
             rescheduleRepeatingAlarm(context, targetScreen, mode, intervalMillis)
         } else {
-            // This is a daily alarm, reschedule for next day
             rescheduleDailyAlarm(context, targetScreen, mode, intent)
         }
     }
@@ -86,7 +85,6 @@ class WallpaperAlarmReceiver : BroadcastReceiver() {
             return
         }
         
-        // Calculate next alarm time - exactly intervalMillis from now
         val nextTriggerTime = System.currentTimeMillis() + intervalMillis
         val intervalMinutes = intervalMillis / 60000
         
@@ -94,7 +92,6 @@ class WallpaperAlarmReceiver : BroadcastReceiver() {
         android.util.Log.d(TAG, "  Current time: ${System.currentTimeMillis()}")
         android.util.Log.d(TAG, "  Next trigger: $nextTriggerTime")
         
-        // Create intent with same parameters for next alarm
         val alarmIntent = Intent(context, WallpaperAlarmReceiver::class.java).apply {
             putExtra("targetScreen", targetScreen)
             putExtra("mode", mode)
@@ -133,11 +130,9 @@ class WallpaperAlarmReceiver : BroadcastReceiver() {
             return
         }
         
-        // Extract original target time from intent
         val targetHour = originalIntent.getIntExtra("targetHour", 9)
         val targetMinute = originalIntent.getIntExtra("targetMinute", 0)
         
-        // Calculate next alarm time (same time tomorrow)
         val calendar = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, targetHour)
             set(Calendar.MINUTE, targetMinute)
@@ -156,7 +151,6 @@ class WallpaperAlarmReceiver : BroadcastReceiver() {
         )
         
         try {
-            // Set alarm for next day at same time
             alarmManager.setExactAndAllowWhileIdle(
                 AlarmManager.RTC_WAKEUP,
                 calendar.timeInMillis,
@@ -176,9 +170,7 @@ class WallpaperAlarmReceiver : BroadcastReceiver() {
         private const val ALARM_REQUEST_CODE_REPEATING = 1002
         
         /**
-         * Unique work name for alarm-triggered wallpaper changes.
-         * Using unique work with REPLACE policy prevents duplicate changes
-         * if multiple alarms fire in quick succession.
+         * REPLACE policy prevents duplicate changes if multiple alarms fire in quick succession.
          */
         const val ALARM_TRIGGERED_WORK_NAME = "alarm_triggered_wallpaper_change"
     }

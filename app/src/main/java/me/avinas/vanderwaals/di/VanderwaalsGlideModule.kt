@@ -12,34 +12,9 @@ import com.bumptech.glide.module.AppGlideModule
 import com.bumptech.glide.request.RequestOptions
 
 /**
- * Glide configuration module for Vanderwaals image caching.
- *
- * Optimizes image loading performance with:
- * - 50MB memory cache (LRU)
- * - 250MB disk cache
- * - High quality image decoding (ARGB_8888)
- * - Automatic crossfade animations
- *
- * **Memory Cache:**
- * - LruResourceCache with 50MB capacity
- * - Automatically evicts least recently used images
- * - Configured for ~20-30 wallpaper previews in memory
- *
- * **Disk Cache:**
- * - 250MB internal cache for downloaded wallpapers
- * - Stored in app's internal storage
- * - Automatically cleaned up when space is low
- *
- * **Image Quality:**
- * - ARGB_8888 format for high quality wallpapers
- * - Preserves color depth and gradients
- * - Essential for wallpaper display quality
- *
- * **Integration with Landscapist:**
- * This configuration is automatically used by Landscapist Glide wrapper.
- * All GlideImage composables benefit from this caching.
- *
- * @see com.skydoves.landscapist.glide.GlideImage
+ * Glide caching tuned for wallpapers: 50 MB memory / 250 MB disk cache and
+ * ARGB_8888 decoding. This module is picked up automatically by the
+ * Landscapist Glide wrapper, so all GlideImage composables use it.
  */
 @GlideModule
 class VanderwaalsGlideModule : AppGlideModule() {
@@ -62,57 +37,30 @@ class VanderwaalsGlideModule : AppGlideModule() {
         private const val DISK_CACHE_SIZE = 250 * 1024 * 1024L // 250MB
     }
 
-    /**
-     * Configures Glide with custom memory and disk cache sizes.
-     *
-     * @param context Application context
-     * @param builder GlideBuilder to configure
-     */
     override fun applyOptions(context: Context, builder: GlideBuilder) {
-        // Configure memory cache with LRU eviction policy
         builder.setMemoryCache(LruResourceCache(MEMORY_CACHE_SIZE))
 
-        // Configure disk cache in internal storage
         builder.setDiskCache(
             InternalCacheDiskCacheFactory(context, DISK_CACHE_SIZE)
         )
 
-        // Set default image quality to ARGB_8888 for wallpapers
         builder.setDefaultRequestOptions(
             RequestOptions()
                 .format(DecodeFormat.PREFER_ARGB_8888)
                 .disallowHardwareConfig() // Prevent hardware bitmaps for wallpaper setting
         )
 
-        // Enable verbose logging in debug builds
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.CUPCAKE) {
             builder.setLogLevel(android.util.Log.WARN)
         }
     }
 
-    /**
-     * Configures Glide registry with custom components.
-     *
-     * Currently uses default Glide components. Override this method to add:
-     * - Custom model loaders
-     * - Custom decoders
-     * - Custom encoders
-     *
-     * @param context Application context
-     * @param glide Glide instance
-     * @param registry Registry to configure
-     */
     override fun registerComponents(context: Context, glide: Glide, registry: Registry) {
         // Default Glide components are sufficient for wallpapers
-        // Override to add custom loaders if needed
     }
 
     /**
-     * Disables parsing of Glide annotations in AndroidManifest.xml.
-     *
-     * Improves build time by skipping manifest parsing for Glide modules.
-     *
-     * @return false to disable manifest parsing
+     * Skipping manifest parsing improves build time.
      */
     override fun isManifestParsingEnabled(): Boolean {
         return false

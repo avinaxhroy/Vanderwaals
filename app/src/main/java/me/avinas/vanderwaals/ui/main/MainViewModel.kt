@@ -18,36 +18,6 @@ import me.avinas.vanderwaals.domain.usecase.UpdatePreferencesUseCase
 import me.avinas.vanderwaals.worker.WallpaperChangeWorker
 import javax.inject.Inject
 
-/**
- * ViewModel for main screen state management.
- * 
- * Manages:
- * - Current wallpaper display (URI, metadata, source attribution)
- * - Wallpaper queue (ranked list of next wallpapers)
- * - Manual "Change Now" action
- * - Quick actions (like, dislike, download)
- * - Bottom sheet visibility state
- * - Loading states for wallpaper changes
- * 
- * StateFlow emissions:
- * - CurrentWallpaper: Currently displayed wallpaper with metadata
- * - QueueState: Number of wallpapers in queue, queue health
- * - LoadingState: Processing state for wallpaper changes
- * - BottomSheetState: Overlay visibility
- * 
- * Coordinates with:
- * - GetRankedWallpapersUseCase: Populate queue
- * - ProcessFeedbackUseCase: Handle likes/dislikes
- * - WallpaperChangeWorker: Trigger manual changes
- * - Paperize's WallpaperService: Apply wallpaper
- * 
- * Observes:
- * - Wallpaper change events from WorkManager
- * - Feedback updates that require queue reranking
- * - Settings changes (mode, frequency, apply to)
- * 
- * @see MainScreen
- */
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val wallpaperRepository: WallpaperRepository,
@@ -61,9 +31,6 @@ class MainViewModel @Inject constructor(
     private val preferenceRepository: me.avinas.vanderwaals.data.repository.PreferenceRepository
 ) : ViewModel() {
 
-    /**
-     * UI State for the Main Screen.
-     */
     sealed interface MainUiState {
         data object Loading : MainUiState
         data class Success(val wallpaper: WallpaperMetadata?) : MainUiState
@@ -111,10 +78,10 @@ class MainViewModel @Inject constructor(
         )
 
     /**
-     * Whether the bottom sheet overlay is visible.
-     * Starts as false, user taps screen to toggle.
+     * Whether the UI controls and quick actions are visible over the wallpaper.
+     * Starts as true so controls are readily accessible; user taps wallpaper to toggle full immersion.
      */
-    private val _showOverlay = MutableStateFlow(false)
+    private val _showOverlay = MutableStateFlow(true)
     val showOverlay: StateFlow<Boolean> = _showOverlay.asStateFlow()
 
     /**
@@ -149,9 +116,6 @@ class MainViewModel @Inject constructor(
     private val _liveWallpaperInfo = MutableStateFlow<Pair<String, String?>>("" to null)
     val liveWallpaperInfo: StateFlow<Pair<String, String?>> = _liveWallpaperInfo.asStateFlow()
 
-    /**
-     * Show instructions dialog state.
-     */
     private val _showInstructionsDialog = MutableStateFlow(false)
     val showInstructionsDialog: StateFlow<Boolean> = _showInstructionsDialog.asStateFlow()
 
@@ -168,16 +132,10 @@ class MainViewModel @Inject constructor(
     private val _totalLikes = MutableStateFlow(0)
     val totalLikes: StateFlow<Int> = _totalLikes.asStateFlow()
 
-    /**
-     * Clears the error message after it's been shown.
-     */
     fun clearErrorMessage() {
         _errorMessage.value = null
     }
     
-    /**
-     * Clears the success message after it's been shown.
-     */
     fun clearSuccessMessage() {
         _successMessage.value = null
     }
@@ -194,7 +152,6 @@ class MainViewModel @Inject constructor(
 
                 updateEmbeddingDimensionFromPreferences(prefs)
                 
-                // Get liked count for dialog
                 _totalLikes.value = prefs?.likedWallpaperIds?.size ?: 0
                 
                 val migrationNeeded = settingsDataStore.checkEmbeddingMigrationNeeded(hasPreferences)
@@ -236,21 +193,15 @@ class MainViewModel @Inject constructor(
         }
     }
     
-    /**
-     * Called when user taps "Re-personalize Now" on the embedding migration dialog.
-     * Navigates to the onboarding flow to re-personalize their preferences.
-     */
     fun onRePersonalize(navigateToOnboarding: () -> Unit) {
         viewModelScope.launch {
             // Reset preferences for embedding migration (keeps liked/disliked IDs)
             preferenceRepository.resetForEmbeddingMigration(keepMode = true)
             
-            // Clear migration flags and set to current dimension
             settingsDataStore.clearEmbeddingMigrationFlags()
             
             _showEmbeddingMigrationDialog.value = false
             
-            // Navigate to onboarding
             navigateToOnboarding()
         }
     }
@@ -261,17 +212,14 @@ class MainViewModel @Inject constructor(
      */
     fun onAutoMode() {
         viewModelScope.launch {
-            // Reset preferences and switch to auto mode
             preferenceRepository.resetForEmbeddingMigration(keepMode = false)
             
-            // Clear migration flags and set to current dimension
             settingsDataStore.clearEmbeddingMigrationFlags()
             
             _showEmbeddingMigrationDialog.value = false
             
             android.util.Log.i("MainViewModel", "User chose auto mode for embedding migration")
             
-            // Show success feedback to user
             _successMessage.value = "Auto mode enabled! Finding your first wallpaper..."
             
             // Trigger a wallpaper change to demonstrate the new mode
@@ -314,7 +262,6 @@ class MainViewModel @Inject constructor(
             val (isBlocking, serviceName) = me.avinas.vanderwaals.core.LiveWallpaperDetector.detectBlockingAfterFailure(application)
             
             if (isBlocking) {
-                // Get package name for settings navigation
                 val packageName = me.avinas.vanderwaals.core.LiveWallpaperDetector.getLiveWallpaperPackageName(application)
                 
                 _liveWallpaperInfo.value = (serviceName ?: "Live Wallpaper") to packageName
@@ -327,33 +274,20 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Dismisses the live wallpaper dialog.
-     */
     fun dismissLiveWallpaperDialog() {
         _showLiveWallpaperDialog.value = false
     }
 
-    /**
-     * Shows the instructions dialog.
-     */
     fun showInstructions() {
         _showInstructionsDialog.value = true
         _showLiveWallpaperDialog.value = false  // Hide main dialog when showing instructions
     }
 
-    /**
-     * Dismisses the instructions dialog.
-     */
     fun dismissInstructionsDialog() {
         _showInstructionsDialog.value = false
     }
 
-    /**
-     * Handles successful settings navigation.
-     */
     fun onSettingsOpened() {
-        // Record that user opened settings
         android.util.Log.d("MainViewModel", "User opened live wallpaper settings")
     }
 
@@ -377,22 +311,8 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * Triggers immediate wallpaper change via WorkManager.
-     * 
-     * **Flow:**
-     * 1. Show loading indicator
-     * 2. Create OneTimeWorkRequest for WallpaperChangeWorker
-     * 3. Enqueue work with WorkManager
-     * 4. Observe work status
-     * 5. Update currentWallpaper when complete
-     * 6. Hide overlay and loading indicator
-     * 
-     * **Error Handling:**
-     * - If no downloaded wallpapers available, show error
-     * - If WorkManager fails, show error toast
-     * - Network errors handled by worker retry logic
-     *
-     * Worker dynamically loads Apply To setting from DataStore.
+     * Triggers an immediate wallpaper change via WorkManager.
+     * The worker dynamically loads the Apply To setting from DataStore.
      */
     fun changeNow() {
         viewModelScope.launch {
@@ -415,12 +335,10 @@ class MainViewModel @Inject constructor(
 
                 android.util.Log.d("MainViewModel", "Manual wallpaper change triggered - worker will load Apply To setting")
 
-                // Observe work completion and progress
                 workManager.getWorkInfoByIdFlow(workRequest.id)
                     .collect { workInfo ->
                         if (workInfo == null) return@collect
                         
-                        // Update state based on progress
                         val progressState = workInfo.progress.getString(WallpaperChangeWorker.KEY_PROGRESS_STATE)
                         if (progressState != null) {
                             when (progressState) {
@@ -433,16 +351,13 @@ class MainViewModel @Inject constructor(
                             workInfo.state.isFinished -> {
                                 _loadingState.value = KoalaLoadingState.IDLE
                                 
-                                // Check if wallpaper change failed due to live wallpaper
                                 if (workInfo.state == androidx.work.WorkInfo.State.FAILED) {
-                                    // Check if failure was due to live wallpaper
                                     checkForLiveWallpaper()
                                 }
                                 
                                 // Current wallpaper will update reactively via StateFlow
-                                // Auto-hide overlay after successful change
                                 if (workInfo.state == androidx.work.WorkInfo.State.SUCCEEDED) {
-                                    _showOverlay.value = false
+                                    // Retain controls state
                                 }
                             }
                         }
@@ -603,7 +518,6 @@ class MainViewModel @Inject constructor(
                 android.util.Log.d("MainViewModel", "=== CHANGE AFTER DISLIKE ===")
                 android.util.Log.d("MainViewModel", "Disliked: $dislikedWallpaperId (category: $dislikedCategory)")
                 
-                // Use diversity-focused selection
                 val result = nextWallpaperCacheManager.getNextWallpaperAfterDislike(
                     dislikedWallpaperId = dislikedWallpaperId,
                     dislikedCategory = dislikedCategory,
@@ -615,7 +529,6 @@ class MainViewModel @Inject constructor(
                         android.util.Log.d("MainViewModel", 
                             "Selected diverse wallpaper: ${selectedWallpaper.id} (category: ${selectedWallpaper.category})")
                         
-                        // Create and enqueue wallpaper change work with selected wallpaper
                         val workRequest = OneTimeWorkRequestBuilder<WallpaperChangeWorker>()
                             .setInputData(androidx.work.workDataOf(
                                 WallpaperChangeWorker.KEY_MODE to WallpaperChangeWorker.MODE_VANDERWAALS,
@@ -627,13 +540,11 @@ class MainViewModel @Inject constructor(
 
                         workManager.enqueue(workRequest)
 
-                        // Observe work completion
                         workManager.getWorkInfoByIdFlow(workRequest.id)
                             .collect { workInfo ->
                                 if (workInfo == null) return@collect
                                 
-                                // Update state based on progress
-                                val progressState = workInfo.progress.getString(WallpaperChangeWorker.KEY_PROGRESS_STATE)
+                                        val progressState = workInfo.progress.getString(WallpaperChangeWorker.KEY_PROGRESS_STATE)
                                 if (progressState != null) {
                                     when (progressState) {
                                         WallpaperChangeWorker.PROGRESS_FINDING -> _loadingState.value = KoalaLoadingState.FINDING
@@ -650,7 +561,7 @@ class MainViewModel @Inject constructor(
                                         }
                                         
                                         if (workInfo.state == androidx.work.WorkInfo.State.SUCCEEDED) {
-                                            _showOverlay.value = false
+                                            // Retain controls state
                                         }
                                     }
                                 }
@@ -665,7 +576,6 @@ class MainViewModel @Inject constructor(
             } catch (e: Exception) {
                 android.util.Log.e("MainViewModel", "Exception in changeAfterDislike", e)
                 _loadingState.value = KoalaLoadingState.IDLE
-                // Fallback to normal change
                 changeNow()
             }
         }
@@ -699,17 +609,14 @@ class MainViewModel @Inject constructor(
                     return@launch
                 }
 
-                // Download/Get from cache
                 val downloadResult = wallpaperRepository.downloadWallpaper(fullWallpaper)
                 
                 downloadResult.onSuccess { file ->
-                    // Validate file before saving
                     if (!file.exists() || file.length() <= 0) {
                         onError("Download failed: Empty file")
                         return@onSuccess
                     }
 
-                    // Save to gallery
                     val saveResult = mediaSaver.saveImageToGallery(file, fullWallpaper.id)
                     if (saveResult.isSuccess) {
                         // IMPORTANT: Update preferences with DOWNLOAD feedback (highest weight)
@@ -717,7 +624,6 @@ class MainViewModel @Inject constructor(
                             val preferenceResult = updatePreferencesUseCase(fullWallpaper, FeedbackType.DOWNLOAD)
                             preferenceResult.fold(
                                 onSuccess = {
-                                    // Also update history context
                                     val activeHistory = historyDao.getActiveWallpaper()
                                     if (activeHistory != null) {
                                         val context = me.avinas.vanderwaals.data.entity.FeedbackContext.fromCurrentState(

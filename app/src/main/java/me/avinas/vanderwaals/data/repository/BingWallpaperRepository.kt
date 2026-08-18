@@ -36,39 +36,10 @@ class BingWallpaperRepository @Inject constructor(
         private const val DAILY_FETCH_COUNT = 8
     }
     
-    /**
-     * Syncs Bing daily wallpapers from the last week.
-     * 
-     * Fetches the last 8 days of Bing homepage wallpapers and saves to database.
-     * Only adds wallpapers that don't already exist (checks by ID).
-     * 
-     * **Process**:
-     * 1. Fetch last 8 wallpapers from Bing API
-     * 2. Convert to WallpaperMetadata entities
-     * 3. Check if already exists in database
-     * 4. Insert new wallpapers only
-     * 5. Return count of new wallpapers added
-     * 
-     * @return Result<Int> Success with count of new wallpapers, or Failure
-     * 
-     * Example:
-     * ```kotlin
-     * viewModelScope.launch {
-     *     bingRepo.syncDailyWallpapers()
-     *         .onSuccess { count ->
-     *             Log.d(TAG, "Synced $count new Bing wallpapers")
-     *         }
-     *         .onFailure { error ->
-     *             Log.e(TAG, "Sync failed: ${error.message}")
-     *         }
-     * }
-     * ```
-     */
     suspend fun syncDailyWallpapers(): Result<Int> = withContext(Dispatchers.IO) {
         Log.d(TAG, "Starting Bing daily sync...")
         
         try {
-            // Fetch last 8 days from Bing API with retry logic
             val response = NetworkRetry.retryWithBackoff {
                 bingArchiveService.getDailyWallpaper(count = DAILY_FETCH_COUNT)
             }
@@ -88,7 +59,6 @@ class BingWallpaperRepository @Inject constructor(
             
             Log.d(TAG, "Fetched ${bingWallpapers.size} Bing wallpapers")
             
-            // Convert to entities
             val entities = bingWallpapers.map { bingImage ->
                 val fullUrl = "https://www.bing.com${bingImage.urlbase}_UHD.jpg"
                 val thumbnailUrl = "https://www.bing.com${bingImage.urlbase}_800x600.jpg"
@@ -108,7 +78,6 @@ class BingWallpaperRepository @Inject constructor(
                 )
             }
             
-            // Filter out existing wallpapers
             val existingIds = entities.map { it.id }
             val existing = wallpaperDao.getByIds(existingIds)
             val existingIdSet = existing.map { it.id }.toSet()
@@ -120,7 +89,6 @@ class BingWallpaperRepository @Inject constructor(
                 return@withContext Result.success(0)
             }
             
-            // Insert new wallpapers
             wallpaperDao.insertAll(newEntities)
             
             Log.d(TAG, "✓ Synced ${newEntities.size} new Bing wallpapers")
@@ -132,51 +100,6 @@ class BingWallpaperRepository @Inject constructor(
         }
     }
     
-    /**
-     * Syncs wallpapers from Bing Wallpaper Archive (multi-region, year-based).
-     * 
-     * Intelligently syncs wallpapers from multiple regions using year-based APIs for
-     * efficiency. This provides a diverse catalog of high-quality professional photography
-     * while minimizing bandwidth usage.
-     * 
-     * **Strategy**:
-     * - Multi-region: Fetch from multiple regions for variety (US, GB, ROW by default)
-     * - Year-based: Sync only recent years (current + last 2 years) for efficiency
-     * - Incremental: Only insert new wallpapers (checks database before inserting)
-     * - Bandwidth-friendly: Year APIs are 100-500 KB vs 2-5 MB for full archives
-     * 
-     * **Process**:
-     * 1. Get enabled regions from settings (or use defaults)
-     * 2. For each region, fetch last 3 years using year-based APIs
-     * 3. Convert to WallpaperMetadata entities
-     * 4. Filter out existing entries
-     * 5. Batch insert into database
-     * 6. Return total count of imported wallpapers
-     * 
-     * @param regions List of regions to sync (defaults to US, GB, ROW)
-     * @param yearsToSync Number of recent years to sync (default 3)
-     * @return Result<Int> Success with count of imported wallpapers, or Failure
-     * 
-     * Example:
-     * ```kotlin
-     * // Sync default regions (US, GB, ROW) for last 3 years
-     * bingRepo.syncArchiveWallpapers()
-     *     .onSuccess { count ->
-     *         Log.d(TAG, "Imported $count wallpapers")
-     *     }
-     *     .onFailure { error ->
-     *         Log.e(TAG, "Sync failed: ${error.message}")
-     *     }
-     * 
-     * // Sync specific regions
-     * val customRegions = listOf(
-     *     BingRegionConfig.US_ENGLISH,
-     *     BingRegionConfig.FR_FRENCH,
-     *     BingRegionConfig.JP_JAPANESE
-     * )
-     * bingRepo.syncArchiveWallpapers(customRegions, yearsToSync = 2)
-     * ```
-     */
     suspend fun syncArchiveWallpapers(
         regions: List<me.avinas.vanderwaals.network.BingRegionConfig.Region> = me.avinas.vanderwaals.network.BingRegionConfig.DEFAULT_REGIONS,
         yearsToSync: Int = 3
@@ -195,7 +118,6 @@ class BingWallpaperRepository @Inject constructor(
                 
                 for (year in yearsToFetch) {
                     try {
-                        // Fetch archive data with retry logic
                         val response = NetworkRetry.retryWithBackoff {
                             bingArchiveService.getArchiveManifestYear(
                                 country = region.country,
@@ -221,10 +143,8 @@ class BingWallpaperRepository @Inject constructor(
                         
                         Log.d(TAG, "Fetched ${wallpapers.size} wallpapers from ${region.getApiPath()}/$year")
                         
-                        // Convert to entities
                         val entities: List<WallpaperMetadata> = wallpapers.map { dto -> dto.toWallpaperMetadata() }
                         
-                        // Filter out existing wallpapers
                         val existingIds: List<String> = entities.map { it.id }
                         val existing: List<WallpaperMetadata> = wallpaperDao.getByIds(existingIds)
                         val existingIdSet: Set<String> = existing.map { it.id }.toSet()
@@ -236,7 +156,6 @@ class BingWallpaperRepository @Inject constructor(
                             continue
                         }
                         
-                        // Batch insert in chunks
                         val chunkSize = 100
                         newEntities.chunked(chunkSize).forEach { chunk ->
                             wallpaperDao.insertAll(chunk)
@@ -274,13 +193,6 @@ class BingWallpaperRepository @Inject constructor(
         }
     }
     
-    /**
-     * Syncs wallpapers from a single region (convenience method).
-     * 
-     * @param region Region to sync
-     * @param yearsToSync Number of recent years to sync
-     * @return Result<Int> Success with count of imported wallpapers, or Failure
-     */
     suspend fun syncArchiveRegion(
         region: me.avinas.vanderwaals.network.BingRegionConfig.Region,
         yearsToSync: Int = 3
@@ -288,11 +200,6 @@ class BingWallpaperRepository @Inject constructor(
         return syncArchiveWallpapers(listOf(region), yearsToSync)
     }
     
-    /**
-     * Gets the count of Bing wallpapers currently in database.
-     * 
-     * @return Count of wallpapers with source="bing"
-     */
     suspend fun getBingWallpaperCount(): Int = withContext(Dispatchers.IO) {
         try {
             wallpaperDao.countBySource("bing")
@@ -302,13 +209,7 @@ class BingWallpaperRepository @Inject constructor(
         }
     }
     
-    /**
-     * Checks if Bing archive has been imported.
-     * 
-     * Heuristic: If we have more than 100 Bing wallpapers, assume archive was imported.
-     * 
-     * @return true if archive likely imported, false otherwise
-     */
+    // Heuristic: more than 100 Bing wallpapers implies the archive was imported.
     suspend fun isArchiveImported(): Boolean = withContext(Dispatchers.IO) {
         getBingWallpaperCount() > 100
     }

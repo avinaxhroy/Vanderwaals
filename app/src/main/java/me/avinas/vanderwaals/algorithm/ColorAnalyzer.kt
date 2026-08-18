@@ -4,37 +4,10 @@ import android.graphics.Color
 import kotlin.math.*
 
 /**
- * Advanced color analysis utility for wallpaper personalization.
- * 
- * Provides sophisticated color matching beyond basic RGB comparison:
- * - HSV color space analysis (hue, saturation, value)
- * - Color harmony detection (complementary, analogous, triadic)
- * - Dominant vs accent color weighting
- * - Warm/cool tone classification
- * - Vibrant/muted intensity detection
- * 
- * **Use Cases:**
- * - Learning color preferences from feedback
- * - Matching wallpapers to user's color palette
- * - Detecting color patterns across liked wallpapers
- * - Providing color-aware recommendations
- * 
- * **Color Spaces:**
- * - RGB: Device color representation (0-255 per channel)
- * - HSV: Perceptual color model (Hue 0-360°, Saturation 0-1, Value 0-1)
- * - HSL: Alternative perceptual model (used for lightness)
- * 
- * @see ColorPreference
- * @see SelectNextWallpaperUseCase
+ * Color analysis utility for palette extraction, perceptual LAB similarity, and color preference scoring.
  */
 object ColorAnalyzer {
     
-    /**
-     * Analyzes a color palette and returns detailed color characteristics.
-     * 
-     * @param colors List of hex color codes
-     * @return ColorPaletteAnalysis with detailed insights
-     */
     fun analyzePalette(colors: List<String>): ColorPaletteAnalysis {
         if (colors.isEmpty()) {
             return ColorPaletteAnalysis.empty()
@@ -60,76 +33,36 @@ object ColorAnalyzer {
         )
     }
     
-    /**
-     * Calculates similarity between two color palettes using advanced metrics.
-     * 
-     * Considers:
-     * - Hue similarity (perceptual color difference)
-     * - Saturation similarity (vibrance matching)
-     * - Value similarity (brightness matching)
-     * - Dominant color weight (3x importance)
-     * - Accent color matching
-     * 
-     * @param palette1 First color palette
-     * @param palette2 Second color palette
-     * @return Similarity score 0.0 (completely different) to 1.0 (identical)
-     */
     fun calculatePaletteSimilarity(palette1: ColorPaletteAnalysis, palette2: ColorPaletteAnalysis): Float {
         if (palette1.isEmpty() || palette2.isEmpty()) {
-            return 0.5f // Neutral when data unavailable
+            return 0.5f
         }
         
-        // Hue similarity (circular distance on color wheel)
         val hueSimilarity = calculateCircularSimilarity(palette1.averageHue, palette2.averageHue, 360f)
-        
-        // Saturation similarity (linear)
         val saturationSimilarity = 1f - abs(palette1.averageSaturation - palette2.averageSaturation)
-        
-        // Value (brightness) similarity (linear)
         val valueSimilarity = 1f - abs(palette1.averageValue - palette2.averageValue)
-        
-        // Dominant colour LAB-space distance (perceptually accurate; weighted heavily)
         val dominantSimilarity = calculateLabSimilarity(palette1.dominantColor, palette2.dominantColor)
 
-        // Accent colour matching using LAB similarity
         val accentSimilarity = if (palette1.accentColors.isNotEmpty() && palette2.accentColors.isNotEmpty()) {
             val accent1 = palette1.accentColors.first()
             val accent2 = palette2.accentColors.first()
             calculateLabSimilarity(accent1, accent2)
         } else {
-            0.5f // Neutral if no accents
+            0.5f
         }
         
-        // Warm/cool tone matching bonus
         val toneBonus = if (palette1.isWarmToned == palette2.isWarmToned) 0.1f else 0f
-        
-        // Vibrant/muted matching bonus
         val vibrancyBonus = if (palette1.isVibrant == palette2.isVibrant) 0.1f else 0f
         
-        // Weighted combination
-        return (dominantSimilarity * 0.35f +      // 35% dominant color
-                hueSimilarity * 0.20f +           // 20% hue
-                saturationSimilarity * 0.15f +    // 15% saturation
-                valueSimilarity * 0.15f +         // 15% value/brightness
-                accentSimilarity * 0.15f +        // 15% accent
-                toneBonus + vibrancyBonus)        // Bonuses
+        return (dominantSimilarity * 0.35f +
+                hueSimilarity * 0.20f +
+                saturationSimilarity * 0.15f +
+                valueSimilarity * 0.15f +
+                accentSimilarity * 0.15f +
+                toneBonus + vibrancyBonus)
             .coerceIn(0f, 1f)
     }
     
-    /**
-     * Extracts color preferences from a list of liked/disliked wallpapers.
-     * 
-     * Analyzes patterns:
-     * - Most common hue ranges
-     * - Preferred saturation level
-     * - Preferred brightness level
-     * - Warm vs cool preference
-     * - Vibrant vs muted preference
-     * 
-     * @param likedPalettes Palettes from liked wallpapers
-     * @param dislikedPalettes Palettes from disliked wallpapers
-     * @return ColorPreferenceProfile with learned preferences
-     */
     fun extractColorPreferences(
         likedPalettes: List<ColorPaletteAnalysis>,
         dislikedPalettes: List<ColorPaletteAnalysis>
@@ -155,13 +88,6 @@ object ColorAnalyzer {
         )
     }
     
-    /**
-     * Calculates color preference score for a palette based on learned preferences.
-     * 
-     * @param palette Wallpaper color palette to score
-     * @param preferences Learned color preferences
-     * @return Score from -1.0 (strongly dislike) to +1.0 (strongly like)
-     */
     fun calculateColorPreferenceScore(
         palette: ColorPaletteAnalysis,
         preferences: ColorPreferenceProfile
@@ -170,36 +96,26 @@ object ColorAnalyzer {
             return 0f // Neutral when insufficient data
         }
         
-        // Hue match (circular distance)
         val hueInRange = isHueInRange(palette.averageHue, preferences.preferredHueRange)
         val hueScore = if (hueInRange) 1f else -0.5f
         
-        // Saturation match
         val saturationDiff = abs(palette.averageSaturation - preferences.preferredSaturation)
         val saturationScore = 1f - saturationDiff
         
-        // Brightness match
         val brightnessDiff = abs(palette.averageValue - preferences.preferredBrightness)
         val brightnessScore = 1f - brightnessDiff
         
-        // Tone match
         val toneScore = if (palette.isWarmToned == preferences.prefersWarmTones) 1f else -0.5f
-        
-        // Vibrancy match
         val vibrancyScore = if (palette.isVibrant == preferences.prefersVibrant) 1f else -0.5f
         
-        // Weighted combination
-        val rawScore = (hueScore * 0.30f +           // 30% hue
-                        saturationScore * 0.25f +     // 25% saturation
-                        brightnessScore * 0.25f +     // 25% brightness
-                        toneScore * 0.10f +           // 10% warm/cool
-                        vibrancyScore * 0.10f)        // 10% vibrant/muted
+        val rawScore = (hueScore * 0.30f +
+                        saturationScore * 0.25f +
+                        brightnessScore * 0.25f +
+                        toneScore * 0.10f +
+                        vibrancyScore * 0.10f)
         
-        // Apply confidence factor
         return rawScore * preferences.confidence
     }
-    
-    // ========== Private Helper Methods ==========
     
     private fun parseHexToRgb(hex: String): RgbColor? {
         return try {
@@ -224,14 +140,12 @@ object ColorAnalyzer {
     
     private fun isWarmToned(hsvColors: List<HsvColor>): Boolean {
         val avgHue = hsvColors.map { it.hue }.average().toFloat()
-        // Warm tones: Red→Yellow (0-90°) and Magenta→Red (300-360°)
         return avgHue < 90f || avgHue > 300f
     }
     
     private fun isVibrant(hsvColors: List<HsvColor>): Boolean {
         val avgSaturation = hsvColors.map { it.saturation }.average().toFloat()
         val avgValue = hsvColors.map { it.value }.average().toFloat()
-        // Vibrant: High saturation (>0.5) and moderate-high value (>0.4)
         return avgSaturation > 0.5f && avgValue > 0.4f
     }
     
@@ -242,10 +156,10 @@ object ColorAnalyzer {
         val hueRange = hues.maxOrNull()!! - hues.minOrNull()!!
         
         return when {
-            hueRange < 30f -> ColorHarmony.MONOCHROMATIC  // Same hue family
-            hueRange < 60f -> ColorHarmony.ANALOGOUS      // Adjacent on color wheel
-            hueRange > 150f -> ColorHarmony.COMPLEMENTARY // Opposite colors
-            else -> ColorHarmony.TRIADIC                   // Evenly spaced
+            hueRange < 30f -> ColorHarmony.MONOCHROMATIC
+            hueRange < 60f -> ColorHarmony.ANALOGOUS
+            hueRange > 150f -> ColorHarmony.COMPLEMENTARY
+            else -> ColorHarmony.TRIADIC
         }
     }
     
@@ -255,32 +169,18 @@ object ColorAnalyzer {
         return 1f - (circularDiff / (maxValue / 2f))
     }
 
-    // ========== CIE76 ΔE (LAB colour space) ==========
-    // Conversions delegated to me.avinas.vanderwaals.core.ColorSpace (shared impl).
-
     /**
-     * CIE76 ΔE between two [RgbColor]s.
-     *
-     * Operates in the perceptually-uniform CIELab colour space. Small ΔE values
-     * correspond to small perceived colour differences, unlike Euclidean RGB distance.
-     * Max ΔE ≈ 100 (pure black ↔ pure white).
+     * CIE76 delta E between two colors in CIELAB space.
      */
     fun deltaE76(rgb1: RgbColor, rgb2: RgbColor): Double =
         me.avinas.vanderwaals.core.ColorSpace.rgbDeltaE(rgb1.r, rgb1.g, rgb1.b, rgb2.r, rgb2.g, rgb2.b)
 
-    /**
-     * LAB-space colour similarity in [0..1].
-     * Uses CIE76 ΔE normalised by the practical maximum of 100.
-     * More perceptually accurate than Euclidean RGB similarity.
-     */
     fun calculateLabSimilarity(rgb1: RgbColor, rgb2: RgbColor): Float =
         (1.0 - (deltaE76(rgb1, rgb2) / 100.0).coerceIn(0.0, 1.0)).toFloat()
 
     private fun calculatePreferredHueRange(hues: List<Float>): HueRange {
         val avgHue = hues.average().toFloat()
         val stdDev = sqrt(hues.map { (it - avgHue).pow(2) }.average()).toFloat()
-        
-        // Range: ±2 standard deviations, clamped to reasonable width
         val rangeWidth = (stdDev * 2).coerceIn(30f, 90f)
         
         return HueRange(
@@ -295,8 +195,6 @@ object ColorAnalyzer {
         return circularDiff <= range.rangeWidth / 2f
     }
     
-    // ========== Data Classes ==========
-    
     data class RgbColor(val r: Int, val g: Int, val b: Int)
     
     data class HsvColor(val hue: Float, val saturation: Float, val value: Float)
@@ -304,16 +202,13 @@ object ColorAnalyzer {
     data class HueRange(val centerHue: Float, val rangeWidth: Float)
     
     enum class ColorHarmony {
-        MONOCHROMATIC,  // Single color family
-        ANALOGOUS,      // Adjacent colors on wheel
-        COMPLEMENTARY,  // Opposite colors
-        TRIADIC         // Evenly spaced colors
+        MONOCHROMATIC,
+        ANALOGOUS,
+        COMPLEMENTARY,
+        TRIADIC
     }
 }
 
-/**
- * Detailed analysis of a wallpaper's color palette.
- */
 data class ColorPaletteAnalysis(
     val dominantColor: ColorAnalyzer.RgbColor,
     val accentColors: List<ColorAnalyzer.RgbColor>,
@@ -342,16 +237,13 @@ data class ColorPaletteAnalysis(
     }
 }
 
-/**
- * Learned color preferences from user feedback.
- */
 data class ColorPreferenceProfile(
     val preferredHueRange: ColorAnalyzer.HueRange,
     val preferredSaturation: Float,
     val preferredBrightness: Float,
     val prefersWarmTones: Boolean,
     val prefersVibrant: Boolean,
-    val confidence: Float  // 0.0 to 1.0, grows with more feedback
+    val confidence: Float
 ) {
     companion object {
         fun neutral() = ColorPreferenceProfile(

@@ -18,55 +18,27 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * LiquidGlassProcessor - The heart of the Smart Launcher-inspired glass effect.
- * 
- * This processor transforms a source image into a "liquid glass" background by applying:
- * 1. Heavy Gaussian blur - Creates the frosted glass base
- * 2. Edge distortion - Simulates refraction through thick glass
- * 3. Chromatic aberration - RGB channel separation for prism/rainbow edge effects
- * 
- * Key insight from Smart Launcher:
- * - Process ONCE, not per-frame
- * - Cards are OPAQUE, displaying pre-processed slices that match the background
- * - Creates ILLUSION of transparency
+ * Transforms a source bitmap into a frosted background with edge refraction and chromatic offset.
  */
 object LiquidGlassProcessor {
 
-    /**
-     * Configuration for the liquid glass effect
-     */
     data class GlassConfig(
-        val blurRadius: Float = 80f,          // Blur intensity (higher = more frosted)
-        val distortionStrength: Float = 0.15f, // Edge distortion (0 = none, 1 = extreme)
-        val chromaticOffset: Float = 3f,       // RGB separation in pixels
-        val saturationBoost: Float = 1.1f,     // Color saturation multiplier
-        val brightnessAdjust: Float = 1.05f    // Brightness multiplier
+        val blurRadius: Float = 80f,
+        val distortionStrength: Float = 0.15f,
+        val chromaticOffset: Float = 3f,
+        val saturationBoost: Float = 1.1f,
+        val brightnessAdjust: Float = 1.05f
     )
 
-    /**
-     * Process a source bitmap to create a liquid glass background.
-     * 
-     * @param source The source bitmap (gradient, texture, or captured background)
-     * @param config Configuration for the effect parameters
-     * @return Processed bitmap with liquid glass effect applied
-     */
     fun generateLiquidGlassBackground(
         source: Bitmap,
         config: GlassConfig = GlassConfig()
     ): Bitmap {
-        // Step 1: Apply blur
         val blurred = applyFastBlur(source, config.blurRadius)
-        
-        // Step 2: Apply color adjustments
         val colorAdjusted = adjustColors(blurred, config.saturationBoost, config.brightnessAdjust)
-        
-        // Step 3: Apply chromatic aberration for that premium prism effect
         val withChroma = applyChromaAberration(colorAdjusted, config.chromaticOffset)
-        
-        // Step 4: Apply subtle edge distortion
         val final = applyEdgeDistortion(withChroma, config.distortionStrength)
         
-        // Clean up intermediate bitmaps
         if (blurred != source) blurred.recycle()
         if (colorAdjusted != blurred && colorAdjusted != source) colorAdjusted.recycle()
         if (withChroma != colorAdjusted && withChroma != source) withChroma.recycle()
@@ -75,17 +47,8 @@ object LiquidGlassProcessor {
     }
 
     /**
-     * Extract a slice of the processed background for a specific screen region.
-     * This is the "trick" - each card gets a perfectly aligned slice.
-     * 
-     * @param processedBackground The full processed liquid glass background
-     * @param cardLeft Card's left position in pixels
-     * @param cardTop Card's top position in pixels
-     * @param cardWidth Card's width in pixels
-     * @param cardHeight Card's height in pixels
-     * @param screenWidth Total screen width
-     * @param screenHeight Total screen height
-     * @return Cropped and scaled slice for the card
+     * Crops out the region of the processed background that lines up with a card.
+     * The background is rendered once at screen size, then each card reads its own slice.
      */
     fun extractSlice(
         processedBackground: Bitmap,
@@ -96,7 +59,6 @@ object LiquidGlassProcessor {
         screenWidth: Float,
         screenHeight: Float
     ): ImageBitmap {
-        // Map card position to bitmap coordinates
         val bgWidth = processedBackground.width.toFloat()
         val bgHeight = processedBackground.height.toFloat()
         
@@ -120,21 +82,18 @@ object LiquidGlassProcessor {
     }
 
     /**
-     * Fast blur using downscale-upscale technique.
-     * Works on all API levels and is very performant.
+     * Fast blur via downscale-upscale. Works on all API levels.
      */
     private fun applyFastBlur(source: Bitmap, radius: Float): Bitmap {
-        // Downscale factor based on blur radius
-        // Higher radius = more downscale for efficiency
+        // More downscale at higher radius keeps the pass cheap
         val scale = (1f / (radius / 10f)).coerceIn(0.02f, 0.25f)
         
         val smallWidth = (source.width * scale).toInt().coerceAtLeast(1)
         val smallHeight = (source.height * scale).toInt().coerceAtLeast(1)
         
-        // Downscale
         val small = Bitmap.createScaledBitmap(source, smallWidth, smallHeight, true)
         
-        // Upscale back - the bilinear filtering creates the blur effect
+        // Upscaling the small bitmap back is what produces the blur
         val blurred = Bitmap.createScaledBitmap(small, source.width, source.height, true)
         
         if (small != blurred) small.recycle()
@@ -143,8 +102,7 @@ object LiquidGlassProcessor {
     }
 
     /**
-     * Apply chromatic aberration effect.
-     * Separates RGB channels and offsets them slightly for a prism/rainbow edge effect.
+     * Shifts each RGB channel a couple of pixels sideways to fake a prism edge.
      */
     private fun applyChromaAberration(source: Bitmap, offset: Float): Bitmap {
         if (offset <= 0f) return source
@@ -187,8 +145,7 @@ object LiquidGlassProcessor {
     }
 
     /**
-     * Apply subtle edge distortion to simulate light refraction through thick glass.
-     * Uses a simple barrel distortion effect focused on edges.
+     * Mild barrel distortion so the glass reads as thick near the edges.
      */
     private fun applyEdgeDistortion(source: Bitmap, strength: Float): Bitmap {
         if (strength <= 0f) return source
@@ -231,7 +188,7 @@ object LiquidGlassProcessor {
     }
 
     /**
-     * Adjust color saturation and brightness for a more vibrant glass effect.
+     * Adjusts saturation and brightness of the blurred backdrop.
      */
     private fun adjustColors(source: Bitmap, saturation: Float, brightness: Float): Bitmap {
         if (saturation == 1f && brightness == 1f) return source
@@ -250,12 +207,10 @@ object LiquidGlassProcessor {
             var g = Color.green(pixel)
             var b = Color.blue(pixel)
             
-            // Apply brightness
             r = (r * brightness).toInt().coerceIn(0, 255)
             g = (g * brightness).toInt().coerceIn(0, 255)
             b = (b * brightness).toInt().coerceIn(0, 255)
             
-            // Apply saturation
             val gray = (r * 0.299f + g * 0.587f + b * 0.114f).toInt()
             r = (gray + (r - gray) * saturation).toInt().coerceIn(0, 255)
             g = (gray + (g - gray) * saturation).toInt().coerceIn(0, 255)

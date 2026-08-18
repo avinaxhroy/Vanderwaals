@@ -10,32 +10,16 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Use case for syncing wallpaper catalog from GitHub manifest and Bing API.
- * 
- * Weekly background synchronization process:
- * 
- * 1. Download manifest.json from GitHub repository (if enabled)
- * 2. Fetch Bing daily wallpapers (if enabled)
- * 3. Parse metadata for 6000+ wallpapers
- * 4. Compare with local database (check for new/updated wallpapers)
- * 5. Insert/update wallpaper metadata in Room database
- * 6. Clean up metadata for removed wallpapers
- * 7. Update last sync timestamp
- * 
- * Manifest contains pre-computed data from GitHub Actions curation pipeline:
- * - Download URLs (GitHub raw or jsDelivr CDN)
- * - MobileNetV4 embeddings (1280 floats per wallpaper)
- * - Color palettes (5 colors per wallpaper)
- * - Categories and brightness levels
- * - Source attribution
- * 
- * Triggered by:
- * - App launch (if > 7 days since last sync)
- * - Manual "Sync Now" button in settings
- * - WorkManager periodic sync worker
- * 
- * @see me.avinas.vanderwaals.network.GitHubApiService
- * @see me.avinas.vanderwaals.data.repository.WallpaperRepository
+ * Syncs the wallpaper catalog from the enabled sources (GitHub manifest,
+ * Bing, Vanderwaals Collection).
+ *
+ * The manifest carries precomputed data from the GitHub Actions curation
+ * pipeline: download URLs, MobileNetV4 embeddings (1280 floats per
+ * wallpaper), color palettes, categories, brightness, and source
+ * attribution; sync inserts/updates these in Room.
+ *
+ * Triggered on app launch (> 7 days since last sync), via the manual
+ * "Sync Now" button in settings, and by a WorkManager periodic worker.
  */
 @Singleton
 class SyncWallpaperCatalogUseCase @Inject constructor(
@@ -49,12 +33,6 @@ class SyncWallpaperCatalogUseCase @Inject constructor(
         private const val TAG = "SyncWallpaperCatalog"
     }
     
-    /**
-     * Performs a full sync of the wallpaper catalog based on enabled sources.
-     * 
-     * @param onProgress Optional progress callback with (message, progress 0.0-1.0, count)
-     * @return Result<Int> containing total wallpaper count on success, or error on failure
-     */
     suspend fun syncCatalog(
         onProgress: ((message: String, progress: Float, count: Int) -> Unit)? = null
     ): Result<Int> {
@@ -62,7 +40,6 @@ class SyncWallpaperCatalogUseCase @Inject constructor(
             Log.d(TAG, "Starting catalog sync...")
             onProgress?.invoke("Starting sync...", 0.05f, 0)
             
-            // Get enabled sources from settings
             val settings = settingsDataStore.settings.first()
             val githubEnabled = settings.githubEnabled
             val bingEnabled = settings.bingEnabled
@@ -86,7 +63,6 @@ class SyncWallpaperCatalogUseCase @Inject constructor(
                 return start to end
             }
             
-            // Sync GitHub manifest if enabled
             if (githubEnabled) {
                 Log.d(TAG, "Syncing GitHub manifest...")
                 val range = nextRange()
@@ -107,7 +83,6 @@ class SyncWallpaperCatalogUseCase @Inject constructor(
                 )
             }
             
-            // Sync Bing manifest if enabled
             if (bingEnabled) {
                 Log.d(TAG, "Syncing Bing manifest ($bingManifestType)...")
                 val range = nextRange()
@@ -129,7 +104,6 @@ class SyncWallpaperCatalogUseCase @Inject constructor(
                 )
             }
 
-            // Sync Vanderwaals Collection manifest if enabled
             if (vanderwaalsCollectionEnabled) {
                 Log.d(TAG, "Syncing Vanderwaals Collection manifest ($vanderwaalsCollectionManifestType)...")
                 val range = nextRange()

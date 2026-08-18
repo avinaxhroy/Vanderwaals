@@ -30,10 +30,6 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Result of scheduling operations.
- * Used to communicate scheduling success or failure back to ViewModels.
- */
 sealed class SchedulingResult {
     object Success : SchedulingResult()
     data class PermissionDenied(val message: String) : SchedulingResult()
@@ -61,7 +57,6 @@ class WorkScheduler @Inject constructor(
     }
     
     init {
-        // Set up network restoration callback
         setupNetworkRestorationCallback()
     }
     
@@ -79,16 +74,13 @@ class WorkScheduler @Inject constructor(
         networkStateTracker.onNetworkRestored = {
             android.util.Log.d(TAG, "🌐 Network restored - triggering fresh wallpaper download")
             
-            // Cancel any pending retry work
             workManager.cancelUniqueWork(WallpaperChangeWorker.RETRY_WORK_NAME)
             
-            // Trigger immediate wallpaper change to download fresh wallpaper
-            // This runs with network constraint already satisfied
+            // Runs with the network constraint already satisfied
             coroutineScope.launch {
                 // Small delay to ensure network is stable
                 kotlinx.coroutines.delay(2000L)
                 
-                // Get current target screen from settings
                 val settings = settingsDataStore.settings.first()
                 
                 val targetScreen = when (settings.applyTo) {
@@ -239,14 +231,6 @@ class WorkScheduler @Inject constructor(
         )
     }
     
-    /**
-     * Schedules wallpaper change worker based on user's preferred interval.
-     * 
-     * @param interval Change interval (EVERY_UNLOCK, HOURLY, DAILY, NEVER)
-     * @param time Time of day for daily changes (optional)
-     * @param targetScreen Target screen (home, lock, both)
-     * @return SchedulingResult indicating success or failure reason
-     */
     fun scheduleWallpaperChange(
         interval: ChangeInterval,
         time: LocalTime? = null,
@@ -259,7 +243,6 @@ class WorkScheduler @Inject constructor(
         android.util.Log.d(TAG, "  Time: ${time ?: "N/A"}")
         android.util.Log.d(TAG, "========================================")
         
-        // Cancel any existing wallpaper change work
         cancelWallpaperChange()
         
         return when (interval) {
@@ -271,7 +254,6 @@ class WorkScheduler @Inject constructor(
             
             ChangeInterval.EVERY_UNLOCK -> {
                 android.util.Log.d(TAG, "Interval is Every Unlock - starting WallpaperMonitorService")
-                // Start foreground service to monitor unlock events
                 startWallpaperMonitorService()
                 SchedulingResult.Success
             }
@@ -362,20 +344,16 @@ class WorkScheduler @Inject constructor(
             .setInputData(inputData)
             .build()
         
-        // CRITICAL FIX: Use REPLACE policy to ensure schedule changes take effect
-        // REPLACE cancels existing work and creates new work with fresh timing
-        // This ensures frequency changes are applied immediately
         workManager.enqueueUniquePeriodicWork(
             WallpaperChangeWorker.WORK_NAME,
             ExistingPeriodicWorkPolicy.REPLACE,
             changeWork
         )
         
-        android.util.Log.d(TAG, "Periodic work scheduled successfully (NO network constraint)")
+        android.util.Log.d(TAG, "Periodic work scheduled successfully")
         
-        // CRITICAL DEBUG: Verify the work was actually scheduled
         coroutineScope.launch {
-            kotlinx.coroutines.delay(500) // Wait for WorkManager to process
+            kotlinx.coroutines.delay(500)
             logWallpaperChangeStatus()
         }
     }
@@ -441,9 +419,6 @@ class WorkScheduler @Inject constructor(
         return result
     }
     
-    /**
-     * Triggers batch download worker immediately.
-     */
     fun triggerBatchDownload() {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.UNMETERED) // WiFi only
@@ -462,9 +437,6 @@ class WorkScheduler @Inject constructor(
         )
     }
     
-    /**
-     * Triggers immediate wallpaper change (e.g., from "Change Now" button).
-     */
     fun triggerImmediateWallpaperChange(targetScreen: String = WallpaperChangeWorker.TARGET_BOTH) {
         val inputData = workDataOf(
             WallpaperChangeWorker.KEY_TARGET_SCREEN to targetScreen,
@@ -479,31 +451,22 @@ class WorkScheduler @Inject constructor(
     }
     
     /**
-     * Cancels all scheduled wallpaper change work AND alarms.
-     * 
      * CRITICAL FIX: Must cancel BOTH WorkManager work AND AlarmManager alarms.
      * Previously only WorkManager work was cancelled, leaving AlarmManager alarms
      * active which caused multiple triggers and irregular timing.
      */
     fun cancelWallpaperChange() {
-        // Cancel all WorkManager work related to wallpaper changes
         workManager.cancelUniqueWork(WallpaperChangeWorker.WORK_NAME)
         workManager.cancelUniqueWork(WallpaperAlarmReceiver.ALARM_TRIGGERED_WORK_NAME)
         workManager.cancelUniqueWork(WallpaperChangeWorker.RETRY_WORK_NAME)
         
-        // Cancel AlarmManager alarms (daily and repeating)
         cancelAllAlarms()
         
-        // Stop foreground service
         stopWallpaperMonitorService()
         
         android.util.Log.d(TAG, "✅ Cancelled all wallpaper change mechanisms (WorkManager + AlarmManager + Service)")
     }
     
-    /**
-     * Cancels all AlarmManager alarms for wallpaper changes.
-     * Delegates to AlarmScheduler for actual alarm cancellation.
-     */
     private fun cancelAllAlarms() {
         alarmScheduler.cancelAllAlarms()
     }
@@ -570,9 +533,6 @@ class WorkScheduler @Inject constructor(
         }
     }
     
-    /**
-     * Cancels all Vanderwaals workers.
-     */
     fun cancelAllWorkers() {
         workManager.cancelUniqueWork(CatalogSyncWorker.WORK_NAME)
         workManager.cancelUniqueWork(CleanupWorker.WORK_NAME)
@@ -581,16 +541,10 @@ class WorkScheduler @Inject constructor(
         workManager.cancelUniqueWork(DailyPlaylistWorker.WORK_NAME)
     }
     
-    /**
-     * Calculates delay in milliseconds until 3:00 AM.
-     */
     private fun calculateDelayUntil3AM(): Long {
         return calculateDelayUntilTime(LocalTime.of(3, 0))
     }
     
-    /**
-     * Calculates delay in milliseconds until specified time.
-     */
     private fun calculateDelayUntilTime(targetTime: LocalTime): Long {
         val now = LocalDateTime.now()
         var target = now.withHour(targetTime.hour).withMinute(targetTime.minute).withSecond(0)
@@ -669,9 +623,6 @@ class WorkScheduler @Inject constructor(
         android.util.Log.d(TAG, "✅ Deferred service start scheduled (will run in ~5 seconds)")
     }
 
-    /**
-     * Stops the WallpaperMonitorService.
-     */
     private fun stopWallpaperMonitorService() {
         try {
             val intent = Intent(context, me.avinas.vanderwaals.service.WallpaperMonitorService::class.java)
@@ -683,58 +634,27 @@ class WorkScheduler @Inject constructor(
     }
 }
 
-/**
- * Enum representing wallpaper change intervals.
- */
 enum class ChangeInterval(val displayName: String) {
     /**
-     * Change wallpaper on every unlock.
      * Relies on DeviceUnlockReceiver.
      */
     EVERY_UNLOCK("Every Unlock"),
     
-    /**
-     * Change wallpaper every hour.
-     */
     HOURLY("Hourly"),
 
-    /**
-     * Change wallpaper every 3 hours.
-     */
     THREE_HOURS("3 Hours"),
 
-    /**
-     * Change wallpaper every 6 hours.
-     */
     SIX_HOURS("6 Hours"),
 
-    /**
-     * Change wallpaper every 12 hours.
-     */
     TWELVE_HOURS("12 Hours"),
 
-    /**
-     * Change wallpaper every 15 minutes.
-     */
     FIFTEEN_MINUTES("15 Minutes"),
     
-    /**
-     * Change wallpaper once per day at specific time.
-     */
     DAILY("Daily"),
     
-    /**
-     * Change wallpaper every 3 days.
-     */
     THREE_DAYS("3 Days"),
     
-    /**
-     * Change wallpaper every 7 days.
-     */
     SEVEN_DAYS("7 Days"),
     
-    /**
-     * Never change wallpaper automatically.
-     */
     NEVER("Never")
 }

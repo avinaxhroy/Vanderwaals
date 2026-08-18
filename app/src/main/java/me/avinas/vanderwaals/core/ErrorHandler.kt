@@ -15,22 +15,13 @@ object ErrorHandler {
     
     private const val TAG = "ErrorHandler"
     
-    // Maximum retry attempts before giving up
     private const val MAX_RETRY_ATTEMPTS = 3
     
-    // Initial backoff delay (will be multiplied exponentially)
+    // Initial backoff delay, multiplied exponentially per retry.
     private const val INITIAL_BACKOFF_MS = 10_000L // 10 seconds
     
-    // Backoff multiplier for exponential backoff
     private const val BACKOFF_MULTIPLIER = 2.0f
     
-    /**
-     * Classifies an exception into a VanderwaalsError for consistent handling.
-     * 
-     * @param exception The caught exception
-     * @param context Description of where error occurred (e.g., "WallpaperDownload", "DatabaseQuery")
-     * @return Classified error type
-     */
     fun classify(exception: Throwable, context: String): VanderwaalsError {
         return when (exception) {
             // Network errors
@@ -97,18 +88,10 @@ object ErrorHandler {
         }
     }
     
-    /**
-     * Determines the appropriate recovery action based on error type and attempt count.
-     * 
-     * @param error The classified error
-     * @param attemptCount Current retry attempt (0 for first failure)
-     * @return Recovery action to take
-     */
     fun determineRecoveryAction(
         error: VanderwaalsError,
         attemptCount: Int
     ): ErrorRecoveryAction {
-        // Always fail if max retries exceeded
         if (attemptCount >= MAX_RETRY_ATTEMPTS) {
             return ErrorRecoveryAction.Fail(reason = "Max retry attempts ($MAX_RETRY_ATTEMPTS) exceeded")
         }
@@ -168,25 +151,12 @@ object ErrorHandler {
         }
     }
     
-    /**
-     * Calculates exponential backoff delay.
-     * 
-     * @param attemptCount Current retry attempt (0-indexed)
-     * @return Delay in milliseconds
-     */
     fun calculateBackoffDelay(attemptCount: Int): Long {
         // Formula: INITIAL_BACKOFF_MS * (BACKOFF_MULTIPLIER ^ attemptCount)
         // Example: 10s, 20s, 40s for attempts 0, 1, 2
         return (INITIAL_BACKOFF_MS * Math.pow(BACKOFF_MULTIPLIER.toDouble(), attemptCount.toDouble())).toLong()
     }
     
-    /**
-     * Logs error with structured context for debugging.
-     * 
-     * @param error The error to log
-     * @param context Description of where error occurred
-     * @param metadata Additional contextual information
-     */
     fun logError(
         error: VanderwaalsError,
         context: String,
@@ -214,13 +184,6 @@ object ErrorHandler {
         )
     }
     
-    /**
-     * Checks if an error should trigger a retry based on its type and attempt count.
-     * 
-     * @param error The error to check
-     * @param attemptCount Current retry attempt
-     * @return true if should retry, false otherwise
-     */
     fun shouldRetry(error: VanderwaalsError, attemptCount: Int): Boolean {
         if (attemptCount >= MAX_RETRY_ATTEMPTS) return false
         
@@ -234,17 +197,6 @@ object ErrorHandler {
         }
     }
     
-    /**
-     * Handles worker errors with classification and recovery logic.
-     * 
-     * Simplifies error handling in Worker.doWork() implementations.
-     * 
-     * @param exception The caught exception
-     * @param context Description of worker operation
-     * @param attemptCount Current retry attempt count
-     * @param metadata Additional context for logging
-     * @return Pair of (VanderwaalsError, ErrorRecoveryAction)
-     */
     fun handleWorkerError(
         exception: Throwable,
         context: String,
@@ -257,16 +209,7 @@ object ErrorHandler {
         return Pair(error, action)
     }
     
-    /**
-     * Creates standardized Worker output data for errors.
-     * 
-     * Provides consistent error information across all workers for UI/monitoring.
-     * 
-     * @param error The classified error
-     * @param attemptCount Current retry attempt count
-     * @param additionalData Extra data to include in output
-     * @return WorkData map for Worker.Result
-     */
+    /** Worker output data for errors, shared across workers for UI/monitoring. */
     fun createWorkDataForError(
         error: VanderwaalsError,
         attemptCount: Int,

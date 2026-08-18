@@ -44,12 +44,7 @@ object NetworkModule {
     
     /**
      * Base URL for jsDelivr CDN (primary).
-     * 
-     * Benefits:
-     * - Faster global delivery
-     * - No rate limits
-     * - Free forever
-     * 
+     *
      * Format: `https://cdn.jsdelivr.net/gh/{owner}/{repo}@{branch}/`
      */
     private const val JSDELIVR_BASE_URL = "https://cdn.jsdelivr.net/gh/avinaxhroy/Vanderwaals@main/"
@@ -62,9 +57,7 @@ object NetworkModule {
     private const val GITHUB_RAW_BASE_URL = "https://raw.githubusercontent.com/avinaxhroy/Vanderwaals/main/"
 
     /**
-     * Path to manifest file in repository.
-     * 
-     * This path is appended to the base URL to construct the full manifest URL.
+     * Path to the manifest file in the repository.
      */
     private const val MANIFEST_PATH = "app/src/main/assets/manifest.json"
     
@@ -85,9 +78,8 @@ object NetworkModule {
      * This is the max inactivity between read calls (not total download time),
      * so a slow-but-progressing download still succeeds; only a stalled
      * connection fails. 60s is plenty for the ~10-15MB manifest and UHD images,
-     * and ensures the onboarding sync surfaces an actionable error/retry state
-     * quickly instead of hanging for minutes (which triggers Google Play's
-     * "unresponsive app" Broken Functionality rejection).
+     * and keeps the onboarding sync from hanging for minutes (which triggers
+     * Google Play's "unresponsive app" Broken Functionality rejection).
      */
     private const val READ_TIMEOUT = 60L
     
@@ -96,33 +88,16 @@ object NetworkModule {
      */
     private const val WRITE_TIMEOUT = 60L
     
-    /**
-     * Provides jsDelivr CDN base URL.
-     */
     @Provides
     @Singleton
     @JsDelivrBaseUrl
     fun provideJsDelivrBaseUrl(): String = JSDELIVR_BASE_URL
     
-    /**
-     * Provides GitHub raw base URL (fallback).
-     */
     @Provides
     @Singleton
     @GitHubRawBaseUrl
     fun provideGitHubRawBaseUrl(): String = GITHUB_RAW_BASE_URL
     
-    /**
-     * Provides manifest URL based on build configuration.
-     * 
-     * - Debug builds with USE_LOCAL_MANIFEST=true: Use local manifest from assets (for testing)
-     * - Release builds: Use GitHub raw content URL (no 50MB size limit like jsDelivr)
-     * 
-     * This allows developers to test with local data while production
-     * builds automatically fetch the latest curated manifest from GitHub.
-     * 
-     * @return Full URL to manifest.json
-     */
     @Provides
     @Singleton
     fun provideManifestUrl(@GitHubRawBaseUrl githubRawUrl: String): String {
@@ -135,15 +110,6 @@ object NetworkModule {
         }
     }
     
-    /**
-     * Provides HTTP cache directory.
-     * 
-     * Creates a cache directory in the app's cache folder for
-     * storing HTTP responses (manifest, thumbnails).
-     * 
-     * @param context Application context
-     * @return Cache file directory
-     */
     @Provides
     @Singleton
     fun provideHttpCacheDir(@ApplicationContext context: Context): File {
@@ -151,13 +117,8 @@ object NetworkModule {
     }
     
     /**
-     * Provides HTTP cache for OkHttp.
-     * 
-     * Enables offline access to previously downloaded manifest.
-     * Cache is automatically managed by OkHttp based on response headers.
-     * 
-     * @param cacheDir Cache directory
-     * @return Configured cache instance
+     * Enables offline access to previously downloaded manifests; cache
+     * eviction is handled by OkHttp based on response headers.
      */
     @Provides
     @Singleton
@@ -165,13 +126,6 @@ object NetworkModule {
         return Cache(cacheDir, CACHE_SIZE)
     }
     
-    /**
-     * Provides Gson for JSON serialization/deserialization.
-     * 
-     * Configured with lenient parsing for robustness.
-     * 
-     * @return Configured Gson instance
-     */
     @Provides
     @Singleton
     fun provideGson(): Gson {
@@ -180,18 +134,9 @@ object NetworkModule {
     }
     
     /**
-     * Provides HTTP logging interceptor.
-     * 
-     * Logs HTTP requests and responses in debug builds only.
-     * Level:
-     * - Debug: HEADERS (request/response headers only, no body to prevent OOM)
-     * - Release: NONE (no logging for production)
-     * 
-     * Note: Using HEADERS instead of BODY to prevent OutOfMemoryError when downloading
-     * large files (e.g., 65MB manifest). BODY level tries to load entire response into
-     * memory as a String, which can exceed heap limits.
-     * 
-     * @return Configured logging interceptor
+     * HEADERS level avoids loading the response body into memory as a
+     * String — BODY would exceed heap limits on large downloads (e.g. the
+     * ~65 MB manifest).
      */
     @Provides
     @Singleton
@@ -211,12 +156,6 @@ object NetworkModule {
         }
     }
     
-    /**
-     * Provides download progress interceptor for tracking real-time download progress.
-     * 
-     * @param downloadProgressManager Manager for tracking download state
-     * @return Progress tracking interceptor
-     */
     @Provides
     @Singleton
     fun provideDownloadProgressInterceptor(
@@ -227,23 +166,6 @@ object NetworkModule {
         }
     }
     
-    /**
-     * Provides configured OkHttpClient.
-     * 
-     * Configuration:
-     * - Connection timeout: 30 seconds
-     * - Read timeout: 5 minutes (large manifest file ~65MB)
-     * - Write timeout: 60 seconds
-     * - HTTP cache: 10 MB for offline access
-     * - Download progress tracking: Real-time bytes downloaded
-     * - Logging: Full body in debug, none in release
-     * - Connection pooling: Default (5 connections)
-     * 
-     * @param cache HTTP cache
-     * @param loggingInterceptor Logging interceptor
-     * @param downloadProgressInterceptor Progress tracking interceptor
-     * @return Configured OkHttp client
-     */
     /**
      * User-Agent interceptor to bypass Cloudflare bot detection.
      * 
@@ -288,8 +210,8 @@ object NetworkModule {
             .readTimeout(READ_TIMEOUT, TimeUnit.SECONDS)
             .writeTimeout(WRITE_TIMEOUT, TimeUnit.SECONDS)
             .cache(cache)
-            .addInterceptor(userAgentInterceptor) // CRITICAL: Must come first to set headers before other interceptors
-            .addNetworkInterceptor(downloadProgressInterceptor) // Track download progress
+            .addInterceptor(userAgentInterceptor)
+            .addNetworkInterceptor(downloadProgressInterceptor)
             .addInterceptor(loggingInterceptor)
             .build()
     }
@@ -297,17 +219,7 @@ object NetworkModule {
 
     
     /**
-     * Provides Retrofit instance configured for manifest downloads.
-     * 
-     * Uses GitHub raw content URL as base URL for:
-     * - No size limits (jsDelivr has 50MB limit)
-     * - Direct GitHub CDN delivery
-     * - Reliable for large repositories
-     * 
-     * @param okHttpClient Configured OkHttp client
-     * @param gson Gson for JSON parsing
-     * @param baseUrl GitHub raw base URL
-     * @return Configured Retrofit instance
+     * Uses GitHub raw content as base URL (avoids jsDelivr's 50 MB size limit).
      */
     @Provides
     @Singleton
@@ -323,15 +235,6 @@ object NetworkModule {
             .build()
     }
     
-    /**
-     * Provides ManifestService from Retrofit.
-     * 
-     * Creates a Retrofit implementation of the ManifestService interface
-     * for downloading the wallpaper manifest.
-     * 
-     * @param retrofit Configured Retrofit instance
-     * @return ManifestService implementation
-     */
     @Provides
     @Singleton
     fun provideManifestService(retrofit: Retrofit): ManifestService {
@@ -339,13 +242,8 @@ object NetworkModule {
     }
     
     /**
-     * Provides BingApiService for fetching Bing daily wallpapers.
-     * 
-     * Separate Retrofit instance for Bing API (different base URL).
-     * 
-     * @param okHttpClient Configured OkHttp client
-     * @param gson Gson for JSON parsing
-     * @return BingApiService implementation
+     * Separate Retrofit instance — the Bing API uses a different base URL
+     * from the GitHub manifest client.
      */
     @Provides
     @Singleton
@@ -363,17 +261,10 @@ object NetworkModule {
     }
 
     /**
-     * Provides VanderwaalsCollectionService for fetching the Vanderwaals
-     * Collection wallpaper manifest.
-     *
      * Separate Retrofit instance for the dedicated Vanderwaals API
-     * (`https://vanderwaalsapi.2626688.xyz/`), which serves the app's own
-     * curated wallpaper catalog (`cat/lite.json`, `cat/full.json`) in the
-     * same ManifestDto format used by the GitHub and Bing sources.
-     *
-     * @param okHttpClient Configured OkHttp client
-     * @param gson Gson for JSON parsing
-     * @return VanderwaalsCollectionService implementation
+     * (`https://vanderwaalsapi.2626688.xyz/`), which serves the curated
+     * wallpaper catalog (`cat/lite.json`, `cat/full.json`) in the same
+     * ManifestDto format used by the GitHub and Bing sources.
      */
     @Provides
     @Singleton
@@ -391,35 +282,13 @@ object NetworkModule {
     }
     
     /**
-     * Provides BingArchiveService for fetching wallpapers from Bing Wallpaper Archive.
-     * 
-     * Uses npanuhin's official API endpoints at bing.npanuhin.me for accessing
-     * 10,000+ historical Bing wallpapers per region (Tier 2 content).
-     * 
-     * **Archive Details**:
-     * - Repository: https://github.com/npanuhin/Bing-Wallpaper-Archive
-     * - API Base: https://bing.npanuhin.me/
-     * - API Format: {country}/{language}.json (e.g., US/en.json, ROW/en.json)
-     * - Year Format: {country}/{language}.{year}.json (e.g., US/en.2024.json)
-     * - Wallpapers: 10,000+ per region in UHD (3840×2160)
-     * - Multi-region: US, GB, CA, FR, DE, IT, ES, IN, CN, JP, BR, ROW
-     * - Updated: Daily via automated GitHub Actions workflow
-     * 
-     * **Endpoints**:
-     * 1. Daily wallpaper API: https://www.bing.com/HPImageArchive.aspx (Bing's official API)
-     * 2. Full archive: https://bing.npanuhin.me/{country}/{language}.json (2-5 MB per region)
-     * 3. Year-based archive: https://bing.npanuhin.me/{country}/{language}.{year}.json (100-500 KB)
-     * 
-     * **Benefits of npanuhin's API**:
-     * - Direct access without CDN delays
-     * - Year-based APIs for bandwidth efficiency
-     * - Complete metadata (title, caption, subtitle, description, copyright)
-     * - Multiple regions and languages
-     * - Daily automated updates
-     * 
-     * @param okHttpClient Configured OkHttp client with timeouts
-     * @param gson Gson for JSON parsing
-     * @return BingArchiveService implementation with multi-endpoint support
+     * Wallpapers from Bing's official daily API and npanuhin's Bing
+     * Wallpaper Archive (bing.npanuhin.me, 10,000+ historical wallpapers
+     * per region).
+     *
+     * Archive endpoints: `{country}/{language}.json` (full) and
+     * `{country}/{language}.{year}.json` (per-year); e.g. US/en.json,
+     * US/en.2024.json. Regions: US, GB, CA, FR, DE, IT, ES, IN, CN, JP, BR, ROW.
      */
     @Provides
     @Singleton

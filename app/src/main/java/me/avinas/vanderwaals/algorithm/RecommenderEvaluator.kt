@@ -22,39 +22,11 @@ import kotlin.math.min
  * be run in plain JVM unit tests or from an offline analysis script.  The ranking logic is
  * injected as a lambda ([rankFn]) so any version of the algorithm can be evaluated without
  * changing this class.
- *
- * ## Usage
- * ```kotlin
- * val events: List<FeedbackEvent> = buildEventsFromHistory(historyDao, preferencesDao)
- * val result = RecommenderEvaluator().evaluate(
- *     events     = events,
- *     candidates = allWallpapers,
- *     idFn       = { it.id },
- *     rankFn     = { prefVec, pool ->
- *         pool.sortedByDescending { similarityCalculator.calculateSimilarity(prefVec, it.embedding) }
- *     },
- *     k          = 10
- * )
- * Log.d("Eval", result.summary())
- * ```
  */
 class RecommenderEvaluator {
 
-    // ─────────────────────────────────────────────────────────────────────────
     // Data types
-    // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * A single feedback event replayed during evaluation.
-     *
-     * @property wallpaperId           ID of the wallpaper that was shown.
-     * @property liked                 True if the user explicitly liked this wallpaper.
-     * @property timestampMs           Wall-clock time when the wallpaper was applied (epoch ms).
-     * @property preferenceVectorAtTime Snapshot of the preference vector active at the time of
-     *                                 selection.  Supply an empty array for cold-start events.
-     * @property candidatePool         IDs available at selection time.  If empty the evaluator
-     *                                 uses the full [candidates] list passed to [evaluate].
-     */
     data class FeedbackEvent(
         val wallpaperId: String,
         val liked: Boolean,
@@ -82,16 +54,6 @@ class RecommenderEvaluator {
         }
     }
 
-    /**
-     * Aggregated result of an offline evaluation run.
-     *
-     * @property hitRateAtK      Fraction of liked events where the item was in the top-k.
-     * @property ndcgAtK         Mean nDCG@k across all liked events (higher = better ranking).
-     * @property precisionAtK    Mean Precision@k across all liked events.
-     * @property k               Rank cut-off used for all three metrics.
-     * @property likedEventCount Number of liked events that contributed to the metrics.
-     * @property totalEventCount Total events in the replay sequence (liked + non-liked).
-     */
     data class EvaluationResult(
         val hitRateAtK: Float,
         val ndcgAtK: Float,
@@ -114,9 +76,7 @@ class RecommenderEvaluator {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
     // Core evaluation
-    // ─────────────────────────────────────────────────────────────────────────
 
     /**
      * Evaluates the recommendation algorithm by replaying [events] and measuring how well
@@ -154,10 +114,8 @@ class RecommenderEvaluator {
         var likedEvents  = 0
 
         events.forEach { event ->
-            // Only liked events contribute to metrics
             if (!event.liked) return@forEach
 
-            // Determine the candidate pool for this event
             val pool: List<W> = if (event.candidatePool.isNotEmpty()) {
                 event.candidatePool.mapNotNull { candidateById[it] }
             } else {
@@ -170,10 +128,10 @@ class RecommenderEvaluator {
             val topK     = ranked.take(k)
             val topKIds  = topK.map(idFn).toSet()
 
-            // ── Hit Rate @ k ────────────────────────────────────────────────
+            // Hit Rate @ k
             if (event.wallpaperId in topKIds) hitCount++
 
-            // ── nDCG @ k ────────────────────────────────────────────────────
+            // nDCG @ k
             // Single-relevant-item nDCG: DCG / IDCG where IDCG = 1/log2(2) = 1.0 (item at pos 1)
             val rank = ranked.indexOfFirst { idFn(it) == event.wallpaperId }
             if (rank in 0 until k) {
@@ -183,7 +141,7 @@ class RecommenderEvaluator {
                 ndcgSum += dcg / idcg
             }
 
-            // ── Precision @ k ───────────────────────────────────────────────
+            // Precision @ k
             val likedInTopK = topKIds.count { it == event.wallpaperId }
             precisionSum += likedInTopK.toDouble() / min(k, pool.size)
 
@@ -204,9 +162,7 @@ class RecommenderEvaluator {
         )
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
     // Convenience factory — builds FeedbackEvents from parallel lists
-    // ─────────────────────────────────────────────────────────────────────────
 
     /**
      * Builds a list of [FeedbackEvent]s from parallel history arrays.

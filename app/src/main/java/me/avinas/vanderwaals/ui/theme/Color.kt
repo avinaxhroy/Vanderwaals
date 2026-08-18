@@ -3,40 +3,60 @@ package me.avinas.vanderwaals.ui.theme
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
-// ===== VANDERWAALS PREMIUM DESIGN SYSTEM =====
-// A sophisticated, modern color palette with rich dark and clean light modes
+// primary brand colors
+val CyberMagenta = Color(0xFFFF2A85)
+val CyberMagentaDark = Color(0xFFE11D48)
+val CyberMagentaDeep = Color(0xFF9F1239)
+val CyberMagentaLight = Color(0xFFFDA4AF)
+val CyberMagentaMuted = Color(0xFFFECDD3)
 
-// === PRIMARY BRAND COLORS - Electric Blue Spectrum ===
-val BrandPrimary = Color(0xFF3B82F6) // Vibrant blue - main brand
-val BrandPrimaryDark = Color(0xFF2563EB) // Deeper blue for dark mode
-val BrandPrimaryLight = Color(0xFF60A5FA) // Lighter blue for highlights
-val BrandPrimaryMuted = Color(0xFF93C5FD) // Muted blue for secondary elements
-val BrandAccent = Color(0xFF8B5CF6) // Violet accent for contrast
-val BrandAccentLight = Color(0xFFA78BFA) // Lighter violet
+val BrandPrimary = CyberMagenta
+val BrandPrimaryDark = CyberMagentaDark
+val BrandPrimaryLight = CyberMagentaLight
+val BrandPrimaryMuted = CyberMagentaMuted
+val BrandAccent = CyberMagenta
+val BrandAccentLight = CyberMagentaLight
+val BrandAccentDark = CyberMagentaDark
 
-// === GRADIENT DEFINITIONS ===
+val GradientMagenta = Brush.horizontalGradient(
+    colors = listOf(CyberMagenta, CyberMagentaDark)
+)
+
+val GradientMagentaVertical = Brush.verticalGradient(
+    colors = listOf(CyberMagenta, CyberMagentaDark)
+)
+val GradientAmber = Brush.horizontalGradient(
+    colors = listOf(Color(0xFFF59E0B), Color(0xFFD97706))
+)
+val GradientAmberVertical = Brush.verticalGradient(
+    colors = listOf(Color(0xFFF59E0B), Color(0xFFD97706))
+)
+val SolarAmber = Color(0xFFF59E0B)
+val SolarAmberDark = Color(0xFFD97706)
+
+// subtle tonal gradients
 val GradientPrimary = Brush.horizontalGradient(
-    colors = listOf(BrandPrimary, BrandAccent)
+    colors = listOf(BrandPrimary, BrandPrimaryDark)
 )
 
 val GradientPrimaryVertical = Brush.verticalGradient(
-    colors = listOf(BrandPrimary, BrandAccent)
+    colors = listOf(BrandPrimary, BrandPrimaryDark)
 )
 
 val GradientSubtle = Brush.horizontalGradient(
-    colors = listOf(BrandPrimary.copy(alpha = 0.8f), BrandPrimaryLight)
+    colors = listOf(BrandPrimary.copy(alpha = 0.9f), BrandPrimaryLight)
 )
 
 val GradientHero = Brush.linearGradient(
-    colors = listOf(BrandPrimary, BrandAccent, Color(0xFFEC4899))
+    colors = listOf(BrandPrimary, BrandPrimaryDark)
 )
 
-// === PREMIUM ONBOARDING GRADIENTS ===
+// onboarding ambient gradients
 val GradientOnboardingPrimary = Brush.verticalGradient(
     colors = listOf(
-        Color(0xFF030712),
-        Color(0xFF0A0F1A),
-        Color(0xFF050810)
+        Color(0xFF0C0F14),
+        Color(0xFF111722),
+        Color(0xFF0C0F14)
     )
 )
 
@@ -50,8 +70,8 @@ val GradientOnboardingSecondary = Brush.verticalGradient(
 
 val GradientCardDark = Brush.linearGradient(
     colors = listOf(
-        Color(0xFF18181B),
-        Color(0xFF0F0F12)
+        Color(0xFF161B22),
+        Color(0xFF0F141C)
     )
 )
 
@@ -63,18 +83,18 @@ val GradientCardLight = Brush.linearGradient(
 )
 
 val GradientButtonPrimary = Brush.horizontalGradient(
-    colors = listOf(BrandPrimary, BrandAccent)
+    colors = listOf(BrandPrimary, BrandPrimaryDark)
 )
 
 val GradientButtonSecondary = Brush.horizontalGradient(
-    colors = listOf(BrandAccent, Color(0xFFEC4899))
+    colors = listOf(BrandPrimaryDark, BrandPrimary)
 )
 
 val GradientOverlayDark = Brush.verticalGradient(
     colors = listOf(
         Color.Transparent,
-        Color(0xCC030712),
-        Color(0xFF030712)
+        Color(0xCC0C0F14),
+        Color(0xFF0C0F14)
     )
 )
 
@@ -86,26 +106,7 @@ val GradientOverlayLight = Brush.verticalGradient(
     )
 )
 
-// === GLOW EFFECTS ===
-val GlowPrimaryLarge = Brush.radialGradient(
-    colors = listOf(
-        BrandPrimary.copy(alpha = 0.3f),
-        BrandPrimary.copy(alpha = 0.1f),
-        Color.Transparent
-    )
-)
-
-val GlowAccentLarge = Brush.radialGradient(
-    colors = listOf(
-        BrandAccent.copy(alpha = 0.25f),
-        BrandAccent.copy(alpha = 0.08f),
-        Color.Transparent
-    )
-)
-
-// === NEUTRAL PALETTE - Dark Mode ===
-
-// === NEUTRAL PALETTE - Dark Mode ===
+// neutral palette
 val Neutral50 = Color(0xFFFAFAFA)
 val Neutral100 = Color(0xFFF5F5F5)
 val Neutral200 = Color(0xFFE5E5E5)
@@ -118,92 +119,90 @@ val Neutral800 = Color(0xFF262626)
 val Neutral900 = Color(0xFF171717)
 val Neutral950 = Color(0xFF0A0A0B)
 
-// === DARK THEME BACKGROUND HIERARCHY ===
-val BackgroundDark = Color(0xFF09090B) // Near pure black
-val SurfaceDark = Color(0xFF111113) // Primary surface
-val SurfaceElevatedDark = Color(0xFF18181B) // Elevated cards
-val SurfaceOverlayDark = Color(0xFF27272A) // Modals, dialogs
-val SurfaceHighlightDark = Color(0xFF3F3F46) // Interactive states
+// dark theme backgrounds
+val BackgroundDark = Color(0xFF0E1117)
+val SurfaceDark = Color(0xFF161B22)
+val SurfaceElevatedDark = Color(0xFF1F242C)
+val SurfaceOverlayDark = Color(0xFF282E38)
+val SurfaceHighlightDark = Color(0xFF373E4B)
 
-// === DARK THEME TEXT COLORS ===
-val TextPrimaryDark = Color(0xFFFAFAFA) // Primary text
-val TextSecondaryDark = Color(0xFFA1A1AA) // Secondary text
-val TextTertiaryDark = Color(0xFF71717A) // Tertiary/disabled
-val TextInverseDark = Color(0xFF09090B) // Text on light surfaces
+// dark theme text
+val TextPrimaryDark = Color(0xFFF0F6FC)
+val TextSecondaryDark = Color(0xFF8B949E)
+val TextTertiaryDark = Color(0xFF6E7681)
+val TextInverseDark = Color(0xFF0E1117)
 
-// === DARK THEME BORDERS & DIVIDERS ===
-val BorderDark = Color(0xFF27272A)
-val BorderSubtleDark = Color(0xFF1F1F23)
-val DividerDark = Color(0xFF27272A)
+// dark theme borders
+val BorderDark = Color(0xFF30363D)
+val BorderSubtleDark = Color(0xFF21262D)
+val DividerDark = Color(0xFF21262D)
 
-// === LIGHT THEME BACKGROUND HIERARCHY ===
-val BackgroundLight = Color(0xFFFAFAFA) // Warm off-white
-val SurfaceLight = Color(0xFFFFFFFF) // Pure white cards
-val SurfaceElevatedLight = Color(0xFFFFFFFF) // Elevated surfaces
-val SurfaceOverlayLight = Color(0xFFF5F5F5) // Subtle backgrounds
-val SurfaceHighlightLight = Color(0xFFE5E5E5) // Interactive states
+// light theme backgrounds
+val BackgroundLight = Color(0xFFF6F8FA)
+val SurfaceLight = Color(0xFFFFFFFF)
+val SurfaceElevatedLight = Color(0xFFFFFFFF)
+val SurfaceOverlayLight = Color(0xFFF0F2F5)
+val SurfaceHighlightLight = Color(0xFFE1E4E8)
 
-// === LIGHT THEME TEXT COLORS ===
-val TextPrimaryLight = Color(0xFF0A0A0B) // Near black
-val TextSecondaryLight = Color(0xFF525252) // Medium gray
-val TextTertiaryLight = Color(0xFF737373) // Lighter gray
-val TextInverseLight = Color(0xFFFAFAFA) // Text on dark surfaces
+// light theme text
+val TextPrimaryLight = Color(0xFF1F2328)
+val TextSecondaryLight = Color(0xFF656D76)
+val TextTertiaryLight = Color(0xFF8C959F)
+val TextInverseLight = Color(0xFFF0F6FC)
 
-// === LIGHT THEME BORDERS & DIVIDERS ===
-val BorderLight = Color(0xFFE5E5E5)
-val BorderSubtleLight = Color(0xFFF0F0F0)
-val DividerLight = Color(0xFFE5E5E5)
+// light theme borders
+val BorderLight = Color(0xFFD0D7DE)
+val BorderSubtleLight = Color(0xFFE1E4E8)
+val DividerLight = Color(0xFFD0D7DE)
 
-// === STATE COLORS - Universal ===
-val SuccessColor = Color(0xFF22C55E) // Green
-val SuccessContainer = Color(0xFF22C55E).copy(alpha = 0.1f)
-val ErrorColor = Color(0xFFEF4444) // Red
-val ErrorContainer = Color(0xFFEF4444).copy(alpha = 0.1f)
-val WarningColor = Color(0xFFF59E0B) // Amber
-val WarningContainer = Color(0xFFF59E0B).copy(alpha = 0.1f)
-val InfoColor = Color(0xFF3B82F6) // Blue
-val InfoContainer = Color(0xFF3B82F6).copy(alpha = 0.1f)
+// state colors
+val SuccessColor = Color(0xFF16A34A)
+val SuccessContainer = Color(0xFF16A34A).copy(alpha = 0.1f)
+val ErrorColor = Color(0xFFDC2626)
+val ErrorContainer = Color(0xFFDC2626).copy(alpha = 0.1f)
+val WarningColor = Color(0xFFD97706)
+val WarningContainer = Color(0xFFD97706).copy(alpha = 0.1f)
+val InfoColor = Color(0xFF38BDF8)
+val InfoContainer = Color(0xFF38BDF8).copy(alpha = 0.1f)
 
-// === INTERACTIVE COLORS ===
+// interactive colors
 val InteractiveHover = BrandPrimary.copy(alpha = 0.08f)
 val InteractivePressed = BrandPrimary.copy(alpha = 0.12f)
 val RippleColor = Color(0x1A000000)
 
-// === OVERLAY & SCRIM COLORS ===
+// overlays and scrims
 val ScrimDark = Color(0x99000000)
 val ScrimLight = Color(0x99FFFFFF)
 val OverlayDark = Color(0xCC000000)
 
-// === CARD BACKGROUNDS ===
+// card backgrounds
 val CardBackgroundDark = SurfaceElevatedDark
 val CardBackgroundLight = SurfaceLight
 val CardBorderDark = BorderDark
 val CardBorderLight = BorderLight
 
-// === INPUT BACKGROUNDS ===
+// input backgrounds
 val InputBackgroundDark = SurfaceDark
 val InputBackgroundLight = BackgroundLight
 val InputBorderDark = BorderDark
 val InputBorderLight = BorderLight
 val InputBorderFocused = BrandPrimary
 
-// === GLOW & SHADOW EFFECTS ===
-val GlowPrimary = BrandPrimary.copy(alpha = 0.3f)
-val GlowAccent = BrandAccent.copy(alpha = 0.3f)
+// elevation shadows
 val ShadowDark = Color(0x40000000)
 val ShadowLight = Color(0x0A000000)
 
-// === LUXE ONBOARDING COLORS ===
-val LuxeBackground = Color(0xFF1A1A1A) // Warm dark background
-val LuxeCardBackground = Color.White.copy(alpha = 0.06f) // Frosted glass
-val LuxeCardBorder = Color.White.copy(alpha = 0.1f) // Glass edge
-val LuxeTextPrimary = Color(0xFFF5F5F5) // Warm white text
-val LuxeTextSecondary = Color(0xFFB0B0B0) // Muted secondary text
-val LuxeGradientStart = Color(0xFF2D1B00) // Warm amber-dark
-val LuxeGradientMid = Color(0xFF1A1A2E) // Deep indigo
-val LuxeGradientEnd = Color(0xFF1A1A1A) // Warm dark
+// onboarding colors
+val LuxeBackground = Color(0xFF12151B)
+val LuxeCardBackground = Color.White.copy(alpha = 0.05f)
+val LuxeCardBorder = Color.White.copy(alpha = 0.08f)
+val LuxeTextPrimary = Color(0xFFF0F6FC)
+val LuxeTextSecondary = Color(0xFF9BA3AF)
+val LuxeGradientStart = Color(0xFF161B22)
+val LuxeGradientMid = Color(0xFF1F242C)
+val LuxeGradientEnd = Color(0xFF12151B)
 
-// === LEGACY COMPATIBILITY (for existing code references) ===
+// compatibility bindings
 val VanderwaalsTan = BrandPrimary
 val VanderwaalsTanDark = BrandPrimaryDark
 val VanderwaalsTanLight = BrandPrimaryLight
@@ -246,12 +245,12 @@ val SurfaceGlassHighlightLight = SurfaceHighlightLight
 val TextPrimary = TextPrimaryDark
 val TextSecondary = TextSecondaryDark
 val TextTertiary = TextTertiaryDark
-val BorderGlow = BrandPrimary
+val BorderGlow = BorderDark
 val DividerSubtle = DividerDark.copy(alpha = 0.5f)
-val FeedbackLike = Color(0xFFEC4899)
-val FeedbackDislike = BrandPrimary
-val FeedbackDownload = SuccessColor
-val FeedbackShare = BrandAccent
+val FeedbackLike = CyberMagenta
+val FeedbackDislike = Color(0xFF64748B)
+val FeedbackDownload = Color(0xFF10B981)
+val FeedbackShare = BrandPrimary
 val InteractiveHover1 = InteractiveHover
 val InteractivePressed1 = InteractivePressed
 val ShimmerColor = SurfaceElevatedDark
@@ -266,8 +265,12 @@ val InputBorderFocused1 = InputBorderFocused
 val InputBorderError = ErrorColor
 val BackgroundGradient = Brush.verticalGradient(listOf(BackgroundDark, SurfaceDark, BackgroundDark))
 val BackgroundGradientTan = GradientPrimaryVertical
-val GlowTan = GlowPrimary
-val GlowAccent1 = GlowAccent
+val GlowTan = BrandPrimary.copy(alpha = 0.1f)
+val GlowAccent1 = BrandAccent.copy(alpha = 0.1f)
+val GlowPrimary = BrandPrimary.copy(alpha = 0.1f)
+val GlowAccent = BrandAccent.copy(alpha = 0.1f)
+val GlowPrimaryLarge = Brush.radialGradient(listOf(Color.Transparent, Color.Transparent))
+val GlowAccentLarge = Brush.radialGradient(listOf(Color.Transparent, Color.Transparent))
 val ShadowColor = ShadowDark
 val BorderHighlight = SurfaceHighlightDark
 val BorderHighlightLight = SurfaceHighlightLight
@@ -283,20 +286,20 @@ val SurfaceTransparentLight = Color.Transparent
 val GradientAccent = GradientPrimary
 val GradientVertical = GradientPrimaryVertical
 val GradientRadial = Brush.radialGradient(listOf(BrandPrimaryLight, BrandPrimary, BrandPrimaryDark))
-val GradientSunset = GradientHero
-val GradientFusion = GradientHero
+val GradientSunset = GradientPrimary
+val GradientFusion = GradientPrimary
 val GradientFusionLight = GradientPrimary
 val GradientPrimaryLight = Brush.horizontalGradient(listOf(BrandPrimaryDark, BrandPrimary))
 val GradientVerticalLight = Brush.verticalGradient(listOf(BrandPrimaryDark, BrandPrimary))
-val CinematicBlue = BrandPrimary.copy(alpha = 0.3f)
-val CinematicTeal = BrandAccent.copy(alpha = 0.3f)
-val CinematicPurple = BrandAccent
-val CinematicRose = Color(0xFFEC4899).copy(alpha = 0.3f)
-val CinematicRoseMuted = Color(0xFFEC4899).copy(alpha = 0.2f)
+val CinematicBlue = BrandPrimary.copy(alpha = 0.15f)
+val CinematicTeal = BrandAccent.copy(alpha = 0.15f)
+val CinematicPurple = BrandPrimary.copy(alpha = 0.15f)
+val CinematicRose = Color(0xFF64748B).copy(alpha = 0.15f)
+val CinematicRoseMuted = Color(0xFF64748B).copy(alpha = 0.1f)
 val DarkBackground = BackgroundDark
-val AiryBlue = BrandPrimaryLight.copy(alpha = 0.3f)
-val AiryPurple = BrandAccentLight.copy(alpha = 0.3f)
-val AiryTeal = SuccessColor.copy(alpha = 0.3f)
-val AiryRose = Color(0xFFEC4899).copy(alpha = 0.3f)
-val AiryAmber = WarningColor.copy(alpha = 0.3f)
+val AiryBlue = BrandPrimaryLight.copy(alpha = 0.15f)
+val AiryPurple = BrandAccentLight.copy(alpha = 0.15f)
+val AiryTeal = SuccessColor.copy(alpha = 0.15f)
+val AiryRose = Color(0xFF94A3B8).copy(alpha = 0.15f)
+val AiryAmber = WarningColor.copy(alpha = 0.15f)
 val LightBackground = BackgroundLight

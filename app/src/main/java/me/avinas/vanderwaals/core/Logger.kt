@@ -10,9 +10,6 @@ import me.avinas.vanderwaals.BuildConfig
  */
 object Logger {
     
-    /**
-     * Log level enum for filtering.
-     */
     enum class Level {
         VERBOSE, DEBUG, INFO, WARN, ERROR
     }
@@ -20,46 +17,21 @@ object Logger {
     // Minimum log level to output (configured per build type)
     private val minLevel: Level = if (BuildConfig.DEBUG) Level.DEBUG else Level.INFO
     
-    /**
-     * Logs an informational message.
-     * 
-     * Use for normal operation events (wallpaper applied, sync completed).
-     * 
-     * @param tag Log tag (usually class name)
-     * @param message Human-readable message
-     * @param metadata Additional context as key-value pairs
-     */
+    /** For normal operation events (wallpaper applied, sync completed). */
     fun info(tag: String, message: String, metadata: Map<String, Any> = emptyMap()) {
         if (shouldLog(Level.INFO)) {
             Log.i(tag, formatMessage(message, metadata))
         }
     }
     
-    /**
-     * Logs a warning message.
-     * 
-     * Use for recoverable errors (network timeout, cache miss).
-     * 
-     * @param tag Log tag
-     * @param message Human-readable message
-     * @param metadata Additional context
-     */
+    /** For recoverable errors (network timeout, cache miss). */
     fun warn(tag: String, message: String, metadata: Map<String, Any> = emptyMap()) {
         if (shouldLog(Level.WARN)) {
             Log.w(tag, formatMessage(message, metadata))
         }
     }
     
-    /**
-     * Logs an error message.
-     * 
-     * Use for failures that prevent operation completion.
-     * 
-     * @param tag Log tag
-     * @param message Human-readable message
-     * @param error Optional exception/error
-     * @param metadata Additional context
-     */
+    /** For failures that prevent operation completion. */
     fun error(
         tag: String,
         message: String,
@@ -76,46 +48,21 @@ object Logger {
         }
     }
     
-    /**
-     * Logs a debug message (only in debug builds).
-     * 
-     * Use for detailed debugging information.
-     * 
-     * @param tag Log tag
-     * @param message Human-readable message
-     * @param metadata Additional context
-     */
+    /** Debug-only; for detailed debugging information. */
     fun debug(tag: String, message: String, metadata: Map<String, Any> = emptyMap()) {
         if (shouldLog(Level.DEBUG)) {
             Log.d(tag, formatMessage(message, metadata))
         }
     }
     
-    /**
-     * Logs a verbose message (only in debug builds).
-     * 
-     * Use for very detailed tracing (every step of algorithm).
-     * 
-     * @param tag Log tag
-     * @param message Human-readable message
-     * @param metadata Additional context
-     */
+    /** Debug-only; for very detailed tracing (every step of algorithm). */
     fun verbose(tag: String, message: String, metadata: Map<String, Any> = emptyMap()) {
         if (shouldLog(Level.VERBOSE)) {
             Log.v(tag, formatMessage(message, metadata))
         }
     }
     
-    /**
-     * Records a breadcrumb for crash reporting context.
-     * 
-     * Breadcrumbs are lightweight events that help understand the sequence
-     * of actions leading to a crash.
-     * 
-     * @param category Breadcrumb category (e.g., "navigation", "network", "user_action")
-     * @param message Description of the event
-     * @param metadata Additional data
-     */
+    /** Records a lightweight event for crash reporting context. */
     fun recordBreadcrumb(
         category: String,
         message: String,
@@ -129,20 +76,10 @@ object Logger {
         }
     }
     
-    /**
-     * Checks if a given level should be logged based on current configuration.
-     */
     private fun shouldLog(level: Level): Boolean {
         return level.ordinal >= minLevel.ordinal
     }
     
-    /**
-     * Formats a log message with metadata.
-     * 
-     * @param message The core message
-     * @param metadata Key-value pairs to append
-     * @return Formatted string: "message | metadata: key1=value1, key2=value2"
-     */
     private fun formatMessage(message: String, metadata: Map<String, Any>): String {
         return if (metadata.isEmpty()) {
             message

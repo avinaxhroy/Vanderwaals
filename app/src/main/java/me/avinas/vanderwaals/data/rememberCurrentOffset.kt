@@ -11,8 +11,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 
 /**
- * Remember the current offset of a [LazyListState].
- * Source:
+ * Source for the offset-tracking approach:
  * https://stackoverflow.com/a/75677163
  * https://stackoverflow.com/a/70558512
  */

@@ -6,14 +6,6 @@ package me.avinas.vanderwaals.network
  */
 object BingRegionConfig {
     
-    /**
-     * Represents a Bing Wallpaper Archive region.
-     * 
-     * @property country Country code (US, GB, CA, FR, DE, IT, ES, IN, CN, JP, BR, ROW)
-     * @property language Language code (en, fr, de, it, es, zh, ja, pt)
-     * @property displayName Human-readable name for UI
-     * @property flag Unicode emoji flag for the country (for UI display)
-     */
     data class Region(
         val country: String,
         val language: String,
@@ -80,10 +72,6 @@ object BingRegionConfig {
         ROW_ENGLISH
     )
     
-    /**
-     * Default regions to sync (for fresh installs).
-     * Includes most popular English-speaking regions to maximize content variety.
-     */
     val DEFAULT_REGIONS = listOf(
         US_ENGLISH,
         GB_ENGLISH,
@@ -95,33 +83,14 @@ object BingRegionConfig {
      */
     val PRIMARY_REGION = US_ENGLISH
     
-    /**
-     * Gets regions by language code.
-     * 
-     * @param language Language code (en, fr, de, it, es, zh, ja, pt)
-     * @return List of regions using that language
-     */
     fun getRegionsByLanguage(language: String): List<Region> {
         return ALL_REGIONS.filter { it.language == language }
     }
     
-    /**
-     * Gets a region by its ID.
-     * 
-     * @param id Region ID in format "COUNTRY_language" (e.g., "US_en")
-     * @return Region or null if not found
-     */
     fun getRegionById(id: String): Region? {
         return ALL_REGIONS.find { it.getId() == id }
     }
     
-    /**
-     * Gets a region by country and language codes.
-     * 
-     * @param country Country code
-     * @param language Language code
-     * @return Region or null if not found
-     */
     fun getRegion(country: String, language: String): Region? {
         return ALL_REGIONS.find { 
             it.country.equals(country, ignoreCase = true) && 
@@ -129,12 +98,6 @@ object BingRegionConfig {
         }
     }
     
-    /**
-     * Parses enabled region IDs from settings into Region objects.
-     * 
-     * @param regionIds Set of region IDs (e.g., setOf("US_en", "GB_en"))
-     * @return List of Region objects
-     */
     fun parseEnabledRegions(regionIds: Set<String>): List<Region> {
         if (regionIds.isEmpty()) {
             return DEFAULT_REGIONS
@@ -144,11 +107,6 @@ object BingRegionConfig {
             .ifEmpty { DEFAULT_REGIONS }
     }
     
-    /**
-     * Groups regions by language for organized UI display.
-     * 
-     * @return Map of language name to list of regions
-     */
     fun getRegionsGroupedByLanguage(): Map<String, List<Region>> {
         return ALL_REGIONS.groupBy { 
             when (it.language) {

@@ -37,29 +37,14 @@ class BatchDownloadWorker @AssistedInject constructor(
     companion object {
         private const val TAG = "BatchDownloadWorker"
         
-        /**
-         * Unique work name for batch download.
-         */
         const val WORK_NAME = "batch_download_work"
         
-        /**
-         * Notification channel ID.
-         */
         private const val CHANNEL_ID = "batch_download_channel"
         
-        /**
-         * Notification ID.
-         */
         private const val NOTIFICATION_ID = 2
         
-        /**
-         * Output data key for download count.
-         */
         const val KEY_DOWNLOADED_COUNT = "downloaded_count"
         
-        /**
-         * Output data key for failed count.
-         */
         const val KEY_FAILED_COUNT = "failed_count"
         
         /**
@@ -70,13 +55,10 @@ class BatchDownloadWorker @AssistedInject constructor(
     
     override suspend fun doWork(): Result {
         return try {
-            // Create notification channel
             createNotificationChannel()
             
-            // Set foreground with initial notification
             setForeground(createForegroundInfo(0, BATCH_SIZE))
             
-            // Get next batch of wallpapers to download
             val queueItems = wallpaperRepository.getNextToDownload(BATCH_SIZE)
             
             if (queueItems.isEmpty()) {
@@ -95,23 +77,18 @@ class BatchDownloadWorker @AssistedInject constructor(
             var failedCount = 0
             val totalCount = queueItems.size
             
-            // Download wallpapers in parallel with concurrency limit
             val concurrencyLimit = 3
             val semaphore = kotlinx.coroutines.sync.Semaphore(concurrencyLimit)
             
             
-            // Use coroutineScope to create a scope for async builders
             kotlinx.coroutines.coroutineScope {
-                // Use async to start downloads in parallel
                 val deferredResults = queueItems.mapIndexed { index, queueItem ->
                     async {
                         semaphore.withPermit {
-                            // Check if work is cancelled
                             if (isStopped) {
                                 throw CancellationException("Work cancelled by user")
                             }
                             
-                            // Get wallpaper metadata
                             val wallpaper = wallpaperRepository.getAllWallpapers()
                                 .first()
                                 .find { it.id == queueItem.wallpaperId }
@@ -121,11 +98,9 @@ class BatchDownloadWorker @AssistedInject constructor(
                                 return@withPermit false
                             }
                             
-                            // Attempt download
                             val result = wallpaperRepository.downloadWallpaper(wallpaper)
                             
                             if (result.isSuccess) {
-                                // Mark as downloaded in queue
                                 wallpaperRepository.markAsDownloaded(wallpaper.id)
                                 Log.d(TAG, "Downloaded wallpaper ${wallpaper.id}")
                                 true
@@ -137,18 +112,15 @@ class BatchDownloadWorker @AssistedInject constructor(
                     }
                 }
                 
-                // Wait for all downloads to complete and count successes
                 val results = deferredResults.awaitAll()
                 downloadedCount = results.count { it }
                 failedCount = results.count { !it }
             }
             
-            // Update notification with final status
             setForeground(createForegroundInfo(totalCount, totalCount))
             
             Log.d(TAG, "Batch download complete: $downloadedCount succeeded, $failedCount failed")
             
-            // Return success with statistics
             Result.success(
                 workDataOf(
                     KEY_DOWNLOADED_COUNT to downloadedCount,
@@ -165,9 +137,6 @@ class BatchDownloadWorker @AssistedInject constructor(
         }
     }
     
-    /**
-     * Creates notification channel for download progress.
-     */
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -184,12 +153,6 @@ class BatchDownloadWorker @AssistedInject constructor(
         }
     }
     
-    /**
-     * Creates foreground info with progress notification.
-     * 
-     * @param progress Current progress (number of wallpapers downloaded)
-     * @param total Total number of wallpapers to download
-     */
     private fun createForegroundInfo(progress: Int, total: Int): ForegroundInfo {
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setContentTitle("Downloading wallpapers")

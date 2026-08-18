@@ -12,28 +12,6 @@ import kotlinx.coroutines.launch
 import me.avinas.vanderwaals.data.repository.ManifestRepository
 import javax.inject.Inject
 
-/**
- * ViewModel for initial sync screen.
- * 
- * Manages:
- * - Automatic manifest download on first launch
- * - Progress tracking (0% → 100%)
- * - Wallpaper count as sync progresses
- * - Error handling with retry
- * 
- * StateFlow emissions:
- * - syncState: Current sync status
- * - wallpaperCount: Number of wallpapers synced so far
- * 
- * **Sync Process:**
- * 1. Check if database already populated
- * 2. If empty, download manifest from CDN
- * 3. Parse JSON and insert into database
- * 4. Update progress as wallpapers are processed
- * 5. Navigate to next screen on success
- * 
- * @param manifestRepository Repository for manifest operations
- */
 @HiltViewModel
 class InitialSyncViewModel @Inject constructor(
     private val manifestRepository: ManifestRepository,
@@ -61,7 +39,6 @@ class InitialSyncViewModel @Inject constructor(
     fun startSync() {
         viewModelScope.launch {
             try {
-                // Get enabled sources
                 val settings = settingsDataStore.settings.first()
                 val githubEnabled = settings.githubEnabled
                 val bingEnabled = settings.bingEnabled
@@ -161,7 +138,6 @@ class InitialSyncViewModel @Inject constructor(
                     )
                 }
 
-                // Final Success
                 _wallpaperCount.value = totalCount
                 settingsDataStore.updateLastSyncTimestamp(System.currentTimeMillis())
                 _syncState.value = SyncState.Success(totalCount)
@@ -176,37 +152,15 @@ class InitialSyncViewModel @Inject constructor(
     }
 }
 
-/**
- * Sync state for initial catalog download.
- */
 sealed class SyncState {
-    /**
-     * Idle state, sync not started.
-     */
     data object Idle : SyncState()
     
-    /**
-     * Sync in progress.
-     * 
-     * @param message Status message (e.g., "Downloading wallpapers...")
-     * @param progress Progress from 0.0 to 1.0 (null if indeterminate)
-     */
     data class Loading(
         val message: String,
         val progress: Float? = null
     ) : SyncState()
     
-    /**
-     * Sync completed successfully.
-     * 
-     * @param count Number of wallpapers downloaded
-     */
     data class Success(val count: Int) : SyncState()
     
-    /**
-     * Sync failed.
-     * 
-     * @param message Error description
-     */
     data class Error(val message: String) : SyncState()
 }

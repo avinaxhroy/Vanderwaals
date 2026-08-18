@@ -10,23 +10,11 @@ import dagger.assisted.AssistedInject
 
 /**
  * WorkManager worker for periodic wallpaper catalog synchronization.
- * 
- * Executes weekly background sync of manifest.json from GitHub:
- * - Scheduled via PeriodicWorkRequest (7 day interval)
- * - Requires network connectivity
- * - Runs in background with low priority
- * - Updates notification on sync progress/completion
- * 
- * Work constraints:
- * - NetworkType.CONNECTED (requires internet)
- * - BatteryNotLow (waits for sufficient battery)
- * - StorageNotLow (ensures space for metadata)
- * 
- * Failure handling:
- * - Exponential backoff retry policy
- * - Max 3 retry attempts
- * - Falls back to cached catalog on failure
- * 
+ *
+ * Runs on a 7-day cycle syncing manifest.json from GitHub, constrained to
+ * network-connected, battery-not-low, storage-not-low. Retries with exponential
+ * backoff (max 3 attempts) and falls back to the cached catalog on failure.
+ *
  * @see me.avinas.vanderwaals.domain.usecase.SyncWallpaperCatalogUseCase
  */
 @HiltWorker
@@ -38,49 +26,35 @@ class CatalogSyncWorker @AssistedInject constructor(
 ) : CoroutineWorker(appContext, workerParams) {
     
     companion object {
-        /**
-         * Unique work name for periodic catalog sync.
-         */
         const val WORK_NAME = "catalog_sync_work"
         
-        /**
-         * Output data key for synced wallpaper count.
-         */
         const val KEY_SYNCED_COUNT = "synced_count"
         
-        /**
-         * Output data key for error message.
-         */
         const val KEY_ERROR_MESSAGE = "error_message"
     }
     
     override suspend fun doWork(): Result {
         return try {
-            // Reset download progress manager for fresh tracking
             downloadProgressManager.reset()
             
-            // Report initial progress
             setProgress(workDataOf(
                 "status" to "Starting download...",
                 "progress" to 0.05f,
                 "count" to 0
             ))
             
-            // Use SyncWallpaperCatalogUseCase with progress callback
-            // Note: We can't use setProgress in the callback because it's suspend
-            // Instead, we update progress after sync completes
+            // We can't use setProgress in the callback because it's suspend,
+            // so progress is updated after sync completes
             val result = syncWallpaperCatalogUseCase.syncCatalog()
             
             result.fold(
                 onSuccess = { count ->
-                    // Report final completion
                     setProgress(workDataOf(
                         "status" to "Download complete!",
                         "progress" to 1.0f,
                         "count" to count
                     ))
                     
-                    // Success: Return count of synced wallpapers
                     Result.success(
                         workDataOf(KEY_SYNCED_COUNT to count)
                     )
@@ -113,7 +87,6 @@ class CatalogSyncWorker @AssistedInject constructor(
             )
             
         } catch (e: Exception) {
-            // Unexpected error: Retry once
             Result.retry()
         }
     }

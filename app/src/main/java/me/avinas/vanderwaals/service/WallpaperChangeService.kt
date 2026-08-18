@@ -41,26 +41,9 @@ import javax.inject.Inject
 /**
  * Short-lived foreground service for scheduled wallpaper changes.
  * 
- * This service is started by [WallpaperAlarmReceiver] when an AlarmManager
- * alarm fires. Using a foreground service instead of WorkManager ensures
- * reliable execution even when the app was killed by the user.
- * 
- * **Why This Works When App Is Killed:**
- * 1. AlarmManager fires and delivers broadcast to [WallpaperAlarmReceiver]
- * 2. Receiver calls `startForegroundService()` which creates a new process
- * 3. Service calls `startForeground()` within 5 seconds, showing notification
- * 4. Hilt properly initializes in `onCreate()` 
- * 5. Wallpaper change completes, service calls `stopSelf()`
- * 
- * **Lifecycle:**
- * - onCreate: Create notification channel, acquire wake lock
- * - onStartCommand: Start foreground, launch wallpaper change coroutine
- * - Change completes: stopSelf() is called
- * - Total runtime: ~2-5 seconds
- * 
- * **Battery Impact:**
- * Minimal - service only runs for a few seconds when the alarm fires.
- * No polling, no continuous operation.
+ * Started by [WallpaperAlarmReceiver] when an AlarmManager alarm fires. A foreground
+ * service is used instead of WorkManager so the change still runs reliably even when
+ * the app was killed by the user.
  * 
  * @see me.avinas.vanderwaals.worker.WallpaperAlarmReceiver
  */
@@ -108,11 +91,8 @@ class WallpaperChangeService : Service() {
     
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "Service created")
         createNotificationChannel()
-        // CRITICAL: Call startForeground() in onCreate, not onStartCommand.
-        // Android requires startForeground() within 5s of startForegroundService();
-        // onStartCommand may be delayed, causing ForegroundServiceDidNotStartInTimeException.
+        // Call startForeground() in onCreate within 5s window of startForegroundService().
         try {
             startForeground(NOTIFICATION_ID, createNotification("Changing wallpaper..."))
         } catch (e: Exception) {
@@ -151,7 +131,6 @@ class WallpaperChangeService : Service() {
                 }
             }
         } else {
-            // Unknown action, stop immediately
             Log.w(TAG, "Unknown action: ${intent?.action}")
             stopSelf()
         }
@@ -168,24 +147,20 @@ class WallpaperChangeService : Service() {
     
     override fun onBind(intent: Intent?): IBinder? = null
     
-    /**
-     * Changes wallpaper for the specified target screen.
-     */
     private suspend fun changeWallpaper(targetScreen: String) {
-        // Handle "Both But Different" mode separately
+        // "Both But Different" needs its own flow
         if (targetScreen == TARGET_BOTH_DIFFERENT) {
             changeBothDifferentWallpapers()
             return
         }
         
-        // Get current settings to verify auto-change is still enabled
+        // Re-check auto-change is still enabled; settings may have changed since scheduling
         val settings = settingsDataStore.settings.first()
         if (settings.changeInterval == "never") {
             Log.d(TAG, "Auto-change is disabled, skipping")
             return
         }
         
-        // Map DataStore setting to actual target
         val actualTarget = when (settings.applyTo) {
             "lock_screen" -> TARGET_LOCK
             "home_screen" -> TARGET_HOME
@@ -194,13 +169,11 @@ class WallpaperChangeService : Service() {
             else -> TARGET_BOTH
         }
         
-        // If settings changed to "both_different", handle that
         if (actualTarget == TARGET_BOTH_DIFFERENT) {
             changeBothDifferentWallpapers()
             return
         }
         
-        // Select next wallpaper
         val wallpaperResult = selectNextWallpaperUseCase()
         if (wallpaperResult.isFailure) {
             Log.w(TAG, "No wallpaper selected: ${wallpaperResult.exceptionOrNull()?.message}")
@@ -209,7 +182,6 @@ class WallpaperChangeService : Service() {
         
         val wallpaper = wallpaperResult.getOrNull()!!
         
-        // Download or get cached
         var selectedWallpaper = wallpaper
         var wallpaperFile: File?
         
@@ -217,7 +189,6 @@ class WallpaperChangeService : Service() {
         if (downloadResult.isFailure) {
             Log.w(TAG, "Failed to download wallpaper: ${downloadResult.exceptionOrNull()?.message}")
             
-            // OFFLINE FALLBACK: Try to find a cached wallpaper
             Log.d(TAG, "Attempting offline fallback - searching for cached wallpapers...")
             val cachedWallpaperResult = findCachedWallpaperUseCase(excludeWallpaperId = wallpaper.id)
             
@@ -234,26 +205,20 @@ class WallpaperChangeService : Service() {
             wallpaperFile = downloadResult.getOrNull()!!
         }
         
-        // Apply wallpaper
         val applied = applyWallpaperToScreen(wallpaperFile!!, actualTarget)
         if (applied) {
             wallpaperRepository.recordWallpaperApplied(selectedWallpaper)
             engagementTracker.recordWallpaperChange()
             Log.d(TAG, "Wallpaper applied successfully: ${selectedWallpaper.id}")
             
-            // Update notification briefly before stopping
             updateNotification("Wallpaper changed!")
         }
     }
     
-    /**
-     * Changes both home and lock screen with different wallpapers.
-     */
     private suspend fun changeBothDifferentWallpapers() {
         // Track home wallpaper ID for excluding in lock screen selection
         var homeWallpaperId: String? = null
         
-        // Home wallpaper
         val homeResult = selectNextWallpaperUseCase()
         if (homeResult.isSuccess) {
             var actualHomeWallpaper = homeResult.getOrNull()!!
@@ -264,14 +229,13 @@ class WallpaperChangeService : Service() {
             if (homeDownload.isSuccess) {
                 homeFile = homeDownload.getOrNull()!!
             } else {
-                // OFFLINE FALLBACK for home wallpaper
                 Log.d(TAG, "Home wallpaper download failed, attempting offline fallback")
                 val cachedHomeResult = findCachedWallpaperUseCase(excludeWallpaperId = actualHomeWallpaper.id)
                 if (cachedHomeResult != null) {
                     val (cachedWallpaper, cachedFile) = cachedHomeResult
                     Log.d(TAG, "Offline fallback for home - using cached: ${cachedWallpaper.id}")
                     actualHomeWallpaper = cachedWallpaper
-                    homeWallpaperId = cachedWallpaper.id  // Update to cached ID
+                    homeWallpaperId = cachedWallpaper.id
                     homeFile = cachedFile
                 } else {
                     Log.e(TAG, "No cached wallpapers for home screen")
@@ -284,7 +248,7 @@ class WallpaperChangeService : Service() {
             }
         }
         
-        // Lock wallpaper - CRITICAL: exclude home wallpaper ID to ensure different wallpapers
+        // Lock wallpaper: exclude home wallpaper ID so the two differ
         val lockResult = selectNextWallpaperUseCase(excludeWallpaperId = homeWallpaperId)
         if (lockResult.isSuccess) {
             var actualLockWallpaper = lockResult.getOrNull()!!
@@ -294,7 +258,6 @@ class WallpaperChangeService : Service() {
             if (lockDownload.isSuccess) {
                 lockFile = lockDownload.getOrNull()!!
             } else {
-                // OFFLINE FALLBACK for lock wallpaper
                 Log.d(TAG, "Lock wallpaper download failed, attempting offline fallback")
                 val cachedLockResult = findCachedWallpaperUseCase(excludeWallpaperId = actualLockWallpaper.id)
                 if (cachedLockResult != null) {
@@ -317,9 +280,6 @@ class WallpaperChangeService : Service() {
         updateNotification("Wallpaper changed!")
     }
     
-    /**
-     * Applies wallpaper to the specified screen with SmartCrop processing.
-     */
     private suspend fun applyWallpaperToScreen(file: File, targetScreen: String): Boolean {
         var bitmap: android.graphics.Bitmap? = null
         var processedBitmap: android.graphics.Bitmap? = null
@@ -331,7 +291,6 @@ class WallpaperChangeService : Service() {
             bitmap = me.avinas.vanderwaals.core.BitmapManager.loadBitmap(file)
             if (bitmap == null) return false
             
-            // SmartCrop to screen dimensions
             val screenSize = me.avinas.vanderwaals.core.getDeviceScreenSize(applicationContext)
             processedBitmap = me.avinas.vanderwaals.core.SmartCrop.smartCropBitmapAsync(
                 source = bitmap,
@@ -352,7 +311,6 @@ class WallpaperChangeService : Service() {
                 TARGET_BOTH -> wallpaperManager.setBitmap(processedBitmap, null, true, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)
             }
             
-            // Recycle processed bitmap after successful application
             me.avinas.vanderwaals.core.BitmapManager.recycleSafely(processedBitmap)
             processedBitmap = null
             
@@ -366,8 +324,6 @@ class WallpaperChangeService : Service() {
             me.avinas.vanderwaals.core.BitmapManager.recycleSafely(processedBitmap)
         }
     }
-    
-    // ==================== Notification ====================
     
     private fun enqueueFallbackWork(targetScreen: String, mode: String) {
         try {
@@ -419,15 +375,13 @@ class WallpaperChangeService : Service() {
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
-    }
+        }
     
     private fun updateNotification(status: String) {
         val notification = createNotification(status)
         val notificationManager = getSystemService(NotificationManager::class.java)
         notificationManager.notify(NOTIFICATION_ID, notification)
     }
-    
-    // ==================== Wake Lock ====================
     
     private fun acquireWakeLock() {
         if (wakeLock == null) {

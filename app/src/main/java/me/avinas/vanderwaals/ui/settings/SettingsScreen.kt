@@ -132,7 +132,7 @@ fun SettingsScreen(
                             fontStyle = FontStyle.Italic,
                             fontWeight = FontWeight.Bold,
                             fontSize = 24.sp,
-                            color = getOnboardingTextPrimary(isDark)
+                            color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
                         )
                     },
                     navigationIcon = {
@@ -143,15 +143,15 @@ fun SettingsScreen(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = getOnboardingTextPrimary(isDark)
+                                tint = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
                             )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
-                        scrolledContainerColor = if (isDark) Color(0xFF14120F).copy(alpha = 0.8f) else Color(0xFFF9F7F5).copy(alpha = 0.8f),
-                        titleContentColor = getOnboardingTextPrimary(isDark),
-                        navigationIconContentColor = getOnboardingTextPrimary(isDark)
+                        scrolledContainerColor = if (isDark) RadicalPalette.DarkCanvasBase.copy(alpha = 0.88f) else RadicalPalette.LightCanvasBase.copy(alpha = 0.88f),
+                        titleContentColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
+                        navigationIconContentColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
                     ),
                     windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top),
                     scrollBehavior = scrollBehavior
@@ -171,7 +171,6 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(metrics.cardSpacing)
             ) {
 
-            // MODE Section
             item {
                 SettingsSectionHeader(
                     title = "MODE",
@@ -249,28 +248,6 @@ fun SettingsScreen(
                 }
             }
 
-            // APPEARANCE Section
-            item {
-                SettingsSectionHeader(
-                    title = "APPEARANCE",
-                    isDark = isDark
-                )
-                PremiumSettingsCard(
-                    isDark = isDark,
-                    contentPadding = PaddingValues(10.dp)
-                ) {
-                    SegmentedControl(
-                        items = ThemeMode.entries.map { it.displayName },
-                        selectedIndex = settings.themeMode.ordinal,
-                        onItemSelected = { index ->
-                            viewModel.updateThemeMode(ThemeMode.entries[index])
-                        },
-                        isDark = isDark
-                    )
-                }
-            }
-
-            // AUTO-CHANGE Section
             item {
                 SettingsSectionHeader(
                     title = "AUTO-CHANGE",
@@ -294,7 +271,7 @@ fun SettingsScreen(
                                 SettingsIconBox(
                                     icon = Icons.Default.Update,
                                     isDark = isDark,
-                                    accentColor = Color(0xFF8B5CF6) // Purple
+                                    accentColor = Color(0xFF8B5CF6)
                                 )
                                 Column {
                                     Text(
@@ -374,7 +351,7 @@ fun SettingsScreen(
                                         SettingsIconBox(
                                             icon = Icons.Default.Collections,
                                             isDark = isDark,
-                                            accentColor = Color(0xFFF43F5E) // Rose
+                                            accentColor = Color(0xFFF43F5E)
                                         )
                                         Text(
                                             text = "Daily Playlist Size",
@@ -517,7 +494,7 @@ fun SettingsScreen(
                                     SettingsIconBox(
                                         icon = Icons.Default.Schedule,
                                         isDark = isDark,
-                                        accentColor = Color(0xFFF59E0B) // Amber
+                                        accentColor = Color(0xFFF59E0B)
                                     )
                                     Column {
                                         Text(
@@ -545,7 +522,6 @@ fun SettingsScreen(
                 }
             }
 
-            // BATTERY & PERFORMANCE Section
             item {
                 val batteryOptimized = remember {
                     !BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
@@ -615,7 +591,6 @@ fun SettingsScreen(
                 }
             }
 
-            // APPLY TO Section
             item {
                 SettingsSectionHeader(
                     title = "APPLY TO",
@@ -623,20 +598,17 @@ fun SettingsScreen(
                 )
                 PremiumSettingsCard(
                     isDark = isDark,
-                    contentPadding = PaddingValues(10.dp)
+                    contentPadding = PaddingValues(0.dp)
                 ) {
-                    SegmentedControl(
-                        items = ApplyTo.entries.map { it.displayName },
-                        selectedIndex = ApplyTo.entries.indexOf(settings.applyTo),
-                        onItemSelected = { index ->
-                            viewModel.updateApplyTo(ApplyTo.entries[index])
-                        },
-                        isDark = isDark
+                    RadicalApplyToSelector(
+                        selectedTarget = settings.applyTo,
+                        onTargetSelected = { viewModel.updateApplyTo(it) },
+                        isDark = isDark,
+                        accentColor = BrandPrimary
                     )
                 }
             }
 
-            // SOURCES Section
             item {
                 SettingsSectionHeader(
                     title = "SOURCES",
@@ -897,7 +869,6 @@ fun SettingsScreen(
                 }
             }
 
-            // STORAGE Section
             item {
                 SettingsSectionHeader(
                     title = "STORAGE",
@@ -912,7 +883,7 @@ fun SettingsScreen(
                             value = settings.cacheSize,
                             isDark = isDark,
                             leadingIcon = Icons.Default.SdStorage,
-                            iconAccentColor = Color(0xFF10B981) // Emerald
+                            iconAccentColor = Color(0xFF10B981)
                         )
                         
                         SettingsDivider(isDark = isDark)
@@ -922,7 +893,7 @@ fun SettingsScreen(
                             value = "Pictures/Vanderwaals",
                             isDark = isDark,
                             leadingIcon = Icons.Default.FolderOpen,
-                            iconAccentColor = Color(0xFF3B82F6) // Blue
+                            iconAccentColor = Color(0xFF3B82F6)
                         )
                         
                         SettingsDivider(isDark = isDark)
@@ -953,7 +924,6 @@ fun SettingsScreen(
                 }
             }
 
-            // INSIGHTS Section
             item {
                 SettingsSectionHeader(
                     title = "INSIGHTS",
@@ -1003,7 +973,6 @@ fun SettingsScreen(
                 }
             }
 
-            // ABOUT Section
             item {
                 SettingsSectionHeader(
                     title = "ABOUT",
@@ -1084,7 +1053,6 @@ fun SettingsScreen(
     }
     }
 
-    // Dialogs
     if (needsAlarmPermission) {
         PremiumAlertDialog(
             onDismissRequest = { viewModel.dismissAlarmPermissionDialog() },
@@ -1158,7 +1126,7 @@ private fun SettingsSectionHeader(
         text = title.uppercase(),
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.Bold,
-        color = getOnboardingTextSecondary(isDark),
+        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
         letterSpacing = 1.2.sp,
         modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
     )
@@ -1198,14 +1166,27 @@ private fun PremiumSettingsCard(
 private fun SettingsIconBox(
     icon: ImageVector,
     isDark: Boolean,
-    accentColor: Color
+    accentColor: Color,
+    backgroundColor: Color? = null
 ) {
     val metrics = rememberOnboardingLayoutMetrics()
+    val shape = RoundedCornerShape(14.dp)
+    val bgModifier = if (backgroundColor != null) {
+        Modifier.background(backgroundColor)
+    } else {
+        Modifier.background(accentColor.copy(alpha = if (isDark) 0.16f else 0.12f))
+    }
+
     Box(
         modifier = Modifier
             .size(metrics.iconBoxSize)
-            .clip(RoundedCornerShape(14.dp))
-            .background(accentColor.copy(alpha = 0.15f)),
+            .clip(shape)
+            .then(bgModifier)
+            .border(
+                1.dp,
+                accentColor.copy(alpha = if (isDark) 0.35f else 0.22f),
+                shape
+            ),
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -1373,20 +1354,20 @@ private fun PremiumAlertDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        containerColor = if (isDark) Color(0xFF14120F) else Color(0xFFF9F7F5),
+        containerColor = if (isDark) Color(0xFF161B22) else Color(0xFFF9F7F5),
         title = {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = getOnboardingTextPrimary(isDark)
+                color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
             )
         },
         text = {
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
-                color = getOnboardingTextSecondary(isDark)
+                color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
             )
         },
         confirmButton = {
@@ -1403,7 +1384,7 @@ private fun PremiumAlertDialog(
             TextButton(
                 onClick = onDismiss,
                 colors = ButtonDefaults.textButtonColors(
-                    contentColor = getOnboardingTextSecondary(isDark)
+                    contentColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
                 )
             ) {
                 Text(dismissText)
@@ -1426,13 +1407,13 @@ private fun PremiumTimePickerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        containerColor = if (isDark) Color(0xFF14120F) else Color(0xFFF9F7F5),
+        containerColor = if (isDark) Color(0xFF161B22) else Color(0xFFF9F7F5),
         title = {
             Text(
                 text = "Set Daily Change Time",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = getOnboardingTextPrimary(isDark)
+                color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
             )
         },
         text = {
@@ -1447,37 +1428,37 @@ private fun PremiumTimePickerDialog(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         IconButton(onClick = { onHourChange((initialHour + 1) % 24) }) {
-                            Icon(Icons.Default.ArrowUpward, "Up", tint = getOnboardingTextPrimary(isDark))
+                            Icon(Icons.Default.ArrowUpward, "Up", tint = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A))
                         }
                         Text(
                             text = "%02d".format(initialHour),
                             style = MaterialTheme.typography.headlineLarge,
-                            color = getOnboardingTextPrimary(isDark),
+                            color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
                             fontWeight = FontWeight.Bold
                         )
                         IconButton(onClick = { onHourChange(if (initialHour == 0) 23 else initialHour - 1) }) {
-                            Icon(Icons.Default.ArrowDownward, "Down", tint = getOnboardingTextPrimary(isDark))
+                            Icon(Icons.Default.ArrowDownward, "Down", tint = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A))
                         }
                     }
                     Text(
                         text = ":",
                         style = MaterialTheme.typography.headlineLarge,
-                        color = getOnboardingTextPrimary(isDark),
+                        color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
                         modifier = Modifier.padding(horizontal = 8.dp),
                         fontWeight = FontWeight.Bold
                     )
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         IconButton(onClick = { onMinuteChange((initialMinute + 15) % 60) }) {
-                            Icon(Icons.Default.ArrowUpward, "Up", tint = getOnboardingTextPrimary(isDark))
+                            Icon(Icons.Default.ArrowUpward, "Up", tint = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A))
                         }
                         Text(
                             text = "%02d".format(initialMinute),
                             style = MaterialTheme.typography.headlineLarge,
-                            color = getOnboardingTextPrimary(isDark),
+                            color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
                             fontWeight = FontWeight.Bold
                         )
                         IconButton(onClick = { onMinuteChange(if (initialMinute == 0) 45 else initialMinute - 15) }) {
-                            Icon(Icons.Default.ArrowDownward, "Down", tint = getOnboardingTextPrimary(isDark))
+                            Icon(Icons.Default.ArrowDownward, "Down", tint = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A))
                         }
                     }
                 }
@@ -1497,7 +1478,7 @@ private fun PremiumTimePickerDialog(
             TextButton(
                 onClick = onDismiss,
                 colors = ButtonDefaults.textButtonColors(
-                    contentColor = getOnboardingTextSecondary(isDark)
+                    contentColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
                 )
             ) {
                 Text("Cancel")
@@ -1517,7 +1498,7 @@ private fun PremiumBingTypeDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismissRequest,
-        containerColor = if (isDark) Color(0xFF14120F) else Color(0xFFF9F7F5),
+        containerColor = if (isDark) Color(0xFF161B22) else Color(0xFFF9F7F5),
         title = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -1527,12 +1508,12 @@ private fun PremiumBingTypeDialog(
                     text = "Choose Bing Collection",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = getOnboardingTextPrimary(isDark)
+                    color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
                 )
                 Text(
                     text = "Select how much wallpaper history to download",
                     style = MaterialTheme.typography.bodySmall,
-                    color = getOnboardingTextSecondary(isDark),
+                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
@@ -1590,7 +1571,7 @@ private fun PremiumBingTypeDialog(
             TextButton(
                 onClick = onDismissRequest,
                 colors = ButtonDefaults.textButtonColors(
-                    contentColor = getOnboardingTextSecondary(isDark)
+                    contentColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
                 )
             ) {
                 Text("Cancel")

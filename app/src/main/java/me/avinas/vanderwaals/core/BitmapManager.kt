@@ -39,15 +39,9 @@ object BitmapManager {
         )
 
     /**
-     * Loads a bitmap from a file with automatic downsampling and OOM protection.
-     *
-     * Glide handles accurate downsampling (exact target size, not just power-of-2),
-     * bitmap pool reuse, and OOM retry with progressively smaller decodes.
-     *
-     * @param file Image file to load
-     * @param maxWidth Maximum width (default: 4096)
-     * @param maxHeight Maximum height (default: 4096)
-     * @return Decoded bitmap or null if loading failed
+     * Loads a bitmap from a file. Glide handles accurate downsampling (exact
+     * target size, not just power-of-2), bitmap pool reuse, and OOM retry with
+     * progressively smaller decodes.
      */
     fun loadBitmap(
         file: File,
@@ -77,15 +71,9 @@ object BitmapManager {
     }
 
     /**
-     * Loads a bitmap from a Uri with automatic downsampling and OOM protection.
-     *
-     * Preferred over [loadBitmapFromStream] when a Uri is available — Glide handles
-     * content provider access internally without an intermediate byte copy.
-     *
-     * @param uri Image source Uri (content://, file://, etc.)
-     * @param maxWidth Maximum width (default: 4096)
-     * @param maxHeight Maximum height (default: 4096)
-     * @return Decoded bitmap or null if loading failed
+     * Loads a bitmap from a Uri. Preferred over [loadBitmapFromStream] when a Uri
+     * is available — Glide handles content provider access without an intermediate
+     * byte copy.
      */
     fun loadBitmap(
         uri: Uri,
@@ -111,15 +99,8 @@ object BitmapManager {
     }
 
     /**
-     * Loads a bitmap from an InputStream with automatic downsampling and OOM protection.
-     *
-     * The stream is read into a byte array for Glide to decode. Prefer [loadBitmap]
-     * with a [Uri] when available to avoid the intermediate copy.
-     *
-     * @param inputStream Input stream containing image data
-     * @param maxWidth Maximum width (default: 4096)
-     * @param maxHeight Maximum height (default: 4096)
-     * @return Decoded bitmap or null if loading failed
+     * Loads a bitmap from an InputStream. The stream is read into a byte array for
+     * Glide to decode; prefers [loadBitmap] with a [Uri] to avoid the intermediate copy.
      */
     fun loadBitmapFromStream(
         inputStream: InputStream,
@@ -145,11 +126,6 @@ object BitmapManager {
         }
     }
 
-    /**
-     * Safely recycles a bitmap with null check and exception handling.
-     *
-     * @param bitmap Bitmap to recycle (can be null)
-     */
     fun recycleSafely(bitmap: Bitmap?) {
         if (bitmap != null && !bitmap.isRecycled) {
             try {
@@ -162,19 +138,7 @@ object BitmapManager {
     }
 
     /**
-     * Auto-cleanup wrapper for bitmaps using Kotlin's use() pattern.
-     *
-     * Ensures bitmap is recycled even if exception occurs.
-     *
-     * Example:
-     * ```kotlin
-     * AutoRecycleBitmap(file).use { wrapper ->
-     *     wrapper.bitmap?.let { bitmap ->
-     *         // Use bitmap safely
-     *         processBitmap(bitmap)
-     *     }
-     * } // Bitmap automatically recycled here
-     * ```
+     * Auto-cleanup wrapper that recycles the bitmap even if an exception occurs.
      */
     class AutoRecycleBitmap(
         file: File,
@@ -189,9 +153,6 @@ object BitmapManager {
         }
     }
 
-    /**
-     * Auto-cleanup wrapper for bitmaps loaded from streams.
-     */
     class AutoRecycleBitmapFromStream(
         inputStream: InputStream,
         maxWidth: Int = MAX_BITMAP_WIDTH,

@@ -17,25 +17,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Repository for syncing the Vanderwaals Collection wallpaper manifest.
- *
- * The Vanderwaals Collection is the app's own curated wallpaper catalog, served
- * from `https://vanderwaalsapi.2626688.xyz/`. It uses the same [ManifestDto]
- * format as the GitHub and Bing sources (MobileNetV4-Conv-Small 1280D
- * quantized embeddings), so it integrates with the existing catalog pipeline.
- *
- * Two manifest variants are available:
- * - **Lite manifest** (`cat/lite.json`): curated subset, recommended for getting started
- * - **Full manifest** (`cat/full.json`): complete Vanderwaals Collection archive
- *
- * Features (mirrors [BingManifestRepository]):
- * - Smart sync with If-Modified-Since headers (304 Not Modified)
- * - Quarterly sync interval (90 days)
- * - Progress callbacks for UI feedback
- * - Retry logic with exponential backoff
- * - Source normalization to [SOURCE_KEY] for consistent filtering
- *
- * @see VanderwaalsCollectionService
+ * Repository for syncing the app's own curated wallpaper catalog, served from
+ * `https://vanderwaalsapi.2626688.xyz/`. It uses the same [ManifestDto] format
+ * as the GitHub and Bing sources (MobileNetV4-Conv-Small 1280D quantized
+ * embeddings), so it integrates with the existing catalog pipeline.
  */
 @Singleton
 class VanderwaalsCollectionRepository @Inject constructor(
@@ -60,11 +45,6 @@ class VanderwaalsCollectionRepository @Inject constructor(
         const val SOURCE_KEY = "vanderwaals"
     }
 
-    /**
-     * Checks if a Vanderwaals Collection sync is needed based on the last sync timestamp.
-     *
-     * @return true if sync is needed (>90 days since last sync or never synced) and the source is enabled
-     */
     suspend fun isSyncNeeded(): Boolean {
         val settings = settingsDataStore.settings.first()
 
@@ -77,21 +57,10 @@ class VanderwaalsCollectionRepository @Inject constructor(
         return daysSinceSync >= SYNC_INTERVAL_DAYS
     }
 
-    /**
-     * Gets the number of Vanderwaals Collection wallpapers currently in the database.
-     */
     suspend fun getVanderwaalsCollectionWallpaperCount(): Int {
         return wallpaperDao.countBySource(SOURCE_KEY)
     }
 
-    /**
-     * Syncs the Vanderwaals Collection manifest.
-     *
-     * @param manifestType "lite" for the curated subset, "full" for the complete archive
-     * @param onProgress Progress callback: (message, progress 0-1, wallpaperCount)
-     * @param forceUpdate If true, ignores If-Modified-Since and downloads fresh
-     * @return Result with count of synced wallpapers or error
-     */
     suspend fun syncVanderwaalsCollectionManifest(
         manifestType: String = "lite",
         onProgress: ((message: String, progress: Float, count: Int) -> Unit)? = null,
@@ -149,7 +118,6 @@ class VanderwaalsCollectionRepository @Inject constructor(
                     onProgress?.invoke("Saving wallpapers...", progress, inserted)
                 }
 
-                // Update sync metadata
                 settingsDataStore.updateVanderwaalsCollectionLastSyncTimestamp(System.currentTimeMillis())
                 settingsDataStore.updateVanderwaalsCollectionManifestLastModified(
                     response.headers()["Last-Modified"]
@@ -180,9 +148,6 @@ class VanderwaalsCollectionRepository @Inject constructor(
         return Result.failure(Exception("Max retries exceeded"))
     }
 
-    /**
-     * Fetches the manifest based on type with optional conditional request.
-     */
     private suspend fun fetchManifest(
         manifestType: String,
         lastModified: String?
@@ -233,10 +198,7 @@ class VanderwaalsCollectionRepository @Inject constructor(
         }
     }
 
-    /**
-     * Clears all Vanderwaals Collection wallpapers from the database.
-     * Useful for refreshing or switching manifest types.
-     */
+    // Useful for refreshing or switching manifest types.
     suspend fun clearVanderwaalsCollectionWallpapers() {
         wallpaperDao.deleteBySource(SOURCE_KEY)
         settingsDataStore.updateVanderwaalsCollectionManifestLastModified(null)

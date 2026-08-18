@@ -12,22 +12,11 @@ import javax.inject.Singleton
 
 /**
  * Centralized AlarmManager scheduling for wallpaper changes.
- * 
- * Extracted from WorkScheduler to improve:
- * - **Single Responsibility**: Alarm scheduling is now isolated and testable
- * - **Reusability**: Alarm logic can be used by other scheduling mechanisms
- * - **Maintainability**: AlarmManager-specific code is localized here
- * 
- * **Key Methods:**
- * - `scheduleDailyAlarm()`: Exact daily alarm at specified time
- * - `scheduleRepeatingAlarm()`: Self-rescheduling exact interval alarms
- * - `cancelAllAlarms()`: Cancels both daily and repeating alarms
- * 
- * **Why AlarmManager over WorkManager?**
- * - WorkManager cannot guarantee exact-time execution
- * - AlarmManager with `setExactAndAllowWhileIdle` provides precise timing
- * - Essential for user-configured daily wallpaper change times
- * 
+ *
+ * AlarmManager with `setExactAndAllowWhileIdle` is used instead of WorkManager
+ * because WorkManager cannot guarantee exact-time execution, which users expect
+ * for configured daily change times.
+ *
  * @see WorkScheduler
  * @see WallpaperAlarmReceiver
  */
@@ -44,10 +33,6 @@ class AlarmScheduler @Inject constructor(
         const val ALARM_REQUEST_CODE_REPEATING = 1002
     }
     
-    /**
-     * Checks if exact alarm scheduling is available.
-     * @return true if AlarmManager is available and can schedule exact alarms
-     */
     fun canScheduleExactAlarms(): Boolean {
         if (alarmManager == null) return false
         
@@ -58,9 +43,6 @@ class AlarmScheduler @Inject constructor(
         }
     }
     
-    /**
-     * Checks if battery optimization is disabled (recommended for reliable alarms).
-     */
     fun isBatteryOptimizationExempt(): Boolean {
         return me.avinas.vanderwaals.core.BatteryOptimizationHelper
             .isIgnoringBatteryOptimizations(context)
@@ -68,12 +50,7 @@ class AlarmScheduler @Inject constructor(
     
     /**
      * Schedules a daily alarm at the specified time.
-     * 
      * Uses `setExactAndAllowWhileIdle` for precise timing that works during Doze mode.
-     * 
-     * @param time Target time for daily wallpaper change
-     * @param targetScreen Target screen (home, lock, both)
-     * @return SchedulingResult indicating success or failure
      */
     fun scheduleDailyAlarm(time: LocalTime, targetScreen: String): SchedulingResult {
         android.util.Log.d(TAG, "Scheduling daily alarm at ${time.hour}:${String.format("%02d", time.minute)}")
@@ -95,10 +72,8 @@ class AlarmScheduler @Inject constructor(
             android.util.Log.w(TAG, "⚠️ Battery optimization enabled - alarms may be delayed")
         }
         
-        // Cancel any existing daily alarm
         cancelDailyAlarm()
         
-        // Create alarm intent
         val alarmIntent = Intent(context, WallpaperAlarmReceiver::class.java).apply {
             putExtra("targetScreen", targetScreen)
             putExtra("mode", WallpaperChangeWorker.MODE_VANDERWAALS)
@@ -113,7 +88,6 @@ class AlarmScheduler @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         
-        // Calculate next execution time
         val calendar = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, time.hour)
             set(Calendar.MINUTE, time.minute)
@@ -150,13 +124,8 @@ class AlarmScheduler @Inject constructor(
     
     /**
      * Schedules a repeating alarm at the specified interval.
-     * 
-     * Uses `setExactAndAllowWhileIdle` with self-rescheduling for precise intervals.
-     * First alarm triggers after 5 seconds, then WallpaperAlarmReceiver reschedules.
-     * 
-     * @param intervalMillis Interval in milliseconds (e.g., 900000 for 15 min)
-     * @param targetScreen Target screen (home, lock, both)
-     * @return SchedulingResult indicating success or failure
+     * Uses `setExactAndAllowWhileIdle` with self-rescheduling for precise intervals;
+     * the first alarm fires after 5 seconds, then WallpaperAlarmReceiver reschedules.
      */
     fun scheduleRepeatingAlarm(intervalMillis: Long, targetScreen: String): SchedulingResult {
         val intervalMinutes = intervalMillis / 60000
@@ -176,7 +145,6 @@ class AlarmScheduler @Inject constructor(
         
         val hasBatteryWarning = !isBatteryOptimizationExempt()
         
-        // Cancel any existing repeating alarm
         cancelRepeatingAlarm()
         
         val alarmIntent = Intent(context, WallpaperAlarmReceiver::class.java).apply {
@@ -192,7 +160,6 @@ class AlarmScheduler @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         
-        // Schedule first alarm for 5 seconds from now
         val triggerTime = System.currentTimeMillis() + 5000
         
         return try {
@@ -220,11 +187,8 @@ class AlarmScheduler @Inject constructor(
     }
     
     /**
-     * Reschedules the next repeating alarm after the current one fires.
-     * Called by WallpaperAlarmReceiver to maintain the chain of exact alarms.
-     * 
-     * @param intervalMillis Interval in milliseconds
-     * @param targetScreen Target screen
+     * Reschedules the next repeating alarm after the current one fires,
+     * maintaining the chain of exact alarms. Called by WallpaperAlarmReceiver.
      */
     fun rescheduleNextRepeatingAlarm(intervalMillis: Long, targetScreen: String) {
         if (alarmManager == null) {
@@ -259,10 +223,6 @@ class AlarmScheduler @Inject constructor(
         }
     }
     
-    /**
-     * Reschedules daily alarm for the next day.
-     * Called by WallpaperAlarmReceiver after daily alarm fires.
-     */
     fun rescheduleNextDailyAlarm(hour: Int, minute: Int, targetScreen: String) {
         val calendar = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, hour)
@@ -303,9 +263,6 @@ class AlarmScheduler @Inject constructor(
         }
     }
     
-    /**
-     * Cancels the daily alarm.
-     */
     fun cancelDailyAlarm() {
         if (alarmManager == null) return
         
@@ -324,9 +281,6 @@ class AlarmScheduler @Inject constructor(
         }
     }
     
-    /**
-     * Cancels the repeating alarm.
-     */
     fun cancelRepeatingAlarm() {
         if (alarmManager == null) return
         
@@ -345,9 +299,6 @@ class AlarmScheduler @Inject constructor(
         }
     }
     
-    /**
-     * Cancels all wallpaper change alarms (daily and repeating).
-     */
     fun cancelAllAlarms() {
         cancelDailyAlarm()
         cancelRepeatingAlarm()

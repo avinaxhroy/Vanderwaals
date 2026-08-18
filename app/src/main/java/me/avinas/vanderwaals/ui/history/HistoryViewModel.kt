@@ -1,7 +1,6 @@
 package me.avinas.vanderwaals.ui.history
 
 import android.content.Context
-import android.os.Environment
 import android.util.Log
 import androidx.compose.material3.SnackbarHostState
 import androidx.lifecycle.ViewModel
@@ -11,157 +10,191 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import me.avinas.vanderwaals.core.MediaSaver
 import me.avinas.vanderwaals.data.dao.WallpaperHistoryDao
 import me.avinas.vanderwaals.data.entity.WallpaperHistory
 import me.avinas.vanderwaals.data.entity.WallpaperMetadata
-import me.avinas.vanderwaals.data.entity.WallpaperSummary
 import me.avinas.vanderwaals.data.repository.WallpaperRepository
 import me.avinas.vanderwaals.domain.usecase.FeedbackType
 import me.avinas.vanderwaals.domain.usecase.UpdatePreferencesUseCase
+import me.avinas.vanderwaals.worker.WallpaperApplicator
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
-import me.avinas.vanderwaals.core.MediaSaver
 
-/**
- * ViewModel for history screen state management.
- * 
- * Manages:
- * - Feedback history list (grouped by date)
- * - User feedback actions (like, dislike, download)
- * - Preference vector updates from feedback
- * - Queue reranking after significant updates
- * - History item deletion
- * 
- * StateFlow emissions:
- * - HistoryState: List of feedback entries grouped by date
- * - LoadingState: Processing state for feedback actions
- * - UpdateState: Confirmation of preference updates
- * - EmptyState: Whether history is empty
- * 
- * Uses cases:
- * - ProcessFeedbackUseCase: Update preferences from likes/dislikes
- * - GetRankedWallpapersUseCase: Rerank queue after feedback
- * 
- * Data sources:
- * - FeedbackRepository: Load history, record feedback
- * - PreferenceRepository: Update preference vector
- * 
- * Observes:
- * - Feedback history Flow from Room database (reactive updates)
- * - Preference update events
- * 
- * @see HistoryScreen
- */
+enum class HistoryFilter(val label: String) {
+    ALL("All"),
+    LIKED("Liked"),
+    HIDDEN("Hidden"),
+    SAVED("Saved")
+}
+
+data class HistoryStats(
+    val totalCount: Int = 0,
+    val likedCount: Int = 0,
+    val dislikedCount: Int = 0,
+    val savedCount: Int = 0,
+    val topCategory: String? = null
+)
+
+data class HistoryItemUiState(
+    val id: Long,
+    val wallpaper: WallpaperMetadata,
+    val appliedAt: String,
+    val localCroppedPath: String,
+    val feedback: FeedbackType?,
+    val isDownloaded: Boolean = false,
+    val rawTimestamp: Long = 0L
+)
+
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
     private val historyDao: WallpaperHistoryDao,
     private val wallpaperRepository: WallpaperRepository,
     private val updatePreferencesUseCase: UpdatePreferencesUseCase,
+    private val wallpaperApplicator: WallpaperApplicator,
     private val mediaSaver: MediaSaver,
     @param:ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    /**
-     * History items grouped by date headers (Today, Yesterday, Month Year).
-     * Each group contains a list of HistoryItemUiState.
-     */
-    /**
-     * UI State for the History Screen.
-     */
     sealed interface HistoryUiState {
         data object Loading : HistoryUiState
-        data class Success(val groups: List<Pair<String, List<HistoryItemUiState>>>) : HistoryUiState
+        data class Success(
+            val allGroups: List<Pair<String, List<HistoryItemUiState>>>,
+            val filteredGroups: List<Pair<String, List<HistoryItemUiState>>>,
+            val stats: HistoryStats,
+            val selectedFilter: HistoryFilter
+        ) : HistoryUiState
+    }
+
+    private val _selectedFilter = MutableStateFlow(HistoryFilter.ALL)
+    val selectedFilter: StateFlow<HistoryFilter> = _selectedFilter.asStateFlow()
+
+    private val _isApplying = MutableStateFlow<String?>(null)
+    val isApplying: StateFlow<String?> = _isApplying.asStateFlow()
+
+    /**
+     * History items grouped by date headers and filtered by active category/signal.
+     */
+    val historyGroups: StateFlow<HistoryUiState> =
+        combine(
+            historyDao.getHistory(),
+            wallpaperRepository.getAllWallpaperSummaries(),
+            _selectedFilter
+        ) { historyList, wallpapers, filter ->
+            if (historyList.isNotEmpty() && wallpapers.isEmpty()) {
+                HistoryUiState.Loading
+            } else {
+                val wallpaperMap = wallpapers.associateBy { it.id }
+
+                val allUiItems = historyList
+                    .mapNotNull { history ->
+                        wallpaperMap[history.wallpaperId]?.let { wallpaper ->
+                            Pair(
+                                HistoryItemUiState(
+                                    id = history.id,
+                                    wallpaper = wallpaper,
+                                    appliedAt = formatRelativeTime(history.appliedAt),
+                                    localCroppedPath = wallpaperRepository.getCroppedWallpaperFile(wallpaper).absolutePath,
+                                    feedback = when (history.userFeedback) {
+                                        WallpaperHistory.FEEDBACK_LIKE -> FeedbackType.LIKE
+                                        WallpaperHistory.FEEDBACK_DISLIKE -> FeedbackType.DISLIKE
+                                        else -> null
+                                    },
+                                    isDownloaded = history.downloadedToStorage,
+                                    rawTimestamp = history.appliedAt
+                                ),
+                                history.appliedAt
+                            )
+                        }
+                    }
+                    .sortedByDescending { (_, timestamp) -> timestamp }
+
+                val likedCount = historyList.count { it.userFeedback == WallpaperHistory.FEEDBACK_LIKE }
+                val dislikedCount = historyList.count { it.userFeedback == WallpaperHistory.FEEDBACK_DISLIKE }
+                val savedCount = historyList.count { it.downloadedToStorage }
+                val topCat = allUiItems
+                    .map { it.first.wallpaper.category.trim() }
+                    .filter { it.isNotEmpty() }
+                    .groupingBy { it }
+                    .eachCount()
+                    .maxByOrNull { it.value }?.key
+
+                val stats = HistoryStats(
+                    totalCount = historyList.size,
+                    likedCount = likedCount,
+                    dislikedCount = dislikedCount,
+                    savedCount = savedCount,
+                    topCategory = topCat
+                )
+
+                val allGroups = allUiItems
+                    .groupBy { (_, timestamp) -> getDateHeader(timestamp) }
+                    .map { (header, items) -> header to items.map { (uiState, _) -> uiState } }
+                    .sortedWith(compareBy { (header, _) ->
+                        when (header) {
+                            "Today" -> 0
+                            "Yesterday" -> 1
+                            else -> 2
+                        }
+                    })
+
+                val filteredUiItems = when (filter) {
+                    HistoryFilter.ALL -> allUiItems
+                    HistoryFilter.LIKED -> allUiItems.filter { it.first.feedback == FeedbackType.LIKE }
+                    HistoryFilter.HIDDEN -> allUiItems.filter { it.first.feedback == FeedbackType.DISLIKE }
+                    HistoryFilter.SAVED -> allUiItems.filter { it.first.isDownloaded || it.first.feedback == FeedbackType.DOWNLOAD }
+                }
+
+                val filteredGroups = filteredUiItems
+                    .groupBy { (_, timestamp) -> getDateHeader(timestamp) }
+                    .map { (header, items) -> header to items.map { (uiState, _) -> uiState } }
+                    .sortedWith(compareBy { (header, _) ->
+                        when (header) {
+                            "Today" -> 0
+                            "Yesterday" -> 1
+                            else -> 2
+                        }
+                    })
+
+                HistoryUiState.Success(
+                    allGroups = allGroups,
+                    filteredGroups = filteredGroups,
+                    stats = stats,
+                    selectedFilter = filter
+                )
+            }
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = HistoryUiState.Loading
+        )
+
+    fun setFilter(filter: HistoryFilter) {
+        _selectedFilter.value = filter
     }
 
     /**
-     * History items grouped by date headers (Today, Yesterday, Month Year).
-     * Each group contains a list of HistoryItemUiState.
-     */
-    val historyGroups: StateFlow<HistoryUiState> =
-        historyDao.getHistory()
-            .combine(wallpaperRepository.getAllWallpaperSummaries()) { historyList, wallpapers ->
-                // CRITICAL FIX: If we have history items but no wallpapers yet, it means metadata is still loading.
-                // Don't emit Success(empty) yet, wait for metadata.
-                if (historyList.isNotEmpty() && wallpapers.isEmpty()) {
-                    HistoryUiState.Loading
-                } else {
-                    // PERFORMANCE OPTIMIZATION: Use summaries without embeddings for UI display
-                    // Embeddings (1280 floats) are only needed for feedback, not UI rendering
-                    // This reduces memory usage by ~87% (from ~2.3 KB to ~0.3 KB per wallpaper)
-                    val wallpaperMap = wallpapers.associateBy { it.id }
-                    
-                    // Convert to UI state with timestamp tracking for grouping
-                    val uiItems = historyList
-                        .mapNotNull { history ->
-                            wallpaperMap[history.wallpaperId]?.let { wallpaper ->
-                                Pair(
-                                    HistoryItemUiState(
-                                        id = history.id,
-                                        wallpaper = wallpaper,
-                                        appliedAt = formatRelativeTime(history.appliedAt),
-                                        localCroppedPath = wallpaperRepository.getCroppedWallpaperFile(wallpaper).absolutePath,
-                                        feedback = when (history.userFeedback) {
-                                            WallpaperHistory.FEEDBACK_LIKE -> FeedbackType.LIKE
-                                            WallpaperHistory.FEEDBACK_DISLIKE -> FeedbackType.DISLIKE
-                                            else -> null
-                                        }
-                                    ),
-                                    history.appliedAt  // Track original timestamp
-                                )
-                            }
-                        }
-                        .sortedByDescending { (_, timestamp) -> timestamp } // Sort by timestamp descending - most recent first
-                        .groupBy { (_, timestamp) -> getDateHeader(timestamp) }
-                        .map { (header, items) -> header to items.map { (uiState, _) -> uiState } }
-                        .sortedBy { (header, _) ->
-                            // Sort groups: Today, Yesterday, then by date descending
-                            when (header) {
-                                "Today" -> 0
-                                "Yesterday" -> 1
-                                else -> 2
-                            }
-                        }
-                    HistoryUiState.Success(uiItems)
-                }
-            }
-            .flowOn(Dispatchers.Default) // CRITICAL: Run heavy sorting/grouping on Default dispatcher
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = HistoryUiState.Loading
-            )
-
-    /**
      * Updates feedback for a history item and triggers preference learning.
-     * 
-     * @param historyId The ID of the history entry
-     * @param feedback The type of feedback (LIKE or DISLIKE)
-     * @param onSuccess Callback invoked on successful update
      */
     fun updateFeedback(historyId: Long, feedback: FeedbackType, onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
-                // Get the history entry
                 val history = historyDao.getHistory().first().find { it.id == historyId }
                     ?: return@launch
-                
-                // CRITICAL: Load full wallpaper with embedding for preference learning
-                // UI uses summaries, but feedback requires the 1280-dimensional embedding
+
                 val wallpaper = wallpaperRepository.getAllWallpapers().first()
                     .find { it.id == history.wallpaperId }
                     ?: return@launch
-                
-                // Update preferences using the use case
+
                 val result = updatePreferencesUseCase(wallpaper, feedback)
-                
                 result.fold(
                     onSuccess = {
-                        // Update history with feedback
-                        // DOWNLOAD is treated as LIKE in history (super-like)
                         val updatedHistory = history.copy(
                             userFeedback = when (feedback) {
                                 FeedbackType.LIKE, FeedbackType.DOWNLOAD -> WallpaperHistory.FEEDBACK_LIKE
@@ -182,45 +215,36 @@ class HistoryViewModel @Inject constructor(
     }
 
     /**
-     * Downloads a wallpaper to device storage.
-     * 
-     * @param wallpaperId The ID of the wallpaper to download
-     * @param onSuccess Callback invoked on successful download
+     * Downloads a wallpaper to device storage and marks it in history.
      */
-    fun downloadWallpaper(wallpaperId: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    fun downloadWallpaper(historyId: Long, wallpaperId: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
-                // CRITICAL: Load full wallpaper with embedding for preference learning
-                // Download action is the STRONGEST positive signal (1.5x learning rate)
                 val fullWallpaper = wallpaperRepository.getAllWallpapers().first()
                     .find { it.id == wallpaperId }
                     ?: return@launch
-                
-                // Download/Get from cache
+
                 val downloadResult = wallpaperRepository.downloadWallpaper(fullWallpaper)
-                
                 downloadResult.onSuccess { file ->
-                    // Validate file before saving
                     if (!file.exists() || file.length() <= 0) {
                         onError("Download failed: Empty file")
                         return@onSuccess
                     }
 
-                    // Save to gallery
                     val saveResult = mediaSaver.saveImageToGallery(file, fullWallpaper.id)
                     if (saveResult.isSuccess) {
-                        // IMPORTANT: Update preferences with DOWNLOAD feedback (highest weight)
-                        // This has 1.5x learning rate compared to regular LIKE
-                        if (fullWallpaper.embedding.isNotEmpty()) {
-                            val preferenceResult = updatePreferencesUseCase(fullWallpaper, FeedbackType.DOWNLOAD)
-                            preferenceResult.fold(
-                                onSuccess = {
-                                    android.util.Log.d("HistoryViewModel", "Download preference updated for: ${fullWallpaper.id}")
-                                },
-                                onFailure = { error ->
-                                    android.util.Log.e("HistoryViewModel", "Failed to update preferences for download", error)
-                                }
+                        val history = historyDao.getHistory().first().find { it.id == historyId }
+                        if (history != null) {
+                            historyDao.update(
+                                history.copy(
+                                    downloadedToStorage = true,
+                                    userFeedback = history.userFeedback ?: WallpaperHistory.FEEDBACK_LIKE
+                                )
                             )
+                        }
+
+                        if (fullWallpaper.embedding.isNotEmpty()) {
+                            updatePreferencesUseCase(fullWallpaper, FeedbackType.DOWNLOAD)
                         }
                         onSuccess()
                     } else {
@@ -237,57 +261,94 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Shows a snackbar message.
-     */
+    fun applyWallpaper(
+        wallpaper: WallpaperMetadata,
+        targetScreen: String = "both",
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            _isApplying.value = wallpaper.id
+            try {
+                val downloadResult = wallpaperRepository.downloadWallpaper(wallpaper)
+                downloadResult.fold(
+                    onSuccess = { file ->
+                        val applyResult = wallpaperApplicator.apply(file, targetScreen)
+                        when (applyResult) {
+                            is WallpaperApplicator.ApplyResult.Success -> {
+                                val newHistory = WallpaperHistory(
+                                    wallpaperId = wallpaper.id,
+                                    appliedAt = System.currentTimeMillis(),
+                                    removedAt = null,
+                                    userFeedback = null,
+                                    downloadedToStorage = false
+                                )
+                                historyDao.insert(newHistory)
+                                onSuccess()
+                            }
+                            is WallpaperApplicator.ApplyResult.BlockedByLiveWallpaper -> {
+                                onError("Blocked by live wallpaper: ${applyResult.serviceName}")
+                            }
+                            is WallpaperApplicator.ApplyResult.DecodeFailed -> {
+                                onError("Failed to decode wallpaper bitmap")
+                            }
+                            is WallpaperApplicator.ApplyResult.InvalidTarget -> {
+                                onError("Invalid screen target: $targetScreen")
+                            }
+                            is WallpaperApplicator.ApplyResult.Error -> {
+                                onError(applyResult.exception.message ?: "Failed to set wallpaper")
+                            }
+                        }
+                    },
+                    onFailure = { error ->
+                        onError(error.message ?: "Failed to download wallpaper for application")
+                    }
+                )
+            } catch (e: Exception) {
+                Log.e("HistoryViewModel", "Error applying wallpaper from history", e)
+                onError("Error: ${e.message}")
+            } finally {
+                _isApplying.value = null
+            }
+        }
+    }
+
     fun showSnackbar(snackbarHostState: SnackbarHostState, message: String) {
         viewModelScope.launch {
             snackbarHostState.showSnackbar(message)
         }
     }
 
-    /**
-     * Formats a timestamp as relative time.
-     * 
-     * @param timestamp Milliseconds since epoch
-     * @return Formatted string like "2 hours ago", "Yesterday at 8:15 PM", "May 15"
-     */
     private fun formatRelativeTime(timestamp: Long): String {
         val now = System.currentTimeMillis()
         val diff = (now - timestamp).milliseconds
-        
+
         return when {
             diff < 24.hours -> {
-                // Today - show relative time
                 when {
-                    diff.inWholeHours < 1 -> "Applied ${diff.inWholeMinutes} minutes ago"
+                    diff.inWholeHours < 1 -> {
+                        val mins = diff.inWholeMinutes.coerceAtLeast(1)
+                        if (mins == 1L) "Applied 1 min ago" else "Applied $mins mins ago"
+                    }
                     diff.inWholeHours == 1L -> "Applied 1 hour ago"
                     else -> "Applied ${diff.inWholeHours} hours ago"
                 }
             }
             diff < 48.hours -> {
-                // Yesterday - show time
                 val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-                "Applied Yesterday at ${timeFormat.format(Date(timestamp))}"
+                "Yesterday at ${timeFormat.format(Date(timestamp))}"
             }
             else -> {
-                // Older - show date
-                val dateFormat = SimpleDateFormat("MMM d", Locale.getDefault())
-                "Applied ${dateFormat.format(Date(timestamp))}"
+                val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+                dateFormat.format(Date(timestamp))
             }
         }
     }
 
-    /**
-     * Gets the date header for grouping.
-     * 
-     * @param timestamp Milliseconds since epoch
-     * @return "Today", "Yesterday", or "Month Year" (e.g., "May 2024")
-     */
     private fun getDateHeader(timestamp: Long): String {
         val now = System.currentTimeMillis()
         val diff = (now - timestamp).milliseconds
-        
+
         return when {
             diff < 24.hours -> "Today"
             diff < 48.hours -> "Yesterday"
@@ -298,19 +359,3 @@ class HistoryViewModel @Inject constructor(
         }
     }
 }
-
-/**
- * UI state for a single history item.
- * 
- * @property id History entry ID
- * @property wallpaper Full wallpaper metadata
- * @property appliedAt Formatted relative time string
- * @property feedback Current user feedback (LIKE, DISLIKE, or null)
- */
-data class HistoryItemUiState(
-    val id: Long,
-    val wallpaper: WallpaperMetadata,
-    val appliedAt: String,
-    val localCroppedPath: String,
-    val feedback: FeedbackType?
-)

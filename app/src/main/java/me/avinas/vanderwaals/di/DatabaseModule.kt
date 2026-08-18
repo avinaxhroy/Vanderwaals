@@ -27,42 +27,16 @@ import javax.inject.Singleton
 object DatabaseModule {
     
     /**
-     * Provides a singleton Converters instance.
-     * 
-     * Injected into Room database via @ProvidedTypeConverter.
-     * This allows using a custom-configured Gson instance and
-     * makes testing easier by allowing mock converters.
-     * 
-     * @param gson Gson instance for serialization
-     * @return Converters instance with injected Gson
+     * Injected into Room via @ProvidedTypeConverter so a custom-configured
+     * Gson instance can be used and tests can supply mock converters.
      */
     @Provides
     @Singleton
     fun provideConverters(gson: Gson): Converters {
         return Converters(gson)
     }    /**
-     * Provides a singleton VanderwaalsDatabase instance.
-     * 
-     * Configures Room database with:
-     * - Type converters for complex types
-     * - Migrations (empty for version 1)
-     * - Destructive migration fallback (development only - REMOVE for production)
-     * 
-     * **Important for Production:**
-     * Remove `.fallbackToDestructiveMigration()` and add proper migrations
-     * to preserve user data during schema changes.
-     * 
-     * @param context Application context
-     * @param converters Type converters instance
-     * @return Configured database instance
-     * 
-     * Example production configuration:
-     * ```kotlin
-     * Room.databaseBuilder(context, VanderwaalsDatabase::class.java, VanderwaalsDatabase.DATABASE_NAME)
-     *     .addTypeConverter(converters)
-     *     .addMigrations(*VanderwaalsDatabase.MIGRATIONS)
-     *     .build()
-     * ```
+     * Production note: remove `.fallbackToDestructiveMigration()`
+     * and add proper migrations to preserve user data during schema changes.
      */
     @Provides
     @Singleton
@@ -77,30 +51,13 @@ object DatabaseModule {
         )
         .addTypeConverter(converters)
         .addMigrations(*VanderwaalsDatabase.MIGRATIONS)
-        // CRITICAL: Enable multi-instance invalidation for Workers
-        // Workers run in separate processes and need to see main app's database updates
         .enableMultiInstanceInvalidation()
-        // CRITICAL: Set WAL journal mode with TRUNCATE for better multi-process sync
         .setJournalMode(androidx.room.RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-        // Prevent crash on database downgrade (e.g. user reverts to older app version)
         .fallbackToDestructiveMigrationOnDowngrade(true)
-        // ponytail: destructive fallback on upgrade — wallpaper metadata is re-syncable cache,
-        // user prefs/history loss is acceptable vs crashing on every launch
         .fallbackToDestructiveMigration(true)
         .build()
     }
     
-    /**
-     * Provides WallpaperMetadataDao from the database.
-     * 
-     * Used for:
-     * - Loading wallpapers with embeddings
-     * - Filtering by category, source, brightness
-     * - Inserting wallpapers from manifest sync
-     * 
-     * @param database VanderwaalsDatabase instance
-     * @return WallpaperMetadataDao
-     */
     @Provides
     @Singleton
     fun provideWallpaperMetadataDao(
@@ -109,17 +66,6 @@ object DatabaseModule {
         return database.wallpaperMetadataDao
     }
     
-    /**
-     * Provides UserPreferenceDao from the database.
-     * 
-     * Used for:
-     * - Loading/updating user preference vector
-     * - Switching between auto/personalized modes
-     * - Tracking feedback count and epsilon
-     * 
-     * @param database VanderwaalsDatabase instance
-     * @return UserPreferenceDao
-     */
     @Provides
     @Singleton
     fun provideUserPreferenceDao(
@@ -128,18 +74,6 @@ object DatabaseModule {
         return database.userPreferenceDao
     }
     
-    /**
-     * Provides WallpaperHistoryDao from the database.
-     * 
-     * Used for:
-     * - Recording wallpaper applications/removals
-     * - Tracking user feedback (likes/dislikes)
-     * - Displaying history in UI
-     * - Learning from implicit feedback
-     * 
-     * @param database VanderwaalsDatabase instance
-     * @return WallpaperHistoryDao
-     */
     @Provides
     @Singleton
     fun provideWallpaperHistoryDao(
@@ -148,18 +82,6 @@ object DatabaseModule {
         return database.wallpaperHistoryDao
     }
     
-    /**
-     * Provides DownloadQueueDao from the database.
-     * 
-     * Used for:
-     * - Populating queue with top matches
-     * - Retrieving wallpapers to download
-     * - Updating priorities and download status
-     * - Managing retry logic
-     * 
-     * @param database VanderwaalsDatabase instance
-     * @return DownloadQueueDao
-     */
     @Provides
     @Singleton
     fun provideDownloadQueueDao(
@@ -168,18 +90,6 @@ object DatabaseModule {
         return database.downloadQueueDao
     }
     
-    /**
-     * Provides CategoryPreferenceDao from the database.
-     * 
-     * Used for:
-     * - Tracking category-level preferences (likes, dislikes, views)
-     * - Computing category preference scores
-     * - Enabling category-aware exploration
-     * - Managing temporal diversity across categories
-     * 
-     * @param database VanderwaalsDatabase instance
-     * @return CategoryPreferenceDao
-     */
     @Provides
     @Singleton
     fun provideCategoryPreferenceDao(
@@ -188,18 +98,6 @@ object DatabaseModule {
         return database.categoryPreferenceDao
     }
     
-    /**
-     * Provides ColorPreferenceDao from the database.
-     * 
-     * Used for:
-     * - Tracking color-level preferences (likes, dislikes, views)
-     * - Computing color preference scores
-     * - Fallback personalization when categories are missing
-     * - RGB Euclidean distance color similarity matching
-     * 
-     * @param database VanderwaalsDatabase instance
-     * @return ColorPreferenceDao
-     */
     @Provides
     @Singleton
     fun provideColorPreferenceDao(
@@ -208,18 +106,6 @@ object DatabaseModule {
         return database.colorPreferenceDao
     }
     
-    /**
-     * Provides CompositionPreferenceDao from the database.
-     * 
-     * Used for:
-     * - Tracking composition/layout preferences (symmetry, center weight, etc.)
-     * - Computing composition preference scores
-     * - Learning visual composition preferences from feedback
-     * - Matching wallpapers based on composition similarity
-     * 
-     * @param database VanderwaalsDatabase instance
-     * @return CompositionPreferenceDao
-     */
     @Provides
     @Singleton
     fun provideCompositionPreferenceDao(
@@ -227,5 +113,13 @@ object DatabaseModule {
     ): CompositionPreferenceDao {
         return database.compositionPreferenceDao
     }
-    
+
+    @Provides
+    @Singleton
+    fun provideTasteAnchorDao(
+        database: VanderwaalsDatabase
+    ): me.avinas.vanderwaals.data.dao.TasteAnchorDao {
+        return database.tasteAnchorDao
+    }
+
     }

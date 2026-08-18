@@ -12,80 +12,47 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/**
- * Vanderwaals Animation System
- * 
- * A collection of smooth, polished animations and transitions for:
- * - Micro-interactions
- * - Content transitions
- * - State changes
- * - Loading states
- * - Gesture feedback
- */
+// animation specs
 
-// ===== ANIMATION SPECS =====
-
-/**
- * Standard spring animation spec
- */
 val standardSpring = spring<Float>(
-    dampingRatio = Spring.DampingRatioMediumBouncy,
-    stiffness = Spring.StiffnessLow
-)
-
-/**
- * Bouncy spring animation spec
- */
-val bouncySpring = spring<Float>(
-    dampingRatio = Spring.DampingRatioLowBouncy,
+    dampingRatio = Spring.DampingRatioNoBouncy,
     stiffness = Spring.StiffnessMedium
 )
 
-/**
- * Stiff spring animation spec
- */
+val bouncySpring = spring<Float>(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessMedium
+)
+
 val stiffSpring = spring<Float>(
     dampingRatio = Spring.DampingRatioNoBouncy,
     stiffness = Spring.StiffnessHigh
 )
 
-/**
- * Smooth tween animation spec
- */
 val smoothTween = tween<Float>(
     durationMillis = 300,
     easing = FastOutSlowInEasing
 )
 
-/**
- * Quick tween animation spec
- */
 val quickTween = tween<Float>(
     durationMillis = 150,
     easing = FastOutSlowInEasing
 )
 
-/**
- * Slow tween animation spec
- */
 val slowTween = tween<Float>(
-    durationMillis = 500,
+    durationMillis = 400,
     easing = FastOutSlowInEasing
 )
 
-// ===== MODIFIER EXTENSIONS =====
+// modifier extensions
 
-/**
- * Scale down on press animation
- * Creates a subtle press feedback
- */
 fun Modifier.pressAnimation(
-    scaleDown: Float = 0.95f
+    scaleDown: Float = 0.98f
 ): Modifier = composed {
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isPressed) scaleDown else 1f,
-        animationSpec = standardSpring,
+        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
         label = "pressScale"
     )
     
@@ -98,17 +65,14 @@ fun Modifier.pressAnimation(
         )
 }
 
-/**
- * Bounce animation on appear
- */
 fun Modifier.bounceOnAppear(
-    initialScale: Float = 0.8f
+    initialScale: Float = 0.95f
 ): Modifier = composed {
     var isVisible by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isVisible) 1f else initialScale,
-        animationSpec = bouncySpring,
-        label = "bounceScale"
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+        label = "appearScale"
     )
     
     LaunchedEffect(Unit) {
@@ -118,11 +82,8 @@ fun Modifier.bounceOnAppear(
     this.scale(scale)
 }
 
-/**
- * Fade in animation
- */
 fun Modifier.fadeInAnimation(
-    durationMillis: Int = 300,
+    durationMillis: Int = 250,
     delayMillis: Int = 0
 ): Modifier = composed {
     var isVisible by remember { mutableStateOf(false) }
@@ -143,20 +104,17 @@ fun Modifier.fadeInAnimation(
     this.graphicsLayer { this.alpha = alpha }
 }
 
-/**
- * Slide in from left animation
- */
 fun Modifier.slideInFromLeft(
-    durationMillis: Int = 300
+    durationMillis: Int = 250
 ): Modifier = composed {
     var isVisible by remember { mutableStateOf(false) }
     val offsetX by animateFloatAsState(
-        targetValue = if (isVisible) 0f else -100f,
+        targetValue = if (isVisible) 0f else -50f,
         animationSpec = tween(
             durationMillis = durationMillis,
             easing = FastOutSlowInEasing
         ),
-        label = "slideOffset"
+        label = "slideLeft"
     )
     
     LaunchedEffect(Unit) {
@@ -166,20 +124,17 @@ fun Modifier.slideInFromLeft(
     this.graphicsLayer { translationX = offsetX }
 }
 
-/**
- * Slide in from right animation
- */
 fun Modifier.slideInFromRight(
-    durationMillis: Int = 300
+    durationMillis: Int = 250
 ): Modifier = composed {
     var isVisible by remember { mutableStateOf(false) }
     val offsetX by animateFloatAsState(
-        targetValue = if (isVisible) 0f else 100f,
+        targetValue = if (isVisible) 0f else 50f,
         animationSpec = tween(
             durationMillis = durationMillis,
             easing = FastOutSlowInEasing
         ),
-        label = "slideOffset"
+        label = "slideRight"
     )
     
     LaunchedEffect(Unit) {
@@ -189,19 +144,46 @@ fun Modifier.slideInFromRight(
     this.graphicsLayer { translationX = offsetX }
 }
 
-/**
- * Shake animation for errors
- */
-fun Modifier.shakeAnimation(
-    trigger: Boolean
+fun Modifier.slideInFromBottom(
+    durationMillis: Int = 250
 ): Modifier = composed {
+    var isVisible by remember { mutableStateOf(false) }
+    val offsetY by animateFloatAsState(
+        targetValue = if (isVisible) 0f else 50f,
+        animationSpec = tween(
+            durationMillis = durationMillis,
+            easing = FastOutSlowInEasing
+        ),
+        label = "slideBottom"
+    )
+    
+    LaunchedEffect(Unit) {
+        isVisible = true
+    }
+    
+    this.graphicsLayer { translationY = offsetY }
+}
+
+// shake for errors/warnings
+fun Modifier.shakeAnimation(
+    shakeTrigger: Boolean = false
+): Modifier = composed {
+    var isShaking by remember { mutableStateOf(false) }
+    
+    LaunchedEffect(shakeTrigger) {
+        if (shakeTrigger) {
+            isShaking = true
+        }
+    }
+    
     val shake by animateFloatAsState(
-        targetValue = if (trigger) 1f else 0f,
+        targetValue = if (isShaking) 1f else 0f,
         animationSpec = tween(
             durationMillis = 100,
             easing = LinearEasing
         ),
-        label = "shake"
+        label = "shake",
+        finishedListener = { isShaking = false }
     )
     
     this.graphicsLayer {
@@ -211,14 +193,12 @@ fun Modifier.shakeAnimation(
     }
 }
 
-/**
- * Pulse animation for attention
- */
+// pulse to draw attention
 fun Modifier.pulseAnimation(
     enabled: Boolean = true,
-    minScale: Float = 0.95f,
-    maxScale: Float = 1.05f,
-    durationMillis: Int = 1000
+    minScale: Float = 0.98f,
+    maxScale: Float = 1.02f,
+    durationMillis: Int = 1200
 ): Modifier = composed {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val scale by infiniteTransition.animateFloat(
@@ -237,9 +217,6 @@ fun Modifier.pulseAnimation(
     if (enabled) this.scale(scale) else this
 }
 
-/**
- * Shimmer loading animation
- */
 fun Modifier.shimmerAnimation(
     enabled: Boolean = true
 ): Modifier = composed {
@@ -264,9 +241,6 @@ fun Modifier.shimmerAnimation(
     } else this
 }
 
-/**
- * Rotate animation
- */
 fun Modifier.rotateAnimation(
     enabled: Boolean = true,
     durationMillis: Int = 1000
@@ -288,29 +262,23 @@ fun Modifier.rotateAnimation(
     if (enabled) this.graphicsLayer { rotationZ = rotation } else this
 }
 
-/**
- * Hover scale animation
- */
 fun Modifier.hoverScale(
     hovered: Boolean,
-    scale: Float = 1.05f
+    scale: Float = 1.02f
 ): Modifier = composed {
     val animatedScale by animateFloatAsState(
         targetValue = if (hovered) scale else 1f,
-        animationSpec = standardSpring,
+        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
         label = "hoverScale"
     )
     
     this.scale(animatedScale)
 }
 
-/**
- * Elevation animation
- */
 fun Modifier.animatedElevation(
     elevated: Boolean,
-    normalElevation: Dp = 4.dp,
-    elevatedValue: Dp = 12.dp
+    normalElevation: Dp = 2.dp,
+    elevatedValue: Dp = 6.dp
 ): Modifier = composed {
     val elevation by animateDpAsState(
         targetValue = if (elevated) elevatedValue else normalElevation,
@@ -326,59 +294,44 @@ fun Modifier.animatedElevation(
     }
 }
 
-// ===== TRANSITION SPECS =====
+// transition specs
 
-/**
- * Enter transition - fade in and slide up
- */
 fun fadeInSlideUp(
-    durationMillis: Int = 300
+    durationMillis: Int = 250
 ): EnterTransition = fadeIn(
-    animationSpec = tween(durationMillis)
+    animationSpec = tween(durationMillis, easing = FastOutSlowInEasing)
 ) + slideInVertically(
-    animationSpec = tween(durationMillis),
-    initialOffsetY = { it / 2 }
+    animationSpec = tween(durationMillis, easing = FastOutSlowInEasing),
+    initialOffsetY = { it / 4 }
 )
 
-/**
- * Exit transition - fade out and slide down
- */
 fun fadeOutSlideDown(
-    durationMillis: Int = 300
+    durationMillis: Int = 200
 ): ExitTransition = fadeOut(
-    animationSpec = tween(durationMillis)
+    animationSpec = tween(durationMillis, easing = FastOutSlowInEasing)
 ) + slideOutVertically(
-    animationSpec = tween(durationMillis),
-    targetOffsetY = { it / 2 }
+    animationSpec = tween(durationMillis, easing = FastOutSlowInEasing),
+    targetOffsetY = { it / 4 }
 )
 
-/**
- * Enter transition - fade in and scale up
- */
 fun fadeInScaleUp(
-    durationMillis: Int = 300
+    durationMillis: Int = 250
 ): EnterTransition = fadeIn(
-    animationSpec = tween(durationMillis)
+    animationSpec = tween(durationMillis, easing = FastOutSlowInEasing)
 ) + scaleIn(
-    animationSpec = tween(durationMillis),
-    initialScale = 0.8f
+    animationSpec = tween(durationMillis, easing = FastOutSlowInEasing),
+    initialScale = 0.95f
 )
 
-/**
- * Exit transition - fade out and scale down
- */
 fun fadeOutScaleDown(
-    durationMillis: Int = 300
+    durationMillis: Int = 200
 ): ExitTransition = fadeOut(
-    animationSpec = tween(durationMillis)
+    animationSpec = tween(durationMillis, easing = FastOutSlowInEasing)
 ) + scaleOut(
-    animationSpec = tween(durationMillis),
-    targetScale = 0.8f
+    animationSpec = tween(durationMillis, easing = FastOutSlowInEasing),
+    targetScale = 0.95f
 )
 
-/**
- * Standard content transition
- */
 val standardContentTransition = ContentTransform(
     targetContentEnter = fadeInSlideUp(),
     initialContentExit = fadeOutSlideDown()

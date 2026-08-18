@@ -5,16 +5,8 @@ import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
 
 /**
- * Single-row Room entity storing the user's learned preference state.
- *
- * Both "auto" and "personalized" modes use the same table; the mode field
- * only records how the vector was initialized (empty vs. from an uploaded image).
- *
- * @property preferenceVector 1280-dimensional aesthetic preference vector (EMA + momentum)
- * @property originalEmbedding Reference embedding from upload (personalize) or empty (auto)
- * @property momentumVector Velocity vector for momentum-based learning
- * @property feedbackCount Total explicit feedback events (likes + dislikes)
- * @property epsilon Exploration rate for epsilon-greedy selection
+ * Single-row entity holding learned preference state. Both modes share the
+ * table; `mode` only records how the vector was initialized (empty vs. uploaded).
  */
 @Entity(tableName = "user_preferences")
 @TypeConverters(Converters::class)
@@ -80,31 +72,15 @@ data class UserPreferences(
     }
 
     companion object {
-        /**
-         * Default epsilon value for exploration (10% exploration, 90% exploitation).
-         */
+        /** Default epsilon: 10% exploration, 90% exploitation. */
         const val DEFAULT_EPSILON = 0.1f
 
-        /**
-         * Mode constant: User chose Auto Mode (skipped upload, learns from scratch).
-         * Algorithm starts with diverse wallpapers, then learns from likes/dislikes.
-         * After 10-15 likes, becomes just as personalized as MODE_PERSONALIZED.
-         */
+        /** Auto Mode: skipped upload, learns from scratch. */
         const val MODE_AUTO = "auto"
 
-        /**
-         * Mode constant: User chose Personalize Mode (uploaded favorite wallpaper).
-         * Algorithm starts with preferences from upload, continues learning from feedback.
-         * Uses same learning mechanism as MODE_AUTO, just different starting point.
-         */
+        /** Personalize Mode: seeded from an uploaded favorite wallpaper. */
         const val MODE_PERSONALIZED = "personalized"
 
-        /**
-         * Creates a new UserPreferences instance with default values for a new user.
-         * 
-         * @param initialVector Optional initial preference vector (e.g., from uploaded wallpaper)
-         * @return New UserPreferences instance in auto mode with empty feedback
-         */
         fun createDefault(initialVector: FloatArray = floatArrayOf()): UserPreferences {
             return UserPreferences(
                 id = 1,

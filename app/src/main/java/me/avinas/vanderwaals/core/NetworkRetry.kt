@@ -38,48 +38,8 @@ object NetworkRetry {
     private const val JITTER_PERCENT = 0.25
     
     /**
-     * Executes a suspend operation with automatic retry logic.
-     * 
-     * Retries the operation on transient failures (network errors, server errors)
-     * using exponential backoff with jitter. Fails fast on client errors (4xx).
-     * 
-     * **Retry Logic:**
-     * - Retries on: IOException (network errors), HTTP 500-599 (server errors)
-     * - Fails immediately on: HTTP 400-499 (client errors), other exceptions
-     * - Delay formula: min(baseDelay * 2^attempt, maxDelay) with ±25% jitter
-     * 
-     * **Example Delays (with baseDelay=1000ms):**
-     * - Attempt 0: ~1000ms (750-1250ms with jitter)
-     * - Attempt 1: ~2000ms (1500-2500ms with jitter)
-     * - Attempt 2: ~4000ms (3000-5000ms with jitter)
-     * - Attempt 3: ~8000ms (6000-10000ms with jitter)
-     * 
-     * @param maxRetries Maximum number of retry attempts (default: 3)
-     * @param baseDelayMs Base delay in milliseconds for exponential backoff (default: 1000)
-     * @param maxDelayMs Maximum delay cap in milliseconds (default: 30000)
-     * @param onRetry Optional callback invoked before each retry with (attempt, error)
-     * @param operation Suspend function to execute with retry logic
-     * @return Result of the operation if successful
-     * @throws Exception if all retries are exhausted or non-retryable error occurs
-     * 
-     * Example:
-     * ```kotlin
-     * suspend fun downloadManifest(): Manifest {
-     *     return NetworkRetry.retryWithBackoff(
-     *         maxRetries = 3,
-     *         onRetry = { attempt, error ->
-     *             _syncProgress.value = "Retry attempt $attempt..."
-     *         }
-     *     ) {
-     *         manifestService.getManifest().also { response ->
-     *             if (!response.isSuccessful) {
-     *                 throw HttpException(response)
-     *             }
-     *             response.body() ?: throw IOException("Empty response body")
-     *         }
-     *     }
-     * }
-     * ```
+     * Retries on transient failures (IOException, HTTP 5xx) using exponential
+     * backoff with ±25% jitter, and fails fast on client errors (4xx).
      */
     suspend fun <T> retryWithBackoff(
         maxRetries: Int = DEFAULT_MAX_RETRIES,
@@ -92,7 +52,6 @@ object NetworkRetry {
         
         repeat(maxRetries) { attempt ->
             try {
-                // Attempt the operation
                 return operation()
                 
             } catch (e: IOException) {
@@ -152,16 +111,8 @@ object NetworkRetry {
     }
     
     /**
-     * Calculates the backoff delay with exponential backoff and jitter.
-     * 
-     * Formula: min(baseDelay * 2^attempt, maxDelay) with ±25% jitter
-     * 
-     * Jitter prevents thundering herd when multiple clients retry simultaneously.
-     * 
-     * @param attempt Current attempt number (0-indexed)
-     * @param baseDelayMs Base delay in milliseconds
-     * @param maxDelayMs Maximum delay cap in milliseconds
-     * @return Delay in milliseconds with jitter applied
+     * Exponential backoff, min(baseDelay * 2^attempt, maxDelay), with ±25% jitter
+     * to avoid a thundering herd when multiple clients retry simultaneously.
      */
     private fun calculateBackoffDelay(
         attempt: Int,
@@ -181,12 +132,6 @@ object NetworkRetry {
         return (cappedDelay + jitter).coerceAtLeast(0)
     }
     
-    /**
-     * Checks if an exception is retryable.
-     * 
-     * @param exception Exception to check
-     * @return true if the exception should trigger a retry, false otherwise
-     */
     fun isRetryable(exception: Exception): Boolean {
         return when (exception) {
             is IOException -> true
@@ -196,12 +141,7 @@ object NetworkRetry {
     }
 }
 
-/**
- * Exception thrown when all retry attempts are exhausted.
- * 
- * @property message Error message describing the failure
- * @property cause Original exception that caused the retries
- */
+/** Thrown when all retry attempts are exhausted. */
 class NetworkRetryException(
     message: String,
     cause: Throwable?

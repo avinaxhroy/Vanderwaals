@@ -50,9 +50,6 @@ object LiveWallpaperDetector {
         "com.samsung.android.app.wallpaper"
     )
     
-    /**
-     * Checks if the device is a Samsung device.
-     */
     private fun isSamsungDevice(): Boolean {
         return android.os.Build.MANUFACTURER.equals("samsung", ignoreCase = true)
     }
@@ -86,16 +83,8 @@ object LiveWallpaperDetector {
     )
     
     /**
-     * Checks if a live wallpaper is currently active.
-     * 
-     * Uses WallpaperManager.getWallpaperInfo() which returns:
-     * - Non-null WallpaperInfo: Live wallpaper is active
-     * - Null: Static wallpaper or no wallpaper set
-     * 
-     * **API Level:** Works on API 7+ (Android 2.1+)
-     * 
-     * @param context Application or activity context
-     * @return true if live wallpaper is active, false otherwise
+     * A non-null WallpaperManager.getWallpaperInfo() means a live wallpaper is
+     * active; null means a static wallpaper or none set. Works on API 7+.
      */
     fun isLiveWallpaperActive(context: Context): Boolean {
         return try {
@@ -144,17 +133,6 @@ object LiveWallpaperDetector {
         }
     }
     
-    /**
-     * Gets the package name of the currently active live wallpaper.
-     * 
-     * **Use Cases:**
-     * - Logging which service is blocking wallpaper changes
-     * - Opening app settings for the specific service
-     * - Customizing user-facing messages
-     * 
-     * @param context Application or activity context
-     * @return Package name of live wallpaper, or null if none active
-     */
     fun getLiveWallpaperPackageName(context: Context): String? {
         return try {
             val wallpaperManager = WallpaperManager.getInstance(context)
@@ -166,14 +144,7 @@ object LiveWallpaperDetector {
         }
     }
     
-    /**
-     * Gets the service name of the currently active live wallpaper.
-     * 
-     * Returns the full component name (package + service class).
-     * 
-     * @param context Application or activity context
-     * @return Service name, or null if none active
-     */
+    /** Full component name (package + service class) of the active live wallpaper. */
     fun getLiveWallpaperServiceName(context: Context): String? {
         return try {
             val wallpaperManager = WallpaperManager.getInstance(context)
@@ -186,26 +157,12 @@ object LiveWallpaperDetector {
     }
     
     /**
-     * Checks if the active live wallpaper is a known blocking service.
-     * 
-     * Identifies services like Glance, Samsung Dynamic Wallpaper, etc.
-     * that are known to prevent wallpaper changes.
-     * 
-     * **Return Value:**
-     * - Pair<Boolean, String>: (isBlocking, displayName)
-     * - Examples:
-     *   - (true, "Glance") - Known blocking service detected
-     *   - (true, "Dynamic Wallpaper") - Known blocking service detected
-     *   - (false, "Custom Live Wallpaper") - Unknown service, may or may not block
-     *   - (false, null) - No live wallpaper active
-     * 
-     * @param context Application or activity context
-     * @return Pair of (is blocking service, display name)
+     * Identifies live wallpapers known to prevent wallpaper changes, such as
+     * Glance and Samsung Dynamic Wallpaper.
      */
     fun isKnownBlockingService(context: Context): Pair<Boolean, String?> {
         val packageName = getLiveWallpaperPackageName(context) ?: return Pair(false, null)
         
-        // Check exact package match
         KNOWN_BLOCKING_SERVICES[packageName]?.let {
             Log.d(TAG, "Known blocking service detected: $it ($packageName)")
             return Pair(true, it)
@@ -238,25 +195,12 @@ object LiveWallpaperDetector {
         }
     }
     
-    /**
-     * Gets a user-friendly display name for the active live wallpaper.
-     * 
-     * **Priority:**
-     * 1. Known service display name (e.g., "Glance for MI")
-     * 2. Service label from WallpaperInfo
-     * 3. Generic "Live Wallpaper"
-     * 
-     * @param context Application or activity context
-     * @return Display name for user-facing messages
-     */
     fun getLiveWallpaperDisplayName(context: Context): String {
-        // Check if it's a known service first
         val (_, knownName) = isKnownBlockingService(context)
         if (knownName != null) {
             return knownName
         }
         
-        // Try to get label from WallpaperInfo
         return try {
             val wallpaperManager = WallpaperManager.getInstance(context)
             val wallpaperInfo = wallpaperManager.wallpaperInfo
@@ -268,18 +212,9 @@ object LiveWallpaperDetector {
     }
     
     /**
-     * Checks if a proprietary blocking service is active via system settings.
-     * 
-     * **Why this is needed:**
-     * Some services (Samsung Dynamic Lock Screen, Xiaomi Glance) do not run as 
-     * standard Live Wallpapers but still block wallpaper changes.
-     * 
-     * **Heuristics:**
-     * - Checks specific system settings keys (e.g., "dls_state", "wallpaper_carousel_switch")
-     * - Checks for presence of specific packages that might indicate the feature is active
-     * 
-     * @param context Application context
-     * @return Pair of (is blocking, display name)
+     * Some blockers (Samsung Dynamic Lock Screen, Xiaomi Glance) do not run as
+     * standard live wallpapers but still block wallpaper changes, so they are
+     * detected via system settings keys instead.
      */
     fun isProprietaryBlockerActive(context: Context): Pair<Boolean, String?> {
         try {
@@ -315,10 +250,7 @@ object LiveWallpaperDetector {
                 }
             } catch (e: Exception) { }
 
-            // --- Generic Check for Glance Package Presence ---
-            // If we can't read settings, check if the package is just present? 
-            // No, presence doesn't mean active. But some users might want to know.
-            // For now, we rely on settings keys as they are more accurate for "active" state.
+            // Package presence alone doesn't mean active; rely on the settings keys above.
             
         } catch (e: Exception) {
             Log.e(TAG, "Error checking proprietary blockers", e)
@@ -327,12 +259,7 @@ object LiveWallpaperDetector {
         return Pair(false, null)
     }
 
-    /**
-     * Unified check for any blocking service (Live Wallpaper OR Proprietary).
-     * 
-     * @param context Application context
-     * @return Pair of (is blocking, display name)
-     */
+    /** Unified check for any blocking service (live wallpaper or proprietary). */
     fun detectBlockingService(context: Context): Pair<Boolean, String?> {
         // 1. Check standard Live Wallpaper (with Samsung exclusions)
         if (isLiveWallpaperActive(context)) {
@@ -355,19 +282,8 @@ object LiveWallpaperDetector {
     }
     
     /**
-     * Checks if live wallpaper is blocking AFTER a failed wallpaper change attempt.
-     * 
-     * This is the most reliable detection method - we only check for live wallpaper
-     * blocking when the wallpaper change actually fails. This avoids false positives
-     * from manufacturer-specific system services.
-     * 
-     * **How it works:**
-     * 1. Called after setBitmap() completes but verification shows wallpaper didn't change
-     * 2. Checks if a live wallpaper is currently set (raw check, no exclusions)
-     * 3. If live wallpaper exists, it's definitely blocking our static wallpaper
-     * 
-     * @param context Application context
-     * @return Pair of (is blocking, display name) - only returns true if definitely blocking
+     * Only checks for live-wallpaper blocking after a wallpaper change actually fails,
+     * which avoids false positives from the manufacturer-specific system services above.
      */
     fun detectBlockingAfterFailure(context: Context): Pair<Boolean, String?> {
         try {
@@ -380,12 +296,10 @@ object LiveWallpaperDetector {
                 val packageName = wallpaperInfo.packageName ?: "unknown"
                 Log.d(TAG, "Confirmed live wallpaper blocking after failure: $packageName")
                 
-                // Get display name for user message
                 val displayName = getLiveWallpaperDisplayName(context)
                 return Pair(true, displayName)
             }
             
-            // Also check proprietary blockers
             val (isProprietary, proprietaryName) = isProprietaryBlockerActive(context)
             if (isProprietary) {
                 Log.d(TAG, "Confirmed proprietary blocker after failure: $proprietaryName")
@@ -402,17 +316,7 @@ object LiveWallpaperDetector {
         }
     }
 
-    /**
-     * Comprehensive diagnostic information for debugging.
-     * 
-     * **Use Cases:**
-     * - Settings screen debug section
-     * - Support requests
-     * - Logging issues
-     * 
-     * @param context Application or activity context
-     * @return Map of diagnostic information
-     */
+    /** Diagnostic map for debugging live-wallpaper detection. */
     fun getDiagnosticInfo(context: Context): Map<String, String> {
         val packageName = getLiveWallpaperPackageName(context)
         val serviceName = getLiveWallpaperServiceName(context)

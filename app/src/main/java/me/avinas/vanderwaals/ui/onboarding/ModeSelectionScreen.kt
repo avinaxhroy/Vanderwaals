@@ -1,48 +1,40 @@
 package me.avinas.vanderwaals.ui.onboarding
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.Image
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import me.avinas.vanderwaals.R
-import me.avinas.vanderwaals.ui.theme.*
+import me.avinas.vanderwaals.ui.settings.RadicalIconBadge
+import me.avinas.vanderwaals.ui.settings.RadicalPalette
+import me.avinas.vanderwaals.ui.settings.RadicalTactileBackdrop
+import me.avinas.vanderwaals.ui.settings.RadicalTactileCard
+import me.avinas.vanderwaals.ui.theme.LocalThemeIsDark
 
 @Composable
 fun ModeSelectionScreen(
@@ -62,58 +54,36 @@ fun ModeSelectionScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color.Transparent,
         topBar = {
-            // Transparent top navigation with back button only
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .height(metrics.topBarHeight),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .widthIn(max = metrics.maxContentWidth)
-                        .padding(horizontal = metrics.horizontalPadding),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = getOnboardingTextPrimary(isDark)
-                        )
-                    }
-                }
-            }
+            OnboardingTopBar(isDark = isDark, metrics = metrics, onBack = onBack)
         },
         bottomBar = {
             OnboardingBottomBar(
                 isDark = isDark,
                 metrics = metrics,
                 buttonEnabled = selectedMode != null,
-                onButtonClick = { selectedMode?.let { onModeSelected(it) } }
+                buttonText = if (selectedMode == OnboardingMode.PERSONALIZE) "Personalize Taste" else "Continue with Auto Mode",
+                accentColor = RadicalPalette.CyberMagenta,
+                onButtonClick = {
+                    selectedMode?.let { onModeSelected(it) }
+                }
             )
         }
     ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-        ) {
-            OnboardingBackdrop(
-                isDark = isDark,
-                modifier = Modifier.fillMaxSize()
-            )
+        Box(Modifier.fillMaxSize()) {
+            RadicalTactileBackdrop(isDark = isDark, modifier = Modifier.matchParentSize())
 
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = metrics.horizontalPadding),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(horizontal = metrics.horizontalPadding)
+                    .padding(
+                        top = paddingValues.calculateTopPadding() + 8.dp,
+                        bottom = paddingValues.calculateBottomPadding() + 20.dp
+                    ),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Spacer(modifier = Modifier.height(paddingValues.calculateTopPadding() + 12.dp))
-
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -123,231 +93,217 @@ fun ModeSelectionScreen(
                         currentStep = currentStep - 1,
                         totalSteps = totalSteps,
                         isDark = isDark,
+                        accentColor = RadicalPalette.CyberMagenta,
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
 
-                    // Step number
-                    Text(
-                        text = "Step $currentStep of $totalSteps",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = BrandPrimary,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(bottom = 4.dp)
+                    OnboardingHeader(
+                        stepLabel = "STAGE 0$currentStep / 0$totalSteps · ENGINE MODE",
+                        title = "Choose curation mode",
+                        subtitle = "Personalized mode matches wallpapers to your style. Auto mode starts right away with curated highlights.",
+                        isDark = isDark,
+                        accentColor = RadicalPalette.CyberMagenta
                     )
-
-                    // Title
-                    Text(
-                        text = "Choose Your Mode",
-                        style = LuxeHeadlineStyle,
-                        color = getOnboardingTextPrimary(isDark),
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    // Description
-                    Text(
-                        text = "How Vanderwaals learns your taste",
-                        style = LuxeBodyStyle,
-                        color = getOnboardingTextSecondary(isDark)
-                    )
-
-                    Spacer(modifier = Modifier.height(metrics.sectionSpacing))
-
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(metrics.cardSpacing + 4.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        ModeOptionCard(
-                            title = "Personalized Mode",
-                            subtitle = "Upload & Match",
-                            description = "Use a favorite wallpaper as reference and instantly build a tailored feed.",
-                            icon = Icons.Default.Tune,
-                            accent = Color(0xFFF97316),
-                            selected = selectedMode == OnboardingMode.PERSONALIZE,
-                            onClick = {
-                                viewModel.selectMode(OnboardingMode.PERSONALIZE) {}
-                            },
-                            isDark = isDark,
-                            metrics = metrics
-                        )
-
-                        ModeOptionCard(
-                            title = "Auto Mode",
-                            subtitle = "Set & Forget",
-                            description = "Start immediately with curated recommendations and let the app learn over time.",
-                            icon = Icons.Default.AutoAwesome,
-                            accent = Color(0xFF2563EB),
-                            selected = selectedMode == OnboardingMode.AUTO,
-                            onClick = {
-                                viewModel.selectMode(OnboardingMode.AUTO) {}
-                            },
-                            isDark = isDark,
-                            metrics = metrics
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding() + 24.dp))
                 }
+
+                Spacer(Modifier.height(16.dp))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = metrics.maxContentWidth),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    RichModeOptionCard(
+                        title = "Personalized Mode",
+                        subtitle = "Builds a taste profile from your favorite images and ranks matching wallpapers on-device.",
+                        badge = "RECOMMENDED",
+                        badgeBg = Color(0xFFFFE4EC),
+                        badgeTextColor = Color(0xFFBE123C),
+                        icon = Icons.Default.AutoAwesome,
+                        accentColor = RadicalPalette.CyberMagenta,
+                        features = listOf("On-Device AI", "Quick 1-Minute Setup"),
+                        isSelected = selectedMode == OnboardingMode.PERSONALIZE,
+                        onClick = { viewModel.selectMode(OnboardingMode.PERSONALIZE) {} },
+                        isDark = isDark
+                    )
+
+                    RichModeOptionCard(
+                        title = "Auto Mode",
+                        subtitle = "Starts right away with curated wallpapers, then learns as you like or hide images.",
+                        badge = "INSTANT START",
+                        badgeBg = Color(0xFFFEF3C7),
+                        badgeTextColor = Color(0xFFB45309),
+                        icon = Icons.Default.Shuffle,
+                        accentColor = RadicalPalette.RadiantAmber,
+                        features = listOf("No Setup Needed", "Learns as You Like"),
+                        isSelected = selectedMode == OnboardingMode.AUTO,
+                        onClick = { viewModel.selectMode(OnboardingMode.AUTO) {} },
+                        isDark = isDark
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                Text(
+                    text = "You can switch modes anytime in Settings. Your taste profile is always saved.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                    modifier = Modifier
+                        .widthIn(max = metrics.maxContentWidth)
+                        .padding(horizontal = 4.dp),
+                    textAlign = TextAlign.Center,
+                    lineHeight = 19.sp
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ModeOptionCard(
+private fun RichModeOptionCard(
     title: String,
     subtitle: String,
-    description: String,
+    badge: String,
+    badgeBg: Color,
+    badgeTextColor: Color,
     icon: ImageVector,
-    accent: Color,
-    selected: Boolean,
+    accentColor: Color,
+    features: List<String>,
+    isSelected: Boolean,
     onClick: () -> Unit,
-    isDark: Boolean,
-    metrics: OnboardingLayoutMetrics = rememberOnboardingLayoutMetrics()
+    isDark: Boolean
 ) {
-    // Sliding bottom line indicator animation
-    val lineWidthPercent by animateFloatAsState(
-        targetValue = if (selected) 1f else 0f,
-        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
-        label = "lineWidth"
+    val radioBorderColor by animateColorAsState(
+        targetValue = if (isSelected) accentColor else if (isDark) Color(0xFF8C8275) else Color(0xFF6EE7B7),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "modeRadioBorder"
     )
 
-    // Gradient border when selected, glass border otherwise
-    val borderBrush = if (selected) {
-        Brush.linearGradient(
-            colors = listOf(accent, accent.copy(alpha = 0.7f))
-        )
-    } else {
-        SolidColor(getOnboardingCardBorder(isDark))
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(
-                elevation = if (selected) 16.dp else 0.dp,
-                shape = RoundedCornerShape(metrics.cardCornerRadius),
-                ambientColor = if (selected) accent.copy(alpha = 0.25f) else Color.Transparent,
-                spotColor = if (selected) accent.copy(alpha = 0.2f) else Color.Transparent
-            )
-            .clip(RoundedCornerShape(metrics.cardCornerRadius))
-            .background(getOnboardingCardBackground(isDark))
-            .border(
-                width = if (selected) 1.5.dp else 1.dp,
-                brush = borderBrush,
-                shape = RoundedCornerShape(metrics.cardCornerRadius)
-            )
-            .bounceClick { onClick() }
+    RadicalTactileCard(
+        isDark = isDark,
+        modifier = Modifier.bounceClick(onClick)
     ) {
-        val cardPadding = if (metrics.compactWidth) 16.dp else 20.dp
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(cardPadding),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(if (metrics.compactWidth) 12.dp else 14.dp)
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Premium icon container with luxe glass background
-            Box(
-                modifier = Modifier
-                    .size(metrics.iconBoxSize)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(getOnboardingCardBackground(isDark)),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = if (selected) accent else (if (isDark) Color(0xFF8A8478) else Color(0xFF6E685C)),
-                    modifier = Modifier.size(metrics.iconSize)
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = getOnboardingTextPrimary(isDark)
+                    RadicalIconBadge(
+                        icon = icon,
+                        accentColor = accentColor,
+                        isDark = isDark,
+                        size = 44.dp,
+                        iconSize = 22.dp
                     )
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(
-                                if (selected) accent.copy(alpha = 0.15f) else getOnboardingCardBackground(isDark)
+
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isDark) Color(0xFF1C1917) else Color(0xFFFFFFFF)
                             )
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    ) {
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = if (selected) accent else getOnboardingTextSecondary(isDark)
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(99.dp))
+                                .background(badgeBg)
+                                .border(
+                                    1.dp,
+                                    badgeTextColor.copy(alpha = 0.35f),
+                                    RoundedCornerShape(99.dp)
+                                )
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = badge,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = badgeTextColor,
+                                fontSize = 10.sp,
+                                letterSpacing = 0.4.sp
+                            )
+                        }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(if (isSelected) accentColor else Color.Transparent)
+                        .border(
+                            width = if (isSelected) 0.dp else 2.dp,
+                            color = radioBorderColor,
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isSelected) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Selected",
+                            modifier = Modifier.size(15.dp),
+                            tint = Color.White
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = getOnboardingTextSecondary(isDark),
-                    lineHeight = 20.sp
-                )
             }
 
-            // Premium selection indicator
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (selected) {
-                            Brush.linearGradient(
-                                colors = listOf(accent, accent.copy(alpha = 0.8f))
-                            )
-                        } else {
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    if (isDark) Color(0xFF1C1A17) else Color(0xFFF7F5F0),
-                                    if (isDark) Color(0xFF141210) else Color(0xFFECEAE3)
-                                )
-                            )
-                        }
-                    )
-                    .border(
-                        width = if (selected) 0.dp else 1.5.dp,
-                        color = if (selected) Color.Transparent else (if (isDark) Color(0xFF4A443A) else Color(0xFFD1CBBF)),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isDark) Color(0xFF383532) else Color(0xFFA7F3D0),
+                lineHeight = 20.sp
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (selected) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
+                features.forEach { feat ->
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(99.dp))
+                            .background(
+                                if (isDark) Color(0xFFE4DDD2)
+                                else Color(0xFF03261C)
+                            )
+                            .border(
+                                1.dp,
+                                if (isDark) Color(0xFFCBC3B5)
+                                else Color(0xFF0D5E47),
+                                RoundedCornerShape(99.dp)
+                            )
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Text(
+                            text = feat,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isDark) Color(0xFF1C1917) else Color(0xFFD1FAE5)
+                        )
+                    }
                 }
             }
-        }
-
-        // Sliding bottom line indicator for active selection - docked to the bottom edge and clipped by the card shape
-        if (lineWidthPercent > 0f) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth(lineWidthPercent)
-                    .height(4.dp)
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(accent, accent.copy(alpha = 0.6f))
-                        )
-                    )
-            )
         }
     }
 }

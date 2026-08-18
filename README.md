@@ -71,18 +71,33 @@ Vanderwaals is an Android wallpaper application that uses on-device machine lear
 Vanderwaals uses MobileNetV4-Conv-Small via TensorFlow Lite to convert images into 1280-dimensional feature vectors capturing composition, artistic style, color distribution, and visual tone.
 
 ```kotlin
-val embedding = embeddingExtractor.extract(bitmap)
+val embedding = embeddingExtractor.extractEmbedding(bitmap)
 ```
 
-### 2. Similarity calculation
-Wallpapers are ranked using a multi-factor score combining vector cosine similarity (70%), perceptual LAB color space matching (20%), and learned category affinity (10%).
+### 2. Ranking
+Every wallpaper selection goes through a single calibrated ranking path (`RankingEngine`). Six components, each normalized to [0, 1] with 0.5 meaning "no data", combine into a weighted score; the weights sum to exactly 1:
 
-```kotlin
-finalScore = (cosineSimilarity * 0.70) + (colorSimilarity * 0.20) + (categoryAffinity * 0.10)
+| Component | Weight | Signal |
+|-----------|--------|--------|
+| Taste | 0.60 | Multi-anchor embedding similarity |
+| Category | 0.12 | Bayesian like-rate per category |
+| Quality | 0.10 | Resolution, aspect ratio, tonal balance, aesthetic score |
+| Color | 0.06 | Perceptual palette match (CIELAB ΔE) to liked wallpapers |
+| Semantic | 0.06 | Mood/style tag affinity |
+| Time of day | 0.06 | Brightness fit for the current hour |
+
 ```
+score = (weighted taste/category/quality/color/semantic/time sum)
+        × saturation × dislikeSuppression    (multiplicative, bounded)
+        + explorationBonus                   (UCB-style, decays with feedback)
+```
+
+The top 50 candidates are re-ranked with Maximal Marginal Relevance for embedding-space diversity, and the final pick is drawn from a temperature-scaled softmax so the rotation never becomes deterministic. Matching an uploaded reference image (onboarding) uses a separate composite scorer (`SimilarityCalculator`) over the same embeddings.
 
 ### 3. Preference learning
-User preferences update after explicit feedback (likes or dislikes) or implicit retention signals using an Exponential Moving Average (EMA). The learning rate $\alpha$ starts at 0.30 for fast initialization and stabilizes at 0.15 as preference history grows.
+Likes and dislikes become timestamped anchors in a multi-anchor taste memory (`TasteMemory`), replacing the single exponential-moving-average vector. A wallpaper scores well if it resembles *any* recent liked anchor, so distinct tastes coexist instead of averaging into a direction that matches neither. Anchor influence decays with a 14-day half-life for likes and 7 days for dislikes; dislikes act as suppression memory only and never steer the positive direction.
+
+Anchor ages are measured relative to the newest explicit feedback, not the wall clock, so a user who configures taste once at onboarding keeps it indefinitely while new feedback still displaces old evidence. Implicit signals (how long a manually applied wallpaper stayed up, thresholded relative to the change interval) are recorded at 0.4 strength and never advance the reference clock.
 
 ### 4. Background blur implementation
 Jetpack Compose does not support dynamic background blur behind layout cards across all Android API levels. Vanderwaals generates frosted glass cards by pre-processing the active wallpaper once with Gaussian blur, chromatic aberration, and edge distortion, then cropping matching positional slices for each UI card.
@@ -95,10 +110,12 @@ The project follows Clean Architecture and MVVM patterns.
 
 ```
 me.avinas.vanderwaals/
-├── algorithm/              # Machine learning, embeddings, similarity, smart crop
+├── algorithm/              # Machine learning, ranking, taste memory, smart crop
 │   ├── EmbeddingExtractor.kt
+│   ├── RankingEngine.kt
+│   ├── TasteMemory.kt
+│   ├── RecommenderConfig.kt
 │   ├── SimilarityCalculator.kt
-│   ├── PreferenceUpdater.kt
 │   └── SmartCrop.kt
 ├── data/                   # Room database, data sources, and repositories
 │   ├── entity/
@@ -180,6 +197,17 @@ me.avinas.vanderwaals/
 |---------|--------|-------------------|------|
 | v1 | Unquantized float32 | 576D | 60 MB |
 | v3 | Quantized int8 MobileNetV4 | 1280D | ~8 MB |
+
+### Embedding storage (Room)
+
+The ranking path reads the full catalog plus all taste anchors on every selection, so embedding deserialization is on the hot path.
+
+| Database version | Format | Full-catalog deserialize | Per embedding | Catalog total |
+|------------------|--------|--------------------------|---------------|---------------|
+| 12 | JSON text | ~690 ms | ~14 KB | ~55 MB |
+| 13 | float32 BLOB | ~4 ms | 5 KB | ~18 MB |
+
+Values are stored as raw IEEE-754 bits, so migration from v12 is bit-exact and ranking results are unchanged.
 
 ---
 

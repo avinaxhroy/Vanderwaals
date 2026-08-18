@@ -1,8 +1,10 @@
 package me.avinas.vanderwaals.ui.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.AutoMode
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
@@ -13,33 +15,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
-/**
- * Dialog shown to users with legacy 576D embeddings explaining why re-personalization is needed.
- * 
- * **When to Show:**
- * - User upgrades from v4.x (MobileNetV3 576D) to v5.0.0+ (MobileNetV4 1280D)
- * - User has existing preferences with legacy embedding dimension
- * - User has not dismissed this dialog before
- * 
- * **What It Explains:**
- * - The AI model has been upgraded for better recommendations
- * - Existing preferences need to be reset for compatibility
- * - User's liked/disliked wallpaper history is preserved
- * - Category, color, and composition preferences are preserved
- * 
- * **Dialog Flow:**
- * 1. Show rationale explaining the upgrade benefits
- * 2. "Re-personalize Now" → Goes to onboarding flow
- * 3. "Continue with Auto Mode" → Resets preferences, starts with auto mode
- * 4. "Remind Me Later" → Dismisses, shows again next session
- * 
- * @param onRePersonalize Callback when user chooses to re-personalize (goes to onboarding)
- * @param onAutoMode Callback when user chooses auto mode (reset preferences, skip onboarding)
- * @param onRemindLater Callback when user taps "Remind Me Later"
- * @param onDontShowAgain Callback when user taps "Don't Show Again" (permanent dismiss)
- * @param onDismiss Callback when dialog is dismissed
- * @param totalLikes Number of liked wallpapers (shown to reassure user history is preserved)
- */
 @Composable
 fun EmbeddingMigrationDialog(
     onRePersonalize: () -> Unit,
@@ -61,7 +36,7 @@ fun EmbeddingMigrationDialog(
         },
         title = {
             Text(
-                text = "AI Model Upgraded 🚀",
+                text = "AI Model Upgraded",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
@@ -69,17 +44,18 @@ fun EmbeddingMigrationDialog(
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Main explanation
                 Text(
-                    text = "We've upgraded our AI model for significantly better wallpaper recommendations. To take advantage of this improvement, we need to re-learn your preferences.",
+                    text = "We upgraded the on-device AI model for better wallpaper recommendations. Re-training your taste profile takes under a minute.",
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Start
                 )
                 
-                // What's improved
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
@@ -96,13 +72,12 @@ fun EmbeddingMigrationDialog(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        BenefitItem("✓ 2x more accurate recommendations")
-                        BenefitItem("✓ Better understanding of aesthetics")
-                        BenefitItem("✓ Faster preference learning")
+                        BenefitItem("✓ MobileNetV4 on-device visual analysis")
+                        BenefitItem("✓ Better color and style matching")
+                        BenefitItem("✓ Faster local recommendation scoring")
                     }
                 }
                 
-                // What's preserved
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
@@ -129,7 +104,7 @@ fun EmbeddingMigrationDialog(
                 }
                 
                 Text(
-                    text = "Re-personalizing takes just a minute and gives you the best experience!",
+                    text = "Re-personalizing takes just a minute and preserves your favorite wallpaper history.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -143,7 +118,6 @@ fun EmbeddingMigrationDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Primary action: Re-personalize
                 Button(
                     onClick = onRePersonalize,
                     modifier = Modifier.fillMaxWidth()
@@ -154,16 +128,15 @@ fun EmbeddingMigrationDialog(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Re-personalize Now")
+                    Text("Re-personalize")
                 }
                 
-                // Secondary action: Auto mode
                 OutlinedButton(
                     onClick = onAutoMode,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
-                        imageVector = Icons.Default.AutoAwesome,
+                        imageVector = Icons.Default.AutoMode,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )

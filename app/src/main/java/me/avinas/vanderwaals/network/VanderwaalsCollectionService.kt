@@ -22,39 +22,17 @@ import retrofit2.http.Header
  */
 interface VanderwaalsCollectionService {
 
-    /**
-     * Downloads the lite Vanderwaals Collection manifest.
-     *
-     * @return Response containing [ManifestDto] on success
-     */
     @GET("cat/lite.json")
     suspend fun getVanderwaalsCollectionLite(): Response<ManifestDto>
 
-    /**
-     * Downloads the lite manifest only if modified since the given date.
-     * Returns 304 Not Modified if unchanged.
-     *
-     * @param ifModifiedSince Last-Modified header from a previous successful download
-     */
     @GET("cat/lite.json")
     suspend fun getVanderwaalsCollectionLiteConditional(
         @Header("If-Modified-Since") ifModifiedSince: String?
     ): Response<ManifestDto>
 
-    /**
-     * Downloads the full Vanderwaals Collection manifest (complete archive).
-     *
-     * @return Response containing [ManifestDto] on success
-     */
     @GET("cat/full.json")
     suspend fun getVanderwaalsCollectionFull(): Response<ManifestDto>
 
-    /**
-     * Downloads the full manifest only if modified since the given date.
-     * Returns 304 Not Modified if unchanged.
-     *
-     * @param ifModifiedSince Last-Modified header from a previous successful download
-     */
     @GET("cat/full.json")
     suspend fun getVanderwaalsCollectionFullConditional(
         @Header("If-Modified-Since") ifModifiedSince: String?

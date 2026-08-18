@@ -15,120 +15,46 @@ import me.avinas.vanderwaals.data.entity.ColorPreference
 @Dao
 interface ColorPreferenceDao {
     
-    /**
-     * Gets color preference by hex code.
-     * 
-     * @param colorHex Hex color code (e.g., "#FF5733")
-     * @return ColorPreference if exists, null otherwise
-     */
-    @Query("SELECT * FROM color_preferences WHERE colorHex = :colorHex")
-    suspend fun getByColor(colorHex: String): ColorPreference?
-    
-    /**
-     * Gets color preference as Flow for reactive updates.
-     * 
-     * @param colorHex Hex color code
-     * @return Flow of ColorPreference (null if doesn't exist)
-     */
-    @Query("SELECT * FROM color_preferences WHERE colorHex = :colorHex")
-    fun getByColorFlow(colorHex: String): Flow<ColorPreference?>
-    
-    /**
-     * Gets all color preferences.
-     * 
-     * @return List of all tracked colors
-     */
-    @Query("SELECT * FROM color_preferences ORDER BY colorHex ASC")
-    suspend fun getAll(): List<ColorPreference>
-    
-    /**
-     * Gets all color preferences as Flow.
-     * 
-     * @return Flow of all color preferences
-     */
-    @Query("SELECT * FROM color_preferences ORDER BY colorHex ASC")
-    fun getAllFlow(): Flow<List<ColorPreference>>
-    
-    /**
-     * Gets colors sorted by preference score (in-memory sorting required).
-     * 
-     * @return List of colors sorted by calculated score (high to low)
-     */
+    /** Score calculated in-memory (Room can't sort by a computed value). */
     @Query("SELECT * FROM color_preferences")
     suspend fun getAllByScore(): List<ColorPreference>
     
-    /**
-     * Gets underexplored colors (views < 3).
-     * 
-     * @return List of colors that need more exploration
-     */
+    @Query("SELECT * FROM color_preferences WHERE colorHex = :colorHex")
+    suspend fun getByColor(colorHex: String): ColorPreference?
+    
+    @Query("SELECT * FROM color_preferences WHERE colorHex = :colorHex")
+    fun getByColorFlow(colorHex: String): Flow<ColorPreference?>
+    
+    @Query("SELECT * FROM color_preferences ORDER BY colorHex ASC")
+    suspend fun getAll(): List<ColorPreference>
+    
+    @Query("SELECT * FROM color_preferences ORDER BY colorHex ASC")
+    fun getAllFlow(): Flow<List<ColorPreference>>
+    
     @Query("SELECT * FROM color_preferences WHERE views < 3")
     suspend fun getUnderexplored(): List<ColorPreference>
     
-    /**
-     * Gets recently shown colors (within specified time).
-     * 
-     * @param since Timestamp (milliseconds) to filter from
-     * @return List of recently shown colors
-     */
     @Query("SELECT * FROM color_preferences WHERE lastShown > :since")
     suspend fun getRecentlyShown(since: Long): List<ColorPreference>
     
-    /**
-     * Gets liked colors (likes > dislikes).
-     * Useful for building user's preferred color palette.
-     * 
-     * @return List of colors the user tends to like
-     */
     @Query("SELECT * FROM color_preferences WHERE likes > dislikes ORDER BY (likes - dislikes) DESC")
     suspend fun getLikedColors(): List<ColorPreference>
     
-    /**
-     * Gets disliked colors (dislikes > likes).
-     * Useful for filtering out colors user tends to dislike.
-     * 
-     * @return List of colors the user tends to dislike
-     */
     @Query("SELECT * FROM color_preferences WHERE dislikes > likes ORDER BY (dislikes - likes) DESC")
     suspend fun getDislikedColors(): List<ColorPreference>
     
-    /**
-     * Inserts or replaces a color preference.
-     * 
-     * @param colorPreference Color preference to insert/update
-     */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(colorPreference: ColorPreference)
     
-    /**
-     * Inserts or replaces multiple color preferences.
-     * 
-     * @param colorPreferences List of color preferences to insert/update
-     */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(colorPreferences: List<ColorPreference>)
     
-    /**
-     * Deletes a color preference.
-     * 
-     * @param colorHex Hex color code to delete
-     */
     @Query("DELETE FROM color_preferences WHERE colorHex = :colorHex")
     suspend fun delete(colorHex: String)
     
-    /**
-     * Deletes all color preferences.
-     * Useful for reset functionality.
-     */
     @Query("DELETE FROM color_preferences")
     suspend fun deleteAll()
     
-    /**
-     * Increments view count and updates last shown timestamp for a color.
-     * Creates entry with views=1 if color doesn't exist.
-     * 
-     * @param colorHex Hex color code being viewed
-     */
     @Transaction
     suspend fun incrementViews(colorHex: String) {
         val existing = getByColor(colorHex)
@@ -150,13 +76,6 @@ interface ColorPreferenceDao {
         }
     }
     
-    /**
-     * Increments like count for a color.
-     * Also increments views and updates last shown.
-     * Creates entry with likes=1, views=1 if color doesn't exist.
-     * 
-     * @param colorHex Hex color code being liked
-     */
     @Transaction
     suspend fun incrementLikes(colorHex: String) {
         val existing = getByColor(colorHex)
@@ -180,13 +99,6 @@ interface ColorPreferenceDao {
         }
     }
     
-    /**
-     * Increments dislike count for a color.
-     * Also increments views and updates last shown.
-     * Creates entry with dislikes=1, views=1 if color doesn't exist.
-     * 
-     * @param colorHex Hex color code being disliked
-     */
     @Transaction
     suspend fun incrementDislikes(colorHex: String) {
         val existing = getByColor(colorHex)
@@ -210,11 +122,6 @@ interface ColorPreferenceDao {
         }
     }
     
-    /**
-     * Gets total number of tracked colors.
-     * 
-     * @return Count of color entries
-     */
     @Query("SELECT COUNT(*) FROM color_preferences")
     suspend fun getCount(): Int
 }

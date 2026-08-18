@@ -15,10 +15,6 @@ import me.avinas.vanderwaals.data.entity.UserPreferences
 import me.avinas.vanderwaals.data.entity.WallpaperHistory
 import me.avinas.vanderwaals.data.entity.WallpaperMetadata
 
-/**
- * Room database holding wallpaper metadata, user preferences, history,
- * download queue, feedback, and category/color preference tables.
- */
 @Database(
     entities = [
         WallpaperMetadata::class,
@@ -27,99 +23,34 @@ import me.avinas.vanderwaals.data.entity.WallpaperMetadata
         DownloadQueueItem::class,
         me.avinas.vanderwaals.data.entity.CategoryPreference::class,
         me.avinas.vanderwaals.data.entity.ColorPreference::class,
-        me.avinas.vanderwaals.data.entity.CompositionPreference::class
+        me.avinas.vanderwaals.data.entity.CompositionPreference::class,
+        me.avinas.vanderwaals.data.entity.TasteAnchor::class
     ],
-    version = 11,
+    version = 13,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class VanderwaalsDatabase : RoomDatabase() {
     
-    /**
-     * DAO for accessing wallpaper metadata.
-     * 
-     * Provides queries for:
-     * - Loading all wallpapers with embeddings
-     * - Filtering by category, source, brightness
-     * - Inserting/updating from manifest sync
-     */
     abstract val wallpaperMetadataDao: WallpaperMetadataDao
     
-    /**
-     * DAO for managing user preferences.
-     * 
-     * Singleton pattern (single row with id = 1):
-     * - Load/update preference vector
-     * - Switch between auto/personalized modes
-     * - Track feedback count and epsilon
-     */
     abstract val userPreferenceDao: UserPreferenceDao
     
-    /**
-     * DAO for wallpaper application history.
-     * 
-     * Provides queries for:
-     * - Recording wallpaper applications/removals
-     * - Tracking user feedback (likes/dislikes)
-     * - Displaying history in UI
-     * - Calculating implicit feedback from duration
-     */
     abstract val wallpaperHistoryDao: WallpaperHistoryDao
     
-    /**
-     * DAO for managing download queue.
-     * 
-     * Provides queries for:
-     * - Populating queue with top matches
-     * - Retrieving wallpapers to download
-     * - Updating download status and priorities
-     * - Re-ranking after feedback
-     */
     abstract val downloadQueueDao: DownloadQueueDao
     
-    /**
-     * DAO for managing category preferences.
-     * 
-     * Provides queries for:
-     * - Tracking likes/dislikes per category
-     * - Recording category views
-     * - Calculating category scores
-     * - Identifying underexplored categories
-     */
     abstract val categoryPreferenceDao: me.avinas.vanderwaals.data.dao.CategoryPreferenceDao
     
-    /**
-     * DAO for managing color preferences.
-     * 
-     * Provides queries for:
-     * - Tracking likes/dislikes per color hex code
-     * - Recording color views from wallpaper palettes
-     * - Calculating color preference scores
-     * - Fallback personalization when categories are missing
-     */
     abstract val colorPreferenceDao: me.avinas.vanderwaals.data.dao.ColorPreferenceDao
     
-    /**
-     * DAO for managing composition preferences.
-     * 
-     * Provides queries for:
-     * - Tracking learned composition/layout preferences
-     * - Storing average symmetry, center weight, complexity values
-     * - Calculating composition similarity scores
-     * - Personalization based on visual composition patterns
-     */
     abstract val compositionPreferenceDao: me.avinas.vanderwaals.data.dao.CompositionPreferenceDao
+    abstract val tasteAnchorDao: me.avinas.vanderwaals.data.dao.TasteAnchorDao
 
     companion object {
-        /**
-         * Database name for Room.
-         */
         const val DATABASE_NAME = "vanderwaals_db"
         
-        /**
-         * Current database version.
-         */
-        const val DATABASE_VERSION = 11
+        const val DATABASE_VERSION = 13
         
         /**
          * Migration from database version 1 to version 2.
@@ -137,7 +68,6 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
          */
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Add contrast column with default value of 50
                 db.execSQL(
                     "ALTER TABLE wallpaper_metadata ADD COLUMN contrast INTEGER DEFAULT 50 NOT NULL"
                 )
@@ -164,20 +94,17 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
          */
         private val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Add momentumVector column to user_preferences
                 // Store as TEXT (JSON array) for consistency with other FloatArray columns
                 db.execSQL(
                     "ALTER TABLE user_preferences ADD COLUMN momentumVector TEXT NOT NULL DEFAULT '[]'"
                 )
                 
-                // Add originalEmbedding column to user_preferences
-                // This column stores the prime reference from upload/category (Personalize) or empty (Auto)
+                // Prime reference from upload/category (Personalize) or empty (Auto)
                 // Store as TEXT (JSON array) for consistency with other FloatArray columns
                 db.execSQL(
                     "ALTER TABLE user_preferences ADD COLUMN originalEmbedding TEXT NOT NULL DEFAULT '[]'"
                 )
                 
-                // Create category_preferences table
                 db.execSQL("""
                     CREATE TABLE IF NOT EXISTS category_preferences (
                         category TEXT PRIMARY KEY NOT NULL,
@@ -211,7 +138,6 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
          */
         private val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Create color_preferences table
                 db.execSQL("""
                     CREATE TABLE IF NOT EXISTS color_preferences (
                         colorHex TEXT PRIMARY KEY NOT NULL,
@@ -245,7 +171,6 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
          */
         private val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Add feedbackContext column to wallpaper_history
                 // Store as TEXT (JSON) for FeedbackContext object
                 db.execSQL(
                     "ALTER TABLE wallpaper_history ADD COLUMN feedbackContext TEXT DEFAULT NULL"
@@ -269,7 +194,6 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
          */
         private val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Create composition_preferences table
                 db.execSQL("""
                     CREATE TABLE IF NOT EXISTS composition_preferences (
                         id INTEGER PRIMARY KEY NOT NULL DEFAULT 1,
@@ -307,7 +231,6 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
          */
         private val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Add index on wallpaper_history.userFeedback
                 // Optimizes queries filtering by feedback (likes, dislikes)
                 // Used by: getEntriesWithFeedback(), feedback analytics
                 db.execSQL(
@@ -315,7 +238,6 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
                     "ON wallpaper_history(userFeedback)"
                 )
                 
-                // Add index on wallpaper_history.removedAt
                 // Optimizes queries for active wallpaper (WHERE removedAt IS NULL)
                 // Used by: getActiveWallpaper(), getActiveWallpaperFlow()
                 db.execSQL(
@@ -323,7 +245,6 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
                     "ON wallpaper_history(removedAt)"
                 )
                 
-                // Add composite index on download_queue(downloaded, priority)
                 // Optimizes queries ordering by priority while filtering by downloaded status
                 // Used by: getTopUndownloaded(), queue management
                 // SQLite will use this for covering index queries (index-only scans)
@@ -353,7 +274,6 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
          */
         private val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Add composite index on wallpaper_metadata(category, brightness)
                 // Optimizes queries filtering by both category and brightness range
                 // Used by: getByCategoryAndBrightnessRange(), contextual filtering
                 db.execSQL(
@@ -361,7 +281,6 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
                     "ON wallpaper_metadata(category, brightness)"
                 )
                 
-                // Add composite index on wallpaper_metadata(source, brightness)
                 // Optimizes queries filtering by both source and brightness range
                 // Used by: getBySourceAndBrightnessRange(), source-specific contextual filtering
                 db.execSQL(
@@ -489,17 +408,221 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
         }
 
         /**
-         * Array of database migrations.
+         * Migration from database version 11 to version 12.
          *
-         * Add new migrations here when incrementing version:
-         * ```kotlin
-         * val MIGRATIONS = arrayOf(
-         *     MIGRATION_1_2,
-         *     MIGRATION_2_3,
-         *     // ...
-         * )
-         * ```
+         * Changes:
+         * - Created `taste_anchors` table for the multi-anchor taste memory
+         *   that replaces the single EMA preference vector as the source of
+         *   truth for personalisation.
+         *
+         * Migration path: v11 → v12 (taste anchors added)
+         *
+         * For existing data:
+         * - The table starts empty. Learned taste is preserved:
+         *   TasteAnchorRepositoryImpl surfaces the legacy `preferenceVector`
+         *   as a synthetic in-memory anchor until real feedback populates
+         *   persistent anchors, so no vector math happens in SQL.
          */
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS taste_anchors (
+                        wallpaperId TEXT NOT NULL PRIMARY KEY,
+                        kind TEXT NOT NULL,
+                        embedding TEXT NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        strength REAL NOT NULL DEFAULT 1.0
+                    )
+                """)
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_taste_anchors_kind ON taste_anchors(kind)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_taste_anchors_updatedAt ON taste_anchors(updatedAt)"
+                )
+            }
+        }
+
+        /**
+         * Migration from database version 12 to version 13.
+         *
+         * Changes:
+         * - FloatArray columns switched from TEXT (JSON) to BLOB (raw
+         *   little-endian float32) storage:
+         *   - `wallpaper_metadata.embedding`
+         *   - `taste_anchors.embedding`
+         *   - `user_preferences.{preferenceVector, originalEmbedding, momentumVector}`
+         *
+         * Why: the ranking path deserialises the full catalog (plus all
+         * taste anchors) on every selection.  Parsing JSON number arrays
+         * (~14 KB of text per 1280-dim embedding, ~4.7M numbers per catalog
+         * load) dominated selection latency and allocation rate.  BLOB
+         * storage deserialises with zero parsing and shrinks each embedding
+         * to 5,120 bytes; values are copied bit-exactly, so ranking results
+         * are unchanged.
+         *
+         * Migration path: v12 (TEXT embeddings) → v13 (BLOB embeddings)
+         *
+         * For existing data:
+         * - Each affected table is rebuilt (SQLite cannot ALTER a column's
+         *   affinity); every row is copied with its embedding JSON parsed
+         *   once and re-bound as a float32 BLOB.
+         * - Rows whose JSON fails to parse degrade to an empty embedding,
+         *   exactly as they already scored at read time.
+         */
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val converters = me.avinas.vanderwaals.data.entity.Converters(
+                    com.google.gson.Gson()
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `wallpaper_metadata_v13` (
+                        `id` TEXT NOT NULL,
+                        `url` TEXT NOT NULL,
+                        `thumbnailUrl` TEXT NOT NULL,
+                        `source` TEXT NOT NULL,
+                        `category` TEXT NOT NULL,
+                        `colors` TEXT NOT NULL,
+                        `brightness` INTEGER NOT NULL,
+                        `contrast` INTEGER NOT NULL,
+                        `embedding` BLOB NOT NULL,
+                        `resolution` TEXT NOT NULL,
+                        `attribution` TEXT,
+                        `aestheticScore` REAL NOT NULL,
+                        `mood` TEXT NOT NULL,
+                        `style` TEXT NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "INSERT INTO `wallpaper_metadata_v13` " +
+                    "SELECT `id`, `url`, `thumbnailUrl`, `source`, `category`, `colors`, " +
+                    "`brightness`, `contrast`, x'', `resolution`, `attribution`, " +
+                    "`aestheticScore`, `mood`, `style` FROM `wallpaper_metadata`"
+                )
+                // Backfill embeddings row by row (JSON → float32 BLOB).
+                val embeddingBinding = db.compileStatement(
+                    "UPDATE `wallpaper_metadata_v13` SET `embedding` = ? WHERE `id` = ?"
+                )
+                db.query(
+                    "SELECT `id`, `embedding` FROM `wallpaper_metadata` WHERE `embedding` != '[]'"
+                ).use { cursor ->
+                    val idIndex = cursor.getColumnIndex("id")
+                    val embeddingIndex = cursor.getColumnIndex("embedding")
+                    while (cursor.moveToNext()) {
+                        embeddingBinding.bindBlob(
+                            1,
+                            converters.floatArrayToBlob(converters.toFloatArray(cursor.getString(embeddingIndex)))
+                        )
+                        embeddingBinding.bindString(2, cursor.getString(idIndex))
+                        embeddingBinding.executeUpdateDelete()
+                    }
+                }
+                db.execSQL("DROP TABLE `wallpaper_metadata`")
+                db.execSQL("ALTER TABLE `wallpaper_metadata_v13` RENAME TO `wallpaper_metadata`")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_wallpaper_metadata_category` ON `wallpaper_metadata` (`category`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_wallpaper_metadata_source` ON `wallpaper_metadata` (`source`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_wallpaper_metadata_brightness` ON `wallpaper_metadata` (`brightness`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_wallpaper_metadata_contrast` ON `wallpaper_metadata` (`contrast`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_wallpaper_metadata_category_brightness` ON `wallpaper_metadata` (`category`, `brightness`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_wallpaper_metadata_source_brightness` ON `wallpaper_metadata` (`source`, `brightness`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `taste_anchors_v13` (
+                        `wallpaperId` TEXT NOT NULL,
+                        `kind` TEXT NOT NULL,
+                        `embedding` BLOB NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        `strength` REAL NOT NULL,
+                        PRIMARY KEY(`wallpaperId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "INSERT INTO `taste_anchors_v13` " +
+                    "SELECT `wallpaperId`, `kind`, x'', `updatedAt`, `strength` FROM `taste_anchors`"
+                )
+                val anchorBinding = db.compileStatement(
+                    "UPDATE `taste_anchors_v13` SET `embedding` = ? WHERE `wallpaperId` = ?"
+                )
+                db.query(
+                    "SELECT `wallpaperId`, `embedding` FROM `taste_anchors` WHERE `embedding` != '[]'"
+                ).use { cursor ->
+                    val idIndex = cursor.getColumnIndex("wallpaperId")
+                    val embeddingIndex = cursor.getColumnIndex("embedding")
+                    while (cursor.moveToNext()) {
+                        anchorBinding.bindBlob(
+                            1,
+                            converters.floatArrayToBlob(converters.toFloatArray(cursor.getString(embeddingIndex)))
+                        )
+                        anchorBinding.bindString(2, cursor.getString(idIndex))
+                        anchorBinding.executeUpdateDelete()
+                    }
+                }
+                db.execSQL("DROP TABLE `taste_anchors`")
+                db.execSQL("ALTER TABLE `taste_anchors_v13` RENAME TO `taste_anchors`")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_taste_anchors_kind` ON `taste_anchors` (`kind`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_taste_anchors_updatedAt` ON `taste_anchors` (`updatedAt`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `user_preferences_v13` (
+                        `id` INTEGER NOT NULL,
+                        `mode` TEXT NOT NULL,
+                        `preferenceVector` BLOB NOT NULL,
+                        `originalEmbedding` BLOB NOT NULL,
+                        `momentumVector` BLOB NOT NULL,
+                        `likedWallpaperIds` TEXT NOT NULL,
+                        `dislikedWallpaperIds` TEXT NOT NULL,
+                        `feedbackCount` INTEGER NOT NULL,
+                        `epsilon` REAL NOT NULL,
+                        `lastUpdated` INTEGER NOT NULL,
+                        `moodAffinity` TEXT NOT NULL,
+                        `styleAffinity` TEXT NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                db.query("SELECT * FROM `user_preferences`").use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val preferenceVector = converters.floatArrayToBlob(
+                            converters.toFloatArray(cursor.getString(cursor.getColumnIndexOrThrow("preferenceVector")))
+                        )
+                        val originalEmbedding = converters.floatArrayToBlob(
+                            converters.toFloatArray(cursor.getString(cursor.getColumnIndexOrThrow("originalEmbedding")))
+                        )
+                        val momentumVector = converters.floatArrayToBlob(
+                            converters.toFloatArray(cursor.getString(cursor.getColumnIndexOrThrow("momentumVector")))
+                        )
+                        db.execSQL(
+                            "INSERT INTO `user_preferences_v13` VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                            arrayOf<Any?>(
+                                cursor.getLong(cursor.getColumnIndexOrThrow("id")),
+                                cursor.getString(cursor.getColumnIndexOrThrow("mode")),
+                                preferenceVector,
+                                originalEmbedding,
+                                momentumVector,
+                                cursor.getString(cursor.getColumnIndexOrThrow("likedWallpaperIds")),
+                                cursor.getString(cursor.getColumnIndexOrThrow("dislikedWallpaperIds")),
+                                cursor.getLong(cursor.getColumnIndexOrThrow("feedbackCount")),
+                                cursor.getDouble(cursor.getColumnIndexOrThrow("epsilon")),
+                                cursor.getLong(cursor.getColumnIndexOrThrow("lastUpdated")),
+                                cursor.getString(cursor.getColumnIndexOrThrow("moodAffinity")),
+                                cursor.getString(cursor.getColumnIndexOrThrow("styleAffinity"))
+                            )
+                        )
+                    }
+                }
+                db.execSQL("DROP TABLE `user_preferences`")
+                db.execSQL("ALTER TABLE `user_preferences_v13` RENAME TO `user_preferences`")
+            }
+        }
+
+        /** Ordered migrations; append new ones here as the version increments. */
         val MIGRATIONS = arrayOf<Migration>(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -510,15 +633,11 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
             MIGRATION_7_8,
             MIGRATION_8_9,
             MIGRATION_9_10,
-            MIGRATION_10_11
+            MIGRATION_10_11,
+            MIGRATION_11_12,
+            MIGRATION_12_13
         )
         
-        /**
-         * Gets or creates the VanderwaalsDatabase singleton instance.
-         * 
-         * @param context Android application context
-         * @return VanderwaalsDatabase instance
-         */
         fun getInstance(context: android.content.Context): VanderwaalsDatabase {
             return androidx.room.Room.databaseBuilder(
                 context,
@@ -532,87 +651,14 @@ abstract class VanderwaalsDatabase : RoomDatabase() {
                 .fallbackToDestructiveMigration(true)
                 .build()
         }
-        
-        /**
-         * Example migration from version 1 to 2.
-         * 
-         * Uncomment and modify when needed:
-         * ```kotlin
-         * private val MIGRATION_1_2 = object : Migration(1, 2) {
-         *     override fun migrate(database: SupportSQLiteDatabase) {
-         *         // Example: Add a new column
-         *         database.execSQL(
-         *             "ALTER TABLE wallpaper_metadata ADD COLUMN tags TEXT DEFAULT '[]'"
-         *         )
-         *     }
-         * }
-         * ```
-         */
     }
 }
-
-/**
- * Example Migration: Version 1 → Version 2 (for reference)
- * 
- * To use:
- * 1. Uncomment this migration
- * 2. Add to MIGRATIONS array
- * 3. Increment DATABASE_VERSION to 2
- * 4. Update @Database version to 2
- */
-/*
-private val MIGRATION_1_2 = object : Migration(1, 2) {
-    override fun migrate(database: SupportSQLiteDatabase) {
-        // Example 1: Add a new column
-        database.execSQL(
-            "ALTER TABLE wallpaper_metadata ADD COLUMN tags TEXT DEFAULT '[]'"
-        )
-        
-        // Example 2: Create a new table
-        database.execSQL("""
-            CREATE TABLE IF NOT EXISTS category_preferences (
-                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                category TEXT NOT NULL,
-                likeCount INTEGER NOT NULL DEFAULT 0,
-                dislikeCount INTEGER NOT NULL DEFAULT 0,
-                UNIQUE(category)
-            )
-        """)
-        
-        // Example 3: Create an index
-        database.execSQL(
-            "CREATE INDEX IF NOT EXISTS index_wallpaper_metadata_tags ON wallpaper_metadata(tags)"
-        )
-        
-        // Example 4: Populate new table from existing data
-        database.execSQL("""
-            INSERT OR IGNORE INTO category_preferences (category, likeCount, dislikeCount)
-            SELECT 
-                wm.category,
-                SUM(CASE WHEN wh.userFeedback = 'like' THEN 1 ELSE 0 END) as likeCount,
-                SUM(CASE WHEN wh.userFeedback = 'dislike' THEN 1 ELSE 0 END) as dislikeCount
-            FROM wallpaper_metadata wm
-            LEFT JOIN wallpaper_history wh ON wm.id = wh.wallpaperId
-            GROUP BY wm.category
-        """)
-    }
-}
-*/
 
 /**
  * Migration helper functions for common schema changes.
  */
 object MigrationHelpers {
     
-    /**
-     * Adds a new nullable column to a table.
-     * 
-     * @param database Database instance
-     * @param tableName Name of the table
-     * @param columnName Name of the new column
-     * @param columnType SQL type (e.g., "TEXT", "INTEGER", "REAL")
-     * @param defaultValue Default value for existing rows (optional)
-     */
     fun addColumn(
         database: SupportSQLiteDatabase,
         tableName: String,
@@ -626,14 +672,6 @@ object MigrationHelpers {
         )
     }
     
-    /**
-     * Creates an index on a table column.
-     * 
-     * @param database Database instance
-     * @param tableName Name of the table
-     * @param columnName Name of the column to index
-     * @param indexName Optional custom index name
-     */
     fun createIndex(
         database: SupportSQLiteDatabase,
         tableName: String,
@@ -646,12 +684,6 @@ object MigrationHelpers {
         )
     }
     
-    /**
-     * Drops an index from the database.
-     * 
-     * @param database Database instance
-     * @param indexName Name of the index to drop
-     */
     fun dropIndex(
         database: SupportSQLiteDatabase,
         indexName: String
@@ -659,13 +691,7 @@ object MigrationHelpers {
         database.execSQL("DROP INDEX IF EXISTS $indexName")
     }
     
-    /**
-     * Renames a table (requires creating new table and copying data).
-     * 
-     * @param database Database instance
-     * @param oldName Current table name
-     * @param newName New table name
-     */
+    /** Renames a table; changing its columns requires a new table + data copy. */
     fun renameTable(
         database: SupportSQLiteDatabase,
         oldName: String,

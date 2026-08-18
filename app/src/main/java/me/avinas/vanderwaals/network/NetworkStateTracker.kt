@@ -18,23 +18,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Tracks network connectivity state and notifies when connectivity is restored.
- * 
- * This is CRITICAL for fixing the issue where wallpaper rotation continues to use
- * cached/old wallpapers even after internet connectivity is restored.
- * 
- * HOW IT WORKS:
- * 1. Monitors network state changes via ConnectivityManager callbacks
- * 2. When network goes offline, sets wasOffline flag to true
- * 3. When network comes back online (and wasOffline is true), triggers a callback
- * 4. The callback can be used to cancel pending retry work and refresh wallpaper cache
- * 
- * INTEGRATION:
- * - Initialized in VanderwaalsApplication or via Hilt dependency injection
- * - WallpaperChangeWorker checks isOnline() before attempting downloads
- * - WorkScheduler listens for network restoration events
- * 
- * @property context Application context for accessing ConnectivityManager
+ * Tracks network connectivity so wallpaper rotation can refresh its cache
+ * after connectivity is restored (otherwise it keeps using old wallpapers).
  */
 @Singleton
 class NetworkStateTracker @Inject constructor(
@@ -52,7 +37,6 @@ class NetworkStateTracker @Inject constructor(
     
     /**
      * Callback invoked when network connectivity is restored after being offline.
-     * This is the key hook for refreshing wallpaper downloads.
      */
     var onNetworkRestored: (() -> Unit)? = null
     
@@ -75,17 +59,14 @@ class NetworkStateTracker @Inject constructor(
             val wasOfflineBefore = _wasOffline.value
             _isOnline.value = true
             
-            // If we were offline and now online, trigger restoration callback
             if (wasOfflineBefore || _isInOfflineMode.value) {
                 Log.d(TAG, "🌐 Network RESTORED after being offline!")
                 Log.d(TAG, "  Was offline: $wasOfflineBefore")
                 Log.d(TAG, "  In offline mode: ${_isInOfflineMode.value}")
                 
-                // Reset offline tracking
                 _wasOffline.value = false
                 _isInOfflineMode.value = false
                 
-                // Notify listeners that network is restored
                 scope.launch {
                     onNetworkRestored?.invoke()
                 }
@@ -144,9 +125,6 @@ class NetworkStateTracker @Inject constructor(
         }
     }
     
-    /**
-     * Checks if device currently has internet connectivity.
-     */
     fun checkCurrentConnectivity(): Boolean {
         return try {
             val network = connectivityManager.activeNetwork
@@ -181,13 +159,6 @@ class NetworkStateTracker @Inject constructor(
         Log.d(TAG, "✅ Download successful at $lastSuccessfulDownloadTime")
     }
     
-    /**
-     * Checks if we should attempt a fresh download.
-     * Returns true if:
-     * - Device is online AND
-     * - We were previously in offline mode OR
-     * - Last download was more than 15 minutes ago
-     */
     fun shouldAttemptFreshDownload(): Boolean {
         if (!_isOnline.value) return false
         
@@ -197,9 +168,6 @@ class NetworkStateTracker @Inject constructor(
         return !_isInOfflineMode.value || timeSinceLastDownload > staleThreshold
     }
     
-    /**
-     * Cleans up resources when no longer needed.
-     */
     fun unregister() {
         try {
             connectivityManager.unregisterNetworkCallback(networkCallback)

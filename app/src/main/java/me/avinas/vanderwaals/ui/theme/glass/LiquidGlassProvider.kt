@@ -24,13 +24,10 @@ import me.avinas.vanderwaals.ui.theme.LocalThemeIsDark
 private const val TAG = "LiquidGlassProvider"
 
 /**
- * LiquidGlassProvider - Uses the existing curated liquid glass background assets.
- * 
- * Your existing bg_liquid_glass_dark.png and bg_liquid_glass_light.png are ALREADY
- * beautiful liquid glass images with wavy liquid distortion and chromatic aberration.
- * 
- * NO additional processing is applied to preserve the original quality!
- * The images are just loaded and scaled to screen size.
+ * Loads the pre-made liquid glass background assets
+ * (bg_liquid_glass_dark.png / bg_liquid_glass_light.png) and exposes them via
+ * LocalLiquidGlassState. No processing is applied — the assets are already
+ * the finished effect; they are only scaled to the screen.
  */
 @Composable
 fun LiquidGlassProvider(
@@ -41,22 +38,18 @@ fun LiquidGlassProvider(
     val density = LocalDensity.current
     val isDark = LocalThemeIsDark.current
     
-    // Get screen dimensions
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }.toInt()
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }.toInt()
     
-    // State to hold the loaded background
     var glassState by remember { mutableStateOf<LiquidGlassState?>(null) }
     
-    // Load background asynchronously to avoid blocking main thread
-    // LaunchedEffect automatically cancels previous coroutine when keys change
     LaunchedEffect(screenWidthPx, screenHeightPx, isDark) {
         if (screenWidthPx <= 0 || screenHeightPx <= 0) {
             Log.d(TAG, "Screen size invalid, skipping load")
             return@LaunchedEffect
         }
         
-        // Skip if we already have the correct theme's background
+        // Reuse the background already loaded for this theme
         if (glassState?.isDarkMode == isDark && glassState?.isReady == true) {
             Log.d(TAG, "Already have correct theme background ($isDark), skipping load")
             return@LaunchedEffect
@@ -66,23 +59,21 @@ fun LiquidGlassProvider(
         
         withContext(Dispatchers.IO) {
             try {
-                // Check if we're still active (not cancelled by theme change)
+                // Theme may have changed while we were queued
                 if (!isActive) {
                     Log.d(TAG, "Load cancelled (theme changed)")
                     return@withContext
                 }
                 
-                // Load the existing curated liquid glass asset
                 val resourceId = if (isDark) {
                     R.drawable.bg_liquid_glass_dark
                 } else {
                     R.drawable.bg_liquid_glass_light
                 }
                 
-                // Load bitmap at full quality (no downsampling)
                 val loadOptions = BitmapFactory.Options().apply {
                     inPreferredConfig = Bitmap.Config.ARGB_8888
-                    inScaled = false  // Don't scale during decode
+                    inScaled = false  // decode at native resolution
                 }
                 
                 val sourceBitmap = BitmapFactory.decodeResource(
@@ -90,7 +81,7 @@ fun LiquidGlassProvider(
                 )
                 
                 if (sourceBitmap != null) {
-                    // Check again before expensive scaling operation
+                    // Re-check before the expensive scale in case the theme flipped
                     if (!isActive) {
                         Log.d(TAG, "Load cancelled during decode (theme changed)")
                         sourceBitmap.recycle()
@@ -99,22 +90,19 @@ fun LiquidGlassProvider(
                     
                     Log.d(TAG, "Source bitmap loaded: ${sourceBitmap.width}x${sourceBitmap.height}")
                     
-                    // Scale to screen size with high quality filtering
                     val scaledBitmap = Bitmap.createScaledBitmap(
                         sourceBitmap,
                         screenWidthPx,
                         screenHeightPx,
-                        true  // Use bilinear filtering for quality
+                        true
                     )
                     
                     Log.d(TAG, "Scaled bitmap: ${scaledBitmap.width}x${scaledBitmap.height}")
                     
-                    // Clean up source if different
                     if (scaledBitmap != sourceBitmap) {
                         sourceBitmap.recycle()
                     }
                     
-                    // Final check before updating state
                     if (!isActive) {
                         Log.d(TAG, "Load cancelled after scaling (theme changed)")
                         scaledBitmap.recycle()

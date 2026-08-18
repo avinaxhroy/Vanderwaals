@@ -21,14 +21,7 @@ import java.io.File
 import kotlin.random.Random
 
 /**
- * Worker to download the daily set of wallpapers.
- *
- * Responsibilities:
- * 1. Get all wallpapers from catalog
- * 2. Score and select based on user preferences
- * 3. Download them from the network with progress reporting
- * 4. Update DailyPlaylistManager with the new list
- * 5. Apply the first wallpaper immediately after download
+ * Worker to download the daily set of wallpapers; applies the first one immediately.
  */
 @HiltWorker
 class DailyPlaylistWorker @AssistedInject constructor(
@@ -65,7 +58,6 @@ class DailyPlaylistWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         Log.d(TAG, "Starting Daily Playlist download job")
         
-        // Check if this is a manual trigger (should bypass interval check)
         val isManualTrigger = tags.contains("manual_playlist_download")
         Log.d(TAG, "Is manual trigger: $isManualTrigger, tags: $tags")
         
@@ -74,7 +66,6 @@ class DailyPlaylistWorker @AssistedInject constructor(
         return try {
             val settings = settingsDataStore.settings.first()
             
-            // Only check interval if not manually triggered
             if (!isManualTrigger && settings.changeInterval != "unlock") {
                 Log.d(TAG, "Daily playlist disabled (interval is ${settings.changeInterval}), skipping")
                 return Result.success()
@@ -83,14 +74,12 @@ class DailyPlaylistWorker @AssistedInject constructor(
             playlistSize = settings.dailyPlaylistSize
             Log.d(TAG, "Target playlist size: $playlistSize")
             
-            // Report initial progress
             setProgress(workDataOf(
                 KEY_DOWNLOADED_COUNT to 0,
                 KEY_TOTAL_COUNT to playlistSize,
                 KEY_STATUS to STATUS_DOWNLOADING
             ))
             
-            // Step 1: Get all wallpapers from the catalog (with embeddings for scoring)
             val allWallpapers = wallpaperRepository.getAllWallpapers().first()
             if (allWallpapers.isEmpty()) {
                 Log.e(TAG, "No wallpapers in catalog!")
@@ -102,7 +91,6 @@ class DailyPlaylistWorker @AssistedInject constructor(
                 return Result.failure()
             }
             
-            // Step 1b: Filter by enabled sources (github/bing user settings)
             val enabledSources = mutableListOf<String>()
             if (settings.githubEnabled) enabledSources.add("github")
             if (settings.bingEnabled) enabledSources.add("bing")
@@ -119,64 +107,41 @@ class DailyPlaylistWorker @AssistedInject constructor(
                 return Result.failure()
             }
             
-            Log.d(TAG, "Catalog has ${allWallpapers.size} total, ${sourceFilteredWallpapers.size} from enabled sources: $enabledSources")
-            
-            // Step 2: Get user preferences for scoring (optional, fallback to random if not available)
             val preferences = preferenceRepository.getUserPreferences().first()
-            
-            // Step 3: Get recently shown wallpapers to avoid repetition
             val recentHistory = wallpaperRepository.getHistory()
                 .first()
                 .take(50)
                 .map { it.wallpaperId }
                 .toSet()
-            Log.d(TAG, "${recentHistory.size} wallpapers shown recently")
             
-            // Step 4: Filter candidates (not recently shown)
             val candidates = sourceFilteredWallpapers.filter { wallpaper ->
                 wallpaper.id !in recentHistory
             }
             
-            if (candidates.isEmpty()) {
-                Log.w(TAG, "No new candidates available, using all source-filtered wallpapers")
-            }
-            
             val availableCandidates = if (candidates.isNotEmpty()) candidates else sourceFilteredWallpapers
-            Log.d(TAG, "${availableCandidates.size} candidates available for selection")
             
-            // Step 5: Score and select wallpapers
             val selectedWallpapers = selectWallpapers(
                 availableCandidates, 
                 playlistSize, 
                 preferences?.preferenceVector
             )
-            Log.d(TAG, "Selected ${selectedWallpapers.size} wallpapers for download")
             
-            // Step 6: Download each wallpaper and track progress
             val newPlaylistIds = mutableListOf<String>()
             var firstWallpaper: WallpaperMetadata? = null
             var firstWallpaperFile: File? = null
             
             for ((index, wallpaper) in selectedWallpapers.withIndex()) {
-                Log.d(TAG, "Downloading wallpaper ${index + 1}/${selectedWallpapers.size}: ${wallpaper.id}")
-                
                 val downloadResult = wallpaperRepository.downloadWallpaper(wallpaper)
                 
                 if (downloadResult.isSuccess) {
                     newPlaylistIds.add(wallpaper.id)
-                    
-                    // Mark as downloaded in the queue
                     wallpaperRepository.markAsDownloaded(wallpaper.id)
                     
-                    // Store first wallpaper for immediate application
                     if (firstWallpaper == null) {
                         firstWallpaper = wallpaper
                         firstWallpaperFile = downloadResult.getOrNull()
                     }
                     
-                    Log.d(TAG, "Downloaded and added to playlist: ${wallpaper.id} (${newPlaylistIds.size}/$playlistSize)")
-                    
-                    // Report progress after each successful download
                     setProgress(workDataOf(
                         KEY_DOWNLOADED_COUNT to newPlaylistIds.size,
                         KEY_TOTAL_COUNT to playlistSize,
@@ -197,13 +162,9 @@ class DailyPlaylistWorker @AssistedInject constructor(
                 return Result.retry()
             }
 
-            // Step 7: Update Playlist Manager
             dailyPlaylistManager.setPlaylist(newPlaylistIds)
             settingsDataStore.updateLastPlaylistUpdate(System.currentTimeMillis())
             
-            Log.d(TAG, "Daily playlist updated with ${newPlaylistIds.size} wallpapers")
-            
-            // Step 8: Apply first wallpaper immediately if available
             var appliedWallpaperId: String? = null
             if (firstWallpaper != null && firstWallpaperFile != null && firstWallpaperFile.exists()) {
                 setProgress(workDataOf(
@@ -217,14 +178,12 @@ class DailyPlaylistWorker @AssistedInject constructor(
                     appliedWallpaperId = firstWallpaper.id
                     Log.d(TAG, "Applied first wallpaper immediately: ${firstWallpaper.id}")
                     
-                    // Record in history
                     wallpaperRepository.recordWallpaperApplied(firstWallpaper)
                 } else {
                     Log.w(TAG, "Failed to apply first wallpaper immediately")
                 }
             }
             
-            // Report completion
             setProgress(workDataOf(
                 KEY_DOWNLOADED_COUNT to newPlaylistIds.size,
                 KEY_TOTAL_COUNT to playlistSize,
@@ -296,7 +255,6 @@ class DailyPlaylistWorker @AssistedInject constructor(
             return remainingCandidates.take(count)
         }
         
-        // Score all candidates by similarity
         val scoredCandidates = remainingCandidates.mapNotNull { wallpaper ->
             val embedding = wallpaper.embedding
             if (embedding.isNotEmpty()) {
@@ -310,11 +268,9 @@ class DailyPlaylistWorker @AssistedInject constructor(
         
         while (selected.size < count && scoredCandidates.isNotEmpty()) {
             val wallpaper = if (random.nextFloat() < EXPLORATION_RATE) {
-                // Explore: random selection
                 val randomIndex = random.nextInt(scoredCandidates.size)
                 scoredCandidates.removeAt(randomIndex).first
             } else {
-                // Exploit: pick highest scoring
                 val best = scoredCandidates.maxByOrNull { it.second }!!
                 scoredCandidates.remove(best)
                 best.first
@@ -346,10 +302,8 @@ class DailyPlaylistWorker @AssistedInject constructor(
                 return false
             }
             
-            // Use actual screen size for SmartCrop
             val screenSize = me.avinas.vanderwaals.core.getDeviceScreenSize(applicationContext)
             
-            // Apply SmartCrop to actual screen dimensions
             processedBitmap = me.avinas.vanderwaals.core.SmartCrop.smartCropBitmapAsync(
                 source = originalBitmap,
                 targetWidth = screenSize.width,
@@ -360,7 +314,7 @@ class DailyPlaylistWorker @AssistedInject constructor(
             // Recycle original bitmap to save memory using BitmapManager
             if (processedBitmap !== originalBitmap) {
                 me.avinas.vanderwaals.core.BitmapManager.recycleSafely(originalBitmap)
-                originalBitmap = null // Clear reference
+                originalBitmap = null
             }
             
             // Apply based on user settings (DataStore values: lock_screen, home_screen, both)
@@ -390,7 +344,6 @@ class DailyPlaylistWorker @AssistedInject constructor(
                     }
                 }
                 else -> {
-                    // Default to lock screen only if unknown value
                     Log.w(TAG, "Unknown applyTo value: $applyTo, defaulting to lock screen")
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
                         wallpaperManager.setBitmap(processedBitmap, null, true, WallpaperManager.FLAG_LOCK)
@@ -400,9 +353,8 @@ class DailyPlaylistWorker @AssistedInject constructor(
                 }
             }
             
-            // Recycle processed bitmap after successful application
             me.avinas.vanderwaals.core.BitmapManager.recycleSafely(processedBitmap)
-            processedBitmap = null // Clear reference
+            processedBitmap = null
             
             Log.d(TAG, "Successfully applied wallpaper to $applyTo")
             true

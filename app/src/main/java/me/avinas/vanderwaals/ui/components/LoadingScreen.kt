@@ -2,6 +2,8 @@ package me.avinas.vanderwaals.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -11,19 +13,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
-/**
- * Loading screen shown during app initialization while wallpapers are being downloaded.
- * 
- * Displays:
- * - Circular progress indicator
- * - Status message
- * - Linear progress bar with percentage
- * - Sub-message with details
- */
 @Composable
 fun LoadingScreen(
-    message: String = "Loading Wallpapers...",
-    subMessage: String = "Please wait while we prepare your wallpapers",
+    message: String = "Loading Wallpapers…",
+    subMessage: String = "Preparing your wallpaper library…",
     progress: Float? = null, // 0.0 to 1.0, null for indeterminate
     isError: Boolean = false,
     onRetry: (() -> Unit)? = null,
@@ -32,7 +25,9 @@ fun LoadingScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .verticalScroll(rememberScrollState())
+            .background(MaterialTheme.colorScheme.background)
+            .padding(vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -71,14 +66,14 @@ fun LoadingScreen(
             modifier = Modifier.padding(horizontal = 32.dp)
         )
         
-        // Show progress bar if progress is available and not error
         if (progress != null && !isError) {
             Spacer(modifier = Modifier.height(24.dp))
             
             Column(
                 modifier = Modifier
-                    .width(280.dp)
-                    .padding(horizontal = 16.dp),
+                    .fillMaxWidth()
+                    .widthIn(max = 280.dp)
+                    .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 LinearProgressIndicator(
@@ -108,9 +103,10 @@ fun LoadingScreen(
                 onClick = onRetry,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
-                )
+                ),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
             ) {
-                Text("Retry Connection")
+                Text("Retry", fontWeight = FontWeight.Bold)
             }
         }
     }

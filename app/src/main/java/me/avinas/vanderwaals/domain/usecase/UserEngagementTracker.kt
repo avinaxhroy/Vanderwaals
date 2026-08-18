@@ -76,14 +76,11 @@ class UserEngagementTracker @Inject constructor(
             val currentTime = System.currentTimeMillis()
             
             dataStore.edit { prefs ->
-                // Increment launch count
                 val launches = (prefs[KEY_APP_LAUNCHES] ?: 0) + 1
                 prefs[KEY_APP_LAUNCHES] = launches
                 
-                // Update last launch time
                 prefs[KEY_LAST_LAUNCH] = currentTime
                 
-                // Increment session count
                 val sessions = (prefs[KEY_TOTAL_SESSIONS] ?: 0) + 1
                 prefs[KEY_TOTAL_SESSIONS] = sessions
                 
@@ -127,21 +124,12 @@ class UserEngagementTracker @Inject constructor(
     }
     
     /**
-     * Calculates current user engagement level.
-     * 
-     * Algorithm:
-     * 1. Get app launches in recent window (last 7 days)
-     * 2. Weight recent activity more heavily (decay factor)
-     * 3. Factor in wallpaper changes and feedback
-     * 4. Classify into engagement levels
-     * 
-     * @return Current engagement level
+     * Calculates the current user engagement level.
      */
     suspend fun calculateEngagement(): EngagementLevel {
         try {
             val currentTime = System.currentTimeMillis()
             
-            // Get metrics
             val prefs = dataStore.data.first()
             val totalLaunches = prefs[KEY_APP_LAUNCHES] ?: 0
             val lastLaunch = prefs[KEY_LAST_LAUNCH]
@@ -149,7 +137,6 @@ class UserEngagementTracker @Inject constructor(
             val feedbackCount = prefs[KEY_FEEDBACK_COUNT] ?: 0
             val lastCalc = prefs[KEY_LAST_ENGAGEMENT_CALC]
             
-            // Calculate days since last launch
             val lastLaunchTime = lastLaunch ?: currentTime
             val daysSinceLastLaunch = (currentTime - lastLaunchTime) / (1000 * 60 * 60 * 24)
             
@@ -159,13 +146,11 @@ class UserEngagementTracker @Inject constructor(
                 return EngagementLevel.MEDIUM
             }
             
-            // Calculate launches per week (estimate)
             val lastCalcTime = lastCalc ?: (currentTime - (7 * 24 * 60 * 60 * 1000))
             val daysSinceCalc = ((currentTime - lastCalcTime) / (1000 * 60 * 60 * 24)).toInt()
             val weeksTracking = min(daysSinceCalc, RECENT_WINDOW_DAYS) / 7.0
             val launchesPerWeek = if (weeksTracking > 0) totalLaunches / weeksTracking else totalLaunches.toDouble()
             
-            // Factor in other engagement signals
             val engagementScore = launchesPerWeek + 
                 (wallpaperChanges * 0.5) +  // Wallpaper changes show active use
                 (feedbackCount * 0.3)        // Feedback shows engagement
@@ -180,7 +165,6 @@ class UserEngagementTracker @Inject constructor(
             
             val adjustedScore = engagementScore * recencyFactor
             
-            // Classify engagement level
             val engagement = when {
                 adjustedScore >= HIGH_ENGAGEMENT_LAUNCHES -> EngagementLevel.HIGH
                 adjustedScore >= MEDIUM_ENGAGEMENT_LAUNCHES -> EngagementLevel.MEDIUM
@@ -188,7 +172,6 @@ class UserEngagementTracker @Inject constructor(
                 else -> EngagementLevel.MINIMAL
             }
             
-            // Update last calculation time
             dataStore.edit { it[KEY_LAST_ENGAGEMENT_CALC] = currentTime }
             
             Log.d(TAG, "Engagement calculated: $engagement " +
@@ -204,12 +187,6 @@ class UserEngagementTracker @Inject constructor(
         }
     }
     
-    /**
-     * Gets optimal sync interval based on engagement level.
-     * 
-     * @param engagement User's engagement level
-     * @return Sync interval in hours
-     */
     fun getSyncIntervalHours(engagement: EngagementLevel): Int {
         return when (engagement) {
             EngagementLevel.HIGH -> SYNC_INTERVAL_HIGH
@@ -219,9 +196,6 @@ class UserEngagementTracker @Inject constructor(
         }
     }
     
-    /**
-     * Gets a human-readable description of the engagement level.
-     */
     fun getEngagementDescription(engagement: EngagementLevel): String {
         return when (engagement) {
             EngagementLevel.HIGH -> "Very Active (syncs daily)"
@@ -276,9 +250,6 @@ class UserEngagementTracker @Inject constructor(
         }
     }
     
-    /**
-     * Data class for engagement statistics.
-     */
     data class EngagementStats(
         val totalLaunches: Int = 0,
         val lastLaunchTimestamp: Long? = null,

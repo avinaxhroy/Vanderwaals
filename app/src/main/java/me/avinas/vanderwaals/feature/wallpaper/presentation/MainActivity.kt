@@ -21,12 +21,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.BatteryFull
@@ -90,16 +93,13 @@ class MainActivity : ComponentActivity() {
     private var showAlarmPermissionDialog by mutableStateOf(false)
     
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Check system dark mode to set initial system bars correctly
-        val isDarkMode = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
-        
+        // app is dark-mode-only, so force dark system bars
         enableEdgeToEdge(
-            statusBarStyle = if (isDarkMode) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
-            navigationBarStyle = if (isDarkMode) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
         )
         super.onCreate(savedInstanceState)
         
-        // Hide action bar / title completely
         actionBar?.hide()
         
         val splashScreen = installSplashScreen()
@@ -126,40 +126,12 @@ class MainActivity : ComponentActivity() {
             val loadingProgress by initViewModel.loadingProgress.collectAsState()
             val syncFailed by initViewModel.syncFailed.collectAsState()
             
-            // Migration dialog state
             val showMigrationDialog by initViewModel.showMigrationDialog.collectAsState()
             val migrationInProgress by initViewModel.migrationInProgress.collectAsState()
             val migrationProgress by initViewModel.migrationProgress.collectAsState()
             val migrationMessage by initViewModel.migrationMessage.collectAsState()
             
-            // Observe settings for theme - directly derive darkTheme to ensure reactive updates
-            val settings by settingsDataStore.settings.collectAsState(initial = null)
-            val systemDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
-            
-            // Directly compute theme from settings - this triggers recomposition when settings change
-            val darkTheme = when (settings?.themeMode) {
-                "light" -> false
-                "dark" -> true
-                else -> systemDarkTheme  // "system" or null
-            }
-            
-            Log.d(TAG, "MainActivity Theme: mode=${settings?.themeMode}, system=$systemDarkTheme, final=$darkTheme")
-            
-            // Log when theme actually changes
-            LaunchedEffect(darkTheme) {
-                Log.d(TAG, ">>> THEME CHANGED IN MAINACTIVITY: darkTheme=$darkTheme <<<")
-            }
-            
-            // Update system bars based on theme
-            LaunchedEffect(darkTheme) {
-                enableEdgeToEdge(
-                    statusBarStyle = if (darkTheme) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
-                    navigationBarStyle = if (darkTheme) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
-                )
-            }
-            
             LaunchedEffect(Unit) {
-                // Record app launch for engagement tracking
                 engagementTracker.recordAppLaunch()
                 
                 onboardingComplete = userPreferenceDao.exists()
@@ -167,10 +139,9 @@ class MainActivity : ComponentActivity() {
                 Log.d(TAG, "Onboarding complete: $onboardingComplete")
             }
             
-            // Observe user preferences to handle reset/re-onboarding
+            // prefs turning null after being set means a reset wiped them
             LaunchedEffect(Unit) {
                 userPreferenceDao.get().collect { prefs ->
-                    // If prefs become null after being complete, it means they were deleted (reset)
                     if (prefs == null && onboardingComplete == true) {
                         onboardingComplete = false
                     }
@@ -182,10 +153,9 @@ class MainActivity : ComponentActivity() {
             }
             
             VanderwaalsTheme(
-                darkTheme = darkTheme,
-                dynamicColor = false // Use brand colors, not dynamic
+                darkTheme = true,
+                dynamicColor = false // brand colors, not dynamic
             ) {
-                // Wrap with LiquidGlassProvider to enable Smart Launcher-style liquid glass effects
                 me.avinas.vanderwaals.ui.theme.glass.LiquidGlassProvider {
                     val navBarPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                     CompositionLocalProvider(LocalNavigationBarPadding provides navBarPadding) {
@@ -193,10 +163,9 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier
                                 .fillMaxSize()
                                 .fillMaxSize(),
-                                // .systemBarsPadding(), // REMOVED: Allow content to extend behind system bars for edge-to-edge
+                                // .systemBarsPadding(), // removed: content extends behind system bars for edge-to-edge
                             color = MaterialTheme.colorScheme.background
                         ) {
-                        // Show loading screen while app is initializing
                         if (!isInitialized) {
                             LoadingScreen(
                                 message = loadingMessage,
@@ -225,7 +194,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         
-                        // Manifest migration dialog for users upgrading from older versions
+                        // migration dialog for users upgrading from older versions
                         if (showMigrationDialog) {
                             ManifestMigrationDialog(
                                 onUpdateNow = { initViewModel.startMigration() },
@@ -315,6 +284,10 @@ private fun AlarmPermissionExplanationDialog(
         },
         text = { 
             Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp)
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.Start,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -344,22 +317,24 @@ private fun AlarmPermissionExplanationDialog(
                 Text(
                     "Without this permission, wallpaper changes may be delayed or skipped. You can grant this permission now or enable it later in Settings.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontStyle = FontStyle.Italic
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         },
         confirmButton = {
             Button(
                 onClick = onContinue,
-                modifier = Modifier.fillMaxWidth(0.5f)
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
             ) {
-                Text("Grant Permission")
+                Text("Grant Permission", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Skip for Now")
+            TextButton(
+                onClick = onDismiss,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
+            ) {
+                Text("Skip for Now", fontWeight = FontWeight.Medium)
             }
         }
     )

@@ -35,10 +35,6 @@ import me.avinas.vanderwaals.ui.settings.SettingsScreen
 import me.avinas.vanderwaals.ui.onboarding.OnboardingNavGraph
 import me.avinas.vanderwaals.ui.analytics.AnalyticsScreen
 
-/**
- * Vanderwaals App - Main navigation composable
- * Minimal navigation for algorithm-driven wallpaper experience
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VanderwaalsApp(
@@ -54,9 +50,7 @@ fun VanderwaalsApp(
         modifier = Modifier
             .fillMaxSize(),
     ) {
-        // Onboarding flow - First launch experience
         composable<Onboarding> {
-            // Use the full onboarding navigation graph with multi-step flow
             OnboardingNavGraph(
                 onOnboardingComplete = {
                     navController.navigate(Main) {
@@ -64,13 +58,11 @@ fun VanderwaalsApp(
                     }
                 },
                 onExitOnboarding = {
-                    // Exit app when back is pressed on first onboarding screen
-                    // User can use system back button to exit
+                    // back exits the app on the first onboarding screen
                 }
             )
         }
 
-        // Main screen - Current wallpaper display
         composable<Main> {
             MainScreen(
                 onNavigateToHistory = {
@@ -82,7 +74,6 @@ fun VanderwaalsApp(
             )
         }
 
-        // History screen - Wallpaper history with learning
         composable<History> {
             HistoryScreen(
                 onNavigateBack = {
@@ -91,7 +82,6 @@ fun VanderwaalsApp(
             )
         }
 
-        // Settings screen - App configuration
         composable<Settings> {
             SettingsScreen(
                 onNavigateBack = {
@@ -108,7 +98,6 @@ fun VanderwaalsApp(
             )
         }
 
-        // Analytics screen - Personalization insights
         composable<Analytics> {
             AnalyticsScreen(
                 onNavigateBack = {
@@ -117,7 +106,6 @@ fun VanderwaalsApp(
             )
         }
 
-        // Notification permission screen
         composable<Notification> {
             NotificationScreen(
                 onAgree = {
@@ -134,54 +122,10 @@ fun VanderwaalsApp(
             )
         }
 
-        // Privacy policy screen
         composable<Privacy> {
-            // Simple privacy policy screen with Material 3 components
-            Scaffold(
-                topBar = {
-                    TopAppBar(
-                        title = { Text("Privacy Policy") },
-                        navigationIcon = {
-                            IconButton(
-                                onClick = { navController.popBackStack() }
-                            ) {
-                                Icon(
-                                    painter = painterResource(android.R.drawable.ic_menu_close_clear_cancel),
-                                    contentDescription = "Back"
-                                )
-                            }
-                        }
-                    )
-                }
-            ) { paddingValues ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                        .padding(16.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    Text(
-                        text = "Privacy Policy",
-                        style = MaterialTheme.typography.headlineMedium,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                    Text(
-                        text = """
-                            Vanderwaals is designed with privacy in mind:
-                            
-                            • All wallpaper preferences are stored locally on your device
-                            • No personal data is collected or transmitted
-                            • Wallpaper downloads are from public sources (GitHub, Bing)
-                            • No analytics or tracking
-                            • No third-party data sharing
-                            
-                            Your wallpaper history and preferences never leave your device.
-                        """.trimIndent(),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
-            }
+            me.avinas.vanderwaals.ui.settings.PrivacyPolicyScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
     }
 }

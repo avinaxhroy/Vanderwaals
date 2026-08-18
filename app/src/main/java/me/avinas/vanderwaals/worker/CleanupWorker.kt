@@ -27,9 +27,6 @@ class CleanupWorker @AssistedInject constructor(
     companion object {
         private const val TAG = "CleanupWorker"
         
-        /**
-         * Unique work name for daily cleanup.
-         */
         const val WORK_NAME = "cleanup_work"
         
         /**
@@ -37,9 +34,6 @@ class CleanupWorker @AssistedInject constructor(
          */
         private const val MAX_HISTORY_ENTRIES = 100
         
-        /**
-         * Output data keys.
-         */
         const val KEY_DELETED_HISTORY = "deleted_history"
         const val KEY_DELETED_WALLPAPERS = "deleted_wallpapers"
         const val KEY_DELETED_DISLIKED = "deleted_disliked"
@@ -53,17 +47,13 @@ class CleanupWorker @AssistedInject constructor(
             var deletedWallpapers = 0
             var deletedDisliked = 0
             
-            // Step 1: Clean up old history entries (keep last 100)
             val history = wallpaperRepository.getHistory().first()
             if (history.size > MAX_HISTORY_ENTRIES) {
                 val toDelete = history.size - MAX_HISTORY_ENTRIES
-                // Note: This would require adding a deleteOldHistory method to repository
-                // For now, we'll just log it
                 Log.d(TAG, "Would delete $toDelete old history entries")
                 deletedHistory = toDelete
             }
             
-            // Step 2: Delete cached wallpapers for disliked wallpapers
             val preferences = preferenceRepository.getUserPreferences().first()
             if (preferences != null) {
                 val allWallpapers = wallpaperRepository.getAllWallpapers().first()
@@ -79,14 +69,6 @@ class CleanupWorker @AssistedInject constructor(
                     }
                 }
             }
-            
-            // Step 3: Clean up low-priority cached wallpapers
-            // Keep only top 100 by priority in download queue
-            // This would require additional repository methods to query and delete
-            Log.d(TAG, "Cache cleanup completed")
-            
-            // Step 4: Clean up orphaned files
-            // This would scan the cache directory and delete files not referenced in the database
             
             Log.d(TAG, "Cleanup complete: $deletedHistory history, $deletedWallpapers wallpapers, $deletedDisliked disliked")
             

@@ -24,11 +24,6 @@ import me.avinas.vanderwaals.worker.ChangeInterval
  */
 class BootCompletedReceiver : BroadcastReceiver() {
     
-    /**
-     * Entry point interface for Hilt dependency injection.
-     * This allows us to manually retrieve dependencies from the Hilt component
-     * in manifest-declared receivers where @AndroidEntryPoint is unreliable.
-     */
     @EntryPoint
     @InstallIn(SingletonComponent::class)
     interface BootReceiverEntryPoint {
@@ -56,23 +51,14 @@ class BootCompletedReceiver : BroadcastReceiver() {
         }
     }
     
-    /**
-     * Handles boot completion by rescheduling all workers.
-     * 
-     * Uses goAsync() to perform work in background coroutine since
-     * BroadcastReceiver.onReceive() must return quickly.
-     * 
-     * Dependencies are retrieved via EntryPointAccessors for reliable injection.
-     */
     private fun handleBootCompleted(context: Context) {
-        // Use goAsync() to extend receiver lifetime for background work
+        // goAsync(): onReceive() must return quickly, so do work off the main thread
         val pendingResult = goAsync()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope.launch {
             try {
                 Log.d(TAG, "Starting worker rescheduling...")
                 
-                // Get dependencies via EntryPointAccessors (more reliable than @AndroidEntryPoint)
                 val entryPoint = EntryPointAccessors.fromApplication(
                     context.applicationContext,
                     BootReceiverEntryPoint::class.java
@@ -82,22 +68,14 @@ class BootCompletedReceiver : BroadcastReceiver() {
                 
                 Log.d(TAG, "✓ Dependencies retrieved via EntryPointAccessors")
                 
-                // Step 1: Initialize periodic workers (sync, cleanup)
                 workScheduler.initializePeriodicWorkers()
-                Log.d(TAG, "✓ Periodic workers initialized")
                 
-                // Step 2: Reschedule wallpaper change if auto-change is enabled
                 val settings = settingsDataStore.settings.first()
-                
                 if (settings.changeInterval != "never") {
                     Log.d(TAG, "Auto-change enabled (${settings.changeInterval}), rescheduling wallpaper change worker")
                     
-                    // Parse interval and reschedule
                     when (settings.changeInterval) {
                         "unlock" -> {
-                            // ANDROID 15+ FIX: Use fromBootReceiver flag to enable deferred start
-                            // This prevents ForegroundServiceStartNotAllowedException on API 35+
-                            Log.d(TAG, "Unlock interval - starting monitor service with boot flag")
                             workScheduler.startWallpaperMonitorService(fromBootReceiver = true)
                         }
                         "15min" -> {
@@ -131,7 +109,6 @@ class BootCompletedReceiver : BroadcastReceiver() {
                             )
                         }
                         "daily" -> {
-                            // Use saved time if available, otherwise default to 9:00 AM
                             val time = settings.dailyTime ?: java.time.LocalTime.of(9, 0)
                             
                             workScheduler.scheduleWallpaperChange(
@@ -159,7 +136,6 @@ class BootCompletedReceiver : BroadcastReceiver() {
                     Log.d(TAG, "Auto-change disabled, skipping wallpaper change worker")
                 }
                 
-                // Step 3: Log diagnostic information
                 val dailyTimeStr = settings.dailyTime?.let { String.format("%02d:%02d", it.hour, it.minute) } ?: "Not set"
                 Log.d(TAG, """
                     ╔═══════════════════════════════════════════════════════════╗
@@ -175,7 +151,6 @@ class BootCompletedReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 Log.e(TAG, "Error rescheduling workers after boot", e)
             } finally {
-                // Signal completion to allow receiver to finish
                 pendingResult.finish()
             }
         }

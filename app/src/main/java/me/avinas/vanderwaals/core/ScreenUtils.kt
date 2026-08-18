@@ -15,21 +15,9 @@ import android.view.WindowMetrics
  * 
  * Provides device screen dimensions across different Android versions.
  */
-
-/**
- * Get device screen size with orientation consideration.
- * 
- * Returns actual screen dimensions adjusted for portrait/landscape.
- * 
- * @param context Application context
- * @return Size with width and height in pixels
- */
 private var isTabletCached: Boolean? = null
 
-/**
- * Check if the device is a tablet.
- * Result is cached to avoid repeated resource checks.
- */
+/** Result is cached to avoid repeated resource checks. */
 fun isTablet(context: Context): Boolean {
     if (isTabletCached == null) {
         val smallestScreenWidthDp = context.resources.configuration.smallestScreenWidthDp
@@ -38,14 +26,6 @@ fun isTablet(context: Context): Boolean {
     return isTabletCached!!
 }
 
-/**
- * Get device screen size with orientation consideration.
- * 
- * Returns actual screen dimensions adjusted for portrait/landscape.
- * 
- * @param context Application context
- * @return Size with width and height in pixels
- */
 fun getDeviceScreenSize(context: Context): Size {
     val size = getScreenSize(context)
     val isTabletDevice = isTablet(context)
@@ -66,13 +46,8 @@ fun getDeviceScreenSize(context: Context): Size {
 }
 
 /**
- * Get raw screen size regardless of orientation.
- * 
- * Uses WindowMetrics API on Android R+ for better accuracy,
- * falls back to DisplayMetrics on older versions.
- * 
- * @param context Application context
- * @return Size with width and height in pixels
+ * Raw screen size regardless of orientation, using WindowMetrics on Android R+
+ * (more accurate) and falling back to DisplayMetrics on older versions.
  */
 private fun getScreenSize(context: Context): Size {
     val api: ScreenSizeApi = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

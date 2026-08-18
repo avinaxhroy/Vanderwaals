@@ -1,250 +1,221 @@
 package me.avinas.vanderwaals.ui.onboarding
 
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import me.avinas.vanderwaals.ui.theme.*
+import me.avinas.vanderwaals.ui.settings.RadicalDivider
+import me.avinas.vanderwaals.ui.settings.RadicalIconBadge
+import me.avinas.vanderwaals.ui.settings.RadicalPalette
+import me.avinas.vanderwaals.ui.settings.RadicalTactileBackdrop
+import me.avinas.vanderwaals.ui.settings.RadicalTactileCard
+import me.avinas.vanderwaals.ui.theme.LocalThemeIsDark
+import me.avinas.vanderwaals.ui.theme.PlayfairDisplayFamily
 
 @Composable
 fun WelcomeScreen(
     onGetStarted: () -> Unit,
     onSkip: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalThemeIsDark.current
     val metrics = rememberOnboardingLayoutMetrics()
+    val haptic = LocalHapticFeedback.current
 
     Scaffold(
-        containerColor = Color.Transparent
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-        ) {
-            // Warm ambient backdrop
-            OnboardingBackdrop(
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        bottomBar = {
+            OnboardingBottomBar(
                 isDark = isDark,
-                modifier = Modifier.matchParentSize()
+                metrics = metrics,
+                buttonText = "Get Started",
+                accentColor = RadicalPalette.EmeraldJade,
+                onButtonClick = onGetStarted
             )
+        }
+    ) { paddingValues ->
+        Box(Modifier.fillMaxSize()) {
+            RadicalTactileBackdrop(isDark = isDark, modifier = Modifier.matchParentSize())
 
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState()),
-                contentAlignment = Alignment.TopCenter
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = metrics.horizontalPadding)
+                    .padding(
+                        top = paddingValues.calculateTopPadding() + 8.dp,
+                        bottom = paddingValues.calculateBottomPadding() + 16.dp
+                    ),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .widthIn(max = metrics.maxContentWidth)
-                        .padding(horizontal = metrics.horizontalPadding)
                 ) {
-                    Spacer(modifier = Modifier.height(paddingValues.calculateTopPadding() + 12.dp))
-                    // Skip button at top right
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(onClick = onSkip) {
+                        TactileStepChip(
+                            text = "QUICK SETUP",
+                            accentColor = RadicalPalette.EmeraldJade,
+                            isDark = isDark
+                        )
+
+                        TextButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onSkip()
+                            },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
                             Text(
                                 text = "Skip",
                                 style = MaterialTheme.typography.labelLarge,
-                                color = getOnboardingTextSecondary(isDark)
+                                fontWeight = FontWeight.Bold,
+                                color = if (isDark) RadicalPalette.DarkCardTextSecondary else RadicalPalette.LightCardTextSecondary
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(if (metrics.compactHeight) 24.dp else 48.dp))
+                    Spacer(Modifier.height(18.dp))
 
-                    // Logo area
-                    // App icon with soft glow
-                    Box(
-                        modifier = Modifier
-                            .size(if (metrics.compactWidth) 72.dp else 88.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        BrandPrimary.copy(alpha = 0.2f),
-                                        BrandAccent.copy(alpha = 0.15f)
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = "Vanderwaals",
-                            modifier = Modifier.size(if (metrics.compactWidth) 36.dp else 44.dp),
-                            tint = BrandPrimary
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // Headline — Playfair Display italic
-                    Text(
-                        text = "Your phone.\nYour aesthetic.",
-                        style = LuxeHeadlineStyle,
-                        color = getOnboardingTextPrimary(isDark),
-                        textAlign = TextAlign.Start
+                    RadicalIconBadge(
+                        icon = Icons.Default.Wallpaper,
+                        accentColor = RadicalPalette.EmeraldJade,
+                        isDark = isDark,
+                        size = if (metrics.compactWidth) 48.dp else 54.dp,
+                        iconSize = if (metrics.compactWidth) 24.dp else 28.dp
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(Modifier.height(14.dp))
 
-                    // Subheadline
                     Text(
-                        text = "Wallpapers that match your taste, refreshed automatically.",
-                        style = LuxeBodyStyle,
-                        color = getOnboardingTextSecondary(isDark),
-                        textAlign = TextAlign.Start,
-                        lineHeight = 24.sp
+                        text = "Wallpapers that learn your taste.",
+                        fontFamily = PlayfairDisplayFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = if (metrics.compactWidth) 26.sp else 30.sp,
+                        color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
+                        letterSpacing = (-0.5).sp,
+                        lineHeight = if (metrics.compactWidth) 32.sp else 36.sp
                     )
 
-                    Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(Modifier.height(8.dp))
 
-                    // 3 Value Cards
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        WelcomeValueCard(
-                            icon = Icons.Default.AutoAwesome,
-                            title = "Learns Your Taste",
-                            description = "The more you use it, the better it gets",
-                            isDark = isDark,
-                            metrics = metrics
-                        )
-                        WelcomeValueCard(
-                            icon = Icons.Default.Wallpaper,
-                            title = "Auto Refresh",
-                            description = "New wallpapers applied on your schedule",
-                            isDark = isDark,
-                            metrics = metrics
-                        )
-                        WelcomeValueCard(
-                            icon = Icons.Default.Security,
-                            title = "Stays Private",
-                            description = "All processing happens on your device",
-                            isDark = isDark,
-                            metrics = metrics
-                        )
-                    }
+                    Text(
+                        text = "On-device AI curation that adapts as you explore, like, and save wallpapers, refreshed on your schedule.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
+                        lineHeight = 22.sp
+                    )
 
-                    Spacer(modifier = Modifier.height(40.dp))
+                    Spacer(Modifier.height(20.dp))
 
-                    // CTA Button — using OnboardingBottomBar style
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .widthIn(max = metrics.maxContentWidth)
-                            .shadow(16.dp, RoundedCornerShape(16.dp))
-                            .height(metrics.buttonHeight)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(BrandPrimary, BrandAccent)
-                                )
+                    RadicalTactileCard(isDark = isDark) {
+                        Column {
+                            WelcomePillarRow(
+                                icon = Icons.Default.AutoAwesome,
+                                accentColor = RadicalPalette.AmethystPurple,
+                                title = "On-Device Personalization",
+                                description = "Learns your visual preferences locally without sending photos to a server.",
+                                isDark = isDark
                             )
-                            .bounceClick(onGetStarted),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = "Get Started",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White
+
+                            RadicalDivider(isDark = isDark)
+
+                            WelcomePillarRow(
+                                icon = Icons.Default.Schedule,
+                                accentColor = RadicalPalette.RadiantAmber,
+                                title = "Automated Rotation",
+                                description = "Rotates on screen unlock or on schedule with battery-friendly background jobs.",
+                                isDark = isDark
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = Color.White
+
+                            RadicalDivider(isDark = isDark)
+
+                            WelcomePillarRow(
+                                icon = Icons.Default.Security,
+                                accentColor = RadicalPalette.EmeraldJade,
+                                title = "Private & Offline-First",
+                                description = "Zero tracking and zero cloud uploads. Your taste profile stays on your device.",
+                                isDark = isDark
                             )
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding() + 24.dp))
                 }
+
+                Text(
+                    text = "You can adjust sources, modes, and schedules anytime in Settings.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }
 }
 
 @Composable
-private fun WelcomeValueCard(
+private fun WelcomePillarRow(
     icon: ImageVector,
+    accentColor: Color,
     title: String,
     description: String,
-    isDark: Boolean,
-    metrics: OnboardingLayoutMetrics
+    isDark: Boolean
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(metrics.cardCornerRadius))
-            .background(getOnboardingCardBackground(isDark))
-            .border(1.dp, getOnboardingCardBorder(isDark), RoundedCornerShape(metrics.cardCornerRadius))
             .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        // Icon
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(BrandPrimary.copy(alpha = if (isDark) 0.15f else 0.1f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(22.dp),
-                tint = BrandPrimary
-            )
-        }
+        RadicalIconBadge(
+            icon = icon,
+            accentColor = accentColor,
+            isDark = isDark,
+            size = 40.dp,
+            iconSize = 20.dp
+        )
 
-        // Text
-        Column {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = getOnboardingTextPrimary(isDark)
+                fontWeight = FontWeight.Bold,
+                color = if (isDark) RadicalPalette.DarkCardTextPrimary else RadicalPalette.LightCardTextPrimary
             )
-            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = getOnboardingTextSecondary(isDark)
+                color = if (isDark) RadicalPalette.DarkCardTextSecondary else RadicalPalette.LightCardTextSecondary,
+                lineHeight = 18.sp
             )
         }
     }

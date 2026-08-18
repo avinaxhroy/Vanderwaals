@@ -26,13 +26,6 @@ import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Default [WallpaperRepository] implementation.
- *
- * Manages wallpaper metadata, download queue, and cached image files.
- * Cache is capped at 450 MB with LRU eviction. Downloads prefer Wi-Fi
- * and use exponential backoff (3 retries max, up to 3 concurrent).
- */
 @Singleton
 class WallpaperRepositoryImpl @Inject constructor(
     @param:ApplicationContext private val context: Context,
@@ -66,9 +59,8 @@ class WallpaperRepositoryImpl @Inject constructor(
                 summaries.map { it.toWallpaperMetadata() }
             }
     }
-    
+
     override fun getDownloadedWallpapers(): Flow<List<WallpaperMetadata>> {
-        // Return wallpapers that have actual files on disk
         // Used for offline fallback and cache checks (main selection uses getAllWallpapers)
         return wallpaperMetadataDao.getAll().map { allWallpapers ->
             allWallpapers.filter { wallpaper ->
@@ -83,7 +75,6 @@ class WallpaperRepositoryImpl @Inject constructor(
     
     override suspend fun addToDownloadQueue(wallpapers: List<WallpaperMetadata>) {
         withContext(Dispatchers.IO) {
-            // Convert wallpapers to queue items with default priority
             val queueItems = wallpapers.mapIndexed { index, wallpaper ->
                 // Priority decreases with index (first = highest priority)
                 val priority = 1.0f - (index.toFloat() / wallpapers.size.toFloat())
@@ -96,7 +87,6 @@ class WallpaperRepositoryImpl @Inject constructor(
                 )
             }
             
-            // Clear existing queue and insert new items
             downloadQueueDao.deleteAll()
             downloadQueueDao.insertAll(queueItems)
         }
@@ -104,8 +94,6 @@ class WallpaperRepositoryImpl @Inject constructor(
     
     override suspend fun insertQueueItems(queueItems: List<DownloadQueueItem>) {
         withContext(Dispatchers.IO) {
-            // Insert/update queue items without clearing existing queue
-            // Uses REPLACE strategy, so existing items will be updated
             downloadQueueDao.insertAll(queueItems)
         }
     }
@@ -174,7 +162,6 @@ class WallpaperRepositoryImpl @Inject constructor(
                     FeedbackType.DISLIKE -> WallpaperHistory.FEEDBACK_DISLIKE
                 }
                 
-                // Convert FeedbackContext to JSON string using Converters
                 val converters = me.avinas.vanderwaals.data.entity.Converters(com.google.gson.Gson())
                 val contextJson = converters.fromFeedbackContext(context)
                 
@@ -190,14 +177,13 @@ class WallpaperRepositoryImpl @Inject constructor(
     override suspend fun downloadWallpaper(wallpaper: WallpaperMetadata): Result<File> {
         return withContext(Dispatchers.IO) {
             try {
-                // Step 1: Validate input
                 when (val idResult = InputValidator.validateWallpaperId(wallpaper.id)) {
                     is ValidationResult.Invalid -> {
                         return@withContext Result.failure(
                             IllegalArgumentException("Invalid wallpaper ID: ${idResult.reason}")
                         )
                     }
-                    is ValidationResult.Valid -> { /* Continue */ }
+                    is ValidationResult.Valid -> {}
                 }
                 
                 when (val urlResult = InputValidator.validateUrl(wallpaper.url)) {
@@ -206,32 +192,26 @@ class WallpaperRepositoryImpl @Inject constructor(
                             IllegalArgumentException("Invalid wallpaper URL: ${urlResult.reason}")
                         )
                     }
-                    is ValidationResult.Valid -> { /* Continue */ }
+                    is ValidationResult.Valid -> {}
                 }
                 
-                // Step 2: Check if file already exists
                 val targetFile = getWallpaperFile(wallpaper)
                 if (targetFile.exists() && targetFile.length() > 0) {
                     return@withContext Result.success(targetFile)
                 }
                 
-                // Step 3: Check cache size before downloading
                 ensureCacheSpace()
                 
-                // Step 4: Execute download with retry logic
                 val result = NetworkRetry.retryWithBackoff {
                     segmentedDownloader.download(wallpaper.url, targetFile)
                 }
                 
                 result
-                
             } catch (e: IOException) {
-                // Network or file I/O error
                 Result.failure(
                     IOException("Download failed: ${e.message}", e)
                 )
             } catch (e: Exception) {
-                // Unexpected error
                 Result.failure(
                     Exception("Unexpected error during download: ${e.message}", e)
                 )
@@ -248,7 +228,6 @@ class WallpaperRepositoryImpl @Inject constructor(
                     
                     if (file.exists()) {
                         if (file.delete()) {
-                            // Update download queue status
                             val queueItem = downloadQueueDao.getByWallpaperId(wallpaper.id)
                             if (queueItem != null) {
                                 val updatedItem = queueItem.copy(downloaded = false)
@@ -279,16 +258,7 @@ class WallpaperRepositoryImpl @Inject constructor(
     }
     
     /**
-     * Ensures there's enough space in cache for new downloads.
-     * 
-     * If cache exceeds max size (450 MB), removes least recently used files
-     * until cache is below 80% of max size (360 MB).
-     * 
-     * **Strategy:**
-     * 1. Get current cache size
-     * 2. If over limit, get all cached files sorted by last modified time
-     * 3. Delete oldest files until under 80% of max size
-     * 4. Update download queue for deleted files
+     * If cache exceeds 450 MB, removes least-recently-used files until below 80% (360 MB).
      */
     private suspend fun ensureCacheSpace() {
         val cacheSize = calculateCacheSize()
@@ -299,7 +269,6 @@ class WallpaperRepositoryImpl @Inject constructor(
                 val targetSize = (MAX_CACHE_SIZE_BYTES * 0.8).toLong() // 80% of max
                 val amountToDelete = cacheSize - targetSize
                 
-                // Get all cached files sorted by last modified (oldest first)
                 val cachedFiles = wallpaperCacheDir.listFiles()
                     ?.filter { it.extension == "jpg" }
                     ?.sortedBy { it.lastModified() }
@@ -318,7 +287,6 @@ class WallpaperRepositoryImpl @Inject constructor(
                     file.delete()
                 }
                 
-                // Update download queue for deleted files
                 deletedIds.forEach { id ->
                     val queueItem = downloadQueueDao.getByWallpaperId(id)
                     if (queueItem != null) {
@@ -330,9 +298,6 @@ class WallpaperRepositoryImpl @Inject constructor(
         }
     }
     
-    /**
-     * Calculates total size of wallpaper cache in bytes.
-     */
     private fun calculateCacheSize(): Long {
         return wallpaperCacheDir.listFiles()
             ?.filter { it.extension == "jpg" }
@@ -370,7 +335,6 @@ class WallpaperRepositoryImpl @Inject constructor(
     
     override suspend fun getDownloadedWallpaperCount(): Int {
         return withContext(Dispatchers.IO) {
-            // Count files in wallpaper cache directory
             val cacheDir = wallpaperCacheDir
             if (cacheDir.exists()) {
                 cacheDir.listFiles()?.count { it.isFile && !it.name.endsWith("_cropped.jpg") } ?: 0

@@ -1,65 +1,51 @@
-🎨 WALLPAPERS THAT LEARN YOUR AESTHETIC
+WALLPAPERS THAT LEARN YOUR STYLE
 
-Vanderwaals uses on-device machine learning to learn your style and deliver wallpapers you'll love. No endless scrolling—just fresh wallpapers that match your vibe.
+Vanderwaals learns your visual style on-device and delivers wallpapers matched to your taste. No endless scrolling required.
 
-✨ HOW IT WORKS
+HOW IT WORKS
 
-• Auto Mode: Discover wallpapers, the app learns from your feedback
-• Personalize Mode: Upload your favorite for instant matches
-• Auto-change triggers: Every unlock, hourly, daily, or manual
-• Apply to lock screen, home screen, or both
+• Auto Mode: Start fresh and let the app learn as you like or hide wallpapers
+• Personalize Mode: Pick a starting style to match right away
+• Flexible Schedules: Rotate wallpapers on screen unlock, hourly, daily, or whenever you choose
+• Apply Anywhere: Set wallpapers for your lock screen, home screen, or both
 
-🤖 PERSONALIZATION
+ON-DEVICE PERSONALIZATION
 
-Machine learning analyzes your aesthetic through:
-• Deep visual features (artistic style & mood via MobileNetV4)
-• Color matching (LAB color space for accurate palettes)
-• Category learning (minimal, nature, abstract, dark themes, etc.)
+MobileNetV4 analyzes style and visual elements directly on your phone:
+• Style & Mood: Evaluates visual motifs and artistic styles
+• Color Harmony: Matches palettes using perceptual LAB color space
+• Aesthetic Categories: Learns preferences across nature, architecture, minimalist, and dark aesthetics
 
-The more you use it, the better it predicts what you'll love.
+PRIVACY FIRST
 
-📚 MASSIVE CURATED LIBRARY
+✓ 100% On-Device AI: Machine learning models run entirely on your phone
+✓ Zero Analytics: No tracking SDKs, no ad networks, no analytics
+✓ No Cloud Account: Your taste profile stays in local storage on your device
+✓ Open Source (AGPL-3.0): Full transparency you can inspect and verify
+✓ Minimal Network Use: Internet is used only to download wallpapers and catalog updates
 
-Thousands of high-quality wallpapers from:
-• GitHub: Aesthetic designs, anime, color schemes
-• Bing: Professional UHD photography & landscapes
-• Weekly auto-updates with fresh content
+CURATED COLLECTIONS
 
-🔒 PRIVACY YOU CAN TRUST
+Thousands of wallpapers organized across curated catalogs:
+• Photography: Landscapes, nature, and architectural photography
+• Digital Art: Minimalist illustrations, geometric patterns, and aesthetic palettes
+• Automatic Catalog Updates: Fresh collections added over time
 
-✓ 100% Offline ML: All processing runs on your device
-✓ Zero Analytics: No Firebase, Google Analytics, or tracking
-✓ No Data Collection: Your preferences never leave your phone
-✓ Open Source (AGPL-3.0): Full code transparency
-✓ Network requests only for: Downloading wallpapers & weekly catalog sync
+MATERIAL 3 DESIGN
 
-🎨 BEAUTIFUL MATERIAL 3 DESIGN
+• Clean interface built with modern Material Design 3
+• Dynamic color theming matching your current wallpaper
+• Dark theme support with high-contrast tactile elements
+• Wallpaper history with quick like, hide, and download actions
 
-• Modern interface with latest Material Design 3
-• Dynamic colors (Android 12+): App adapts to your wallpaper
-• Dark theme: AMOLED-optimized with smooth animations
-• History & feedback: Timeline view with quick like/dislike actions
+REQUIREMENTS
 
-⚙️ REQUIREMENTS
-
-• Android 12.0+
+• Android 12.0 or higher
 • ~50MB storage
-• Internet for initial sync (then works offline)
+• Internet connection for catalog downloads (matching works offline)
 
-🏆 WHY VANDERWAALS?
-
-✓ Only wallpaper app with on-device ML learning
-✓ Privacy-first with zero tracking
-✓ Thousands of curated wallpapers
-✓ Actually improves with use
-✓ Open source & free with no ads
-✓ Material 3 design
-✓ Smart crop to focus on interesting regions
-
-💬 SUPPORT & CONTRIBUTE
+SUPPORT & SOURCE CODE
 
 • GitHub: github.com/avinaxhroy/Vanderwaals
-• Bug reports & feature requests on GitHub
+• Issues & Requests: github.com/avinaxhroy/Vanderwaals/issues
 • Email: hi@avinas.me
-
-Made with ❤️ by Confused Coconut / Avinas

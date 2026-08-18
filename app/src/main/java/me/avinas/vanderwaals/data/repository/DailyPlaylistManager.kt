@@ -9,14 +9,6 @@ import org.json.JSONArray
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Manages the daily wallpaper playlist.
- * 
- * Responsibilities:
- * - Persisting the list of wallpaper IDs for the current day
- * - Providing access to the playlist
- * - Managing the "current index" for rotation
- */
 @Singleton
 class DailyPlaylistManager @Inject constructor(
     @param:ApplicationContext private val context: Context
@@ -32,10 +24,7 @@ class DailyPlaylistManager @Inject constructor(
         context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
     }
     
-    /**
-     * Saves a new list of wallpaper IDs as the daily playlist.
-     * Resets the current index to 0.
-     */
+    // Resets the current index to 0.
     suspend fun setPlaylist(wallpaperIds: List<String>) = withContext(Dispatchers.IO) {
         val jsonArray = JSONArray(wallpaperIds)
         prefs.edit()
@@ -44,9 +33,6 @@ class DailyPlaylistManager @Inject constructor(
             .apply()
     }
     
-    /**
-     * Retrieves the current playlist of wallpaper IDs.
-     */
     suspend fun getPlaylist(): List<String> = withContext(Dispatchers.IO) {
         val jsonString = prefs.getString(KEY_PLAYLIST, null) ?: return@withContext emptyList()
         try {
@@ -61,10 +47,7 @@ class DailyPlaylistManager @Inject constructor(
         }
     }
     
-    /**
-     * Gets the next wallpaper ID from the playlist and advances the index.
-     * Cycles back to the beginning if the end is reached.
-     */
+    // Cycles back to the beginning if the end is reached.
     suspend fun getNextWallpaperId(): String? = withContext(Dispatchers.IO) {
         val playlist = getPlaylist()
         if (playlist.isEmpty()) return@withContext null
@@ -78,23 +61,16 @@ class DailyPlaylistManager @Inject constructor(
         
         val wallpaperId = playlist[currentIndex]
         
-        // Advance index for next time
         val nextIndex = (currentIndex + 1) % playlist.size
         prefs.edit().putInt(KEY_CURRENT_INDEX, nextIndex).apply()
         
         wallpaperId
     }
     
-    /**
-     * Clears the current playlist.
-     */
     suspend fun clearPlaylist() = withContext(Dispatchers.IO) {
         prefs.edit().clear().apply()
     }
     
-    /**
-     * Checks if a playlist exists and has items.
-     */
     suspend fun hasPlaylist(): Boolean = withContext(Dispatchers.IO) {
         getPlaylist().isNotEmpty()
     }

@@ -22,18 +22,8 @@ object BatteryOptimizationHelper {
     private const val PROMPT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000L // 7 days
     
     /**
-     * Checks if app is currently ignoring battery optimizations.
-     * 
-     * **Return Values:**
-     * - `true`: App is whitelisted, background work will run reliably
-     * - `false`: App is subject to battery optimization, work may be restricted
-     * 
-     * **Android Versions:**
-     * - Android 6.0+ (API 23+): Uses PowerManager.isIgnoringBatteryOptimizations()
-     * - Below Android 6.0: Always returns true (optimization not enforced)
-     * 
-     * @param context Application context
-     * @return true if battery optimization is disabled for this app
+     * Android 6.0+ reports exemption via PowerManager.isIgnoringBatteryOptimizations();
+     * below that the optimization isn't enforced and this always returns true.
      */
     fun isIgnoringBatteryOptimizations(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
@@ -53,17 +43,8 @@ object BatteryOptimizationHelper {
     }
     
     /**
-     * Checks if we should prompt user for battery exemption.
-     * 
-     * **Conditions:**
-     * - Not currently exempt AND
-     * - User hasn't declined AND
-     * - Cooldown period expired (7 days since last prompt)
-     * 
-     * This prevents annoying users with repeated prompts.
-     * 
-     * @param context Application context
-     * @return true if prompt should be shown
+     * True when a prompt should be shown: not exempt, not declined
+     * within the 7-day cooldown.
      */
     fun shouldPromptForExemption(context: Context): Boolean {
         if (isIgnoringBatteryOptimizations(context)) {
@@ -75,7 +56,6 @@ object BatteryOptimizationHelper {
         val lastPromptTime = prefs.getLong(KEY_LAST_PROMPT_TIME, 0)
         val currentTime = System.currentTimeMillis()
         
-        // Don't prompt if user declined and cooldown not expired
         if (userDeclined && (currentTime - lastPromptTime) < PROMPT_COOLDOWN_MS) {
             return false
         }
@@ -83,13 +63,7 @@ object BatteryOptimizationHelper {
         return true
     }
     
-    /**
-     * Records that user declined battery exemption.
-     * 
-     * Stores timestamp to implement cooldown period before asking again.
-     * 
-     * @param context Application context
-     */
+    /** Records the decline and the current time so the cooldown is enforced. */
     fun recordUserDeclined(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit()
@@ -100,13 +74,7 @@ object BatteryOptimizationHelper {
         android.util.Log.d(TAG, "User declined battery optimization exemption")
     }
     
-    /**
-     * Records that user was prompted (but didn't necessarily grant).
-     * 
-     * Updates timestamp for cooldown tracking.
-     * 
-     * @param context Application context
-     */
+    /** Records that the user was prompted. */
     fun recordPromptShown(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit()
@@ -116,14 +84,7 @@ object BatteryOptimizationHelper {
         android.util.Log.d(TAG, "Battery optimization prompt shown")
     }
     
-    /**
-     * Clears user's previous decline choice.
-     * 
-     * Call this when user manually enables auto-change or explicitly
-     * requests to be prompted again from settings.
-     * 
-     * @param context Application context
-     */
+    /** Clears the decline flag when the user enables auto-change or asks to be prompted again. */
     fun clearDeclineFlag(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit()
@@ -133,26 +94,6 @@ object BatteryOptimizationHelper {
         android.util.Log.d(TAG, "Cleared battery optimization decline flag")
     }
     
-    /**
-     * Opens system settings for battery optimization exemption.
-     * 
-     * **Intent Actions:**
-     * - Android 6.0+: ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
-     *   (Opens dialog: "Allow [app] to ignore battery optimization?")
-     * 
-     * **User Flow:**
-     * 1. Dialog appears with app name
-     * 2. User taps "Allow" → App whitelisted
-     * 3. User taps "Deny" → Returns to app
-     * 
-     * **Manifest Requirement:**
-     * ```xml
-     * <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
-     * ```
-     * 
-     * @param context Application context
-     * @return true if intent was launched successfully
-     */
     @SuppressLint("BatteryLife")
     fun requestBatteryOptimizationExemption(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
@@ -171,20 +112,11 @@ object BatteryOptimizationHelper {
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Failed to open battery optimization settings", e)
             
-            // Fallback: Open general battery optimization settings
             openBatteryOptimizationSettings(context)
         }
     }
     
-    /**
-     * Opens general battery optimization settings (fallback).
-     * 
-     * Shows list of all apps with their battery optimization status.
-     * User can manually find and whitelist the app.
-     * 
-     * @param context Application context
-     * @return true if settings were opened
-     */
+    /** Fallback that opens the battery optimization list so the app can be whitelisted manually. */
     fun openBatteryOptimizationSettings(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             return false
@@ -204,16 +136,6 @@ object BatteryOptimizationHelper {
         }
     }
     
-    /**
-     * Gets user-friendly explanation for battery exemption need.
-     * 
-     * **Use Cases:**
-     * - Show in dialog before requesting exemption
-     * - Display in settings explanation section
-     * - Help documentation
-     * 
-     * @return Multi-line explanation string
-     */
     fun getExemptionRationale(): String {
         return """
             To ensure your wallpaper changes reliably on schedule, Vanderwaals needs to be excluded from battery optimization.
@@ -233,24 +155,13 @@ object BatteryOptimizationHelper {
     }
     
     /**
-     * Checks if auto-start permission is granted (manufacturer-specific).
-     * 
-     * **Manufacturer Background Restrictions:**
-     * Many manufacturers (Xiaomi, Huawei, Oppo, Vivo, OnePlus) have
-     * aggressive task killers that prevent background work even when
-     * battery optimization is disabled.
-     * 
-     * **Detection:**
-     * This is hard to detect programmatically because each manufacturer
-     * uses different implementations. We can only provide guidance.
-     * 
-     * @param context Application context
-     * @return Best-effort detection (may return false positives)
+     * Many manufacturers (Xiaomi, Huawei, Oppo, Vivo, OnePlus) run aggressive task
+     * killers that stop background work even with battery optimization disabled;
+     * each uses a different implementation, so this is only a best-effort detection.
      */
     fun needsAutoStartPermission(context: Context): Boolean {
         val manufacturer = Build.MANUFACTURER.lowercase()
         
-        // List of manufacturers known for aggressive task killing
         val aggressiveManufacturers = listOf(
             "xiaomi", "huawei", "oppo", "vivo", "oneplus", 
             "realme", "asus", "samsung", "letv", "honor"
@@ -260,12 +171,8 @@ object BatteryOptimizationHelper {
     }
     
     /**
-     * Gets manufacturer-specific auto-start guidance.
-     * 
-     * Provides instructions for disabling aggressive battery management
-     * on various Android manufacturers.
-     * 
-     * @return Manufacturer-specific instructions, or generic guidance
+     * Step-by-step guidance for disabling aggressive battery management
+     * on the current manufacturer.
      */
     fun getAutoStartGuidance(): String {
         val manufacturer = Build.MANUFACTURER.lowercase()
@@ -297,12 +204,7 @@ object BatteryOptimizationHelper {
         }
     }
     
-    /**
-     * Comprehensive system information for debugging battery issues.
-     * 
-     * @param context Application context
-     * @return Map of diagnostic information
-     */
+    /** System information for debugging battery issues. */
     fun getDiagnosticInfo(context: Context): Map<String, String> {
         return mapOf(
             "Battery Optimization Exempt" to isIgnoringBatteryOptimizations(context).toString(),

@@ -13,8 +13,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 /**
- * Modern dark color scheme with purple brand aesthetic.
- * Features proper surface hierarchy and contrast.
+ * Dark color scheme with the purple brand palette.
  */
 private val DarkColors = darkColorScheme(
     primary = md_theme_dark_primary,
@@ -81,19 +80,9 @@ private val AmoledDarkColors = darkColorScheme(
 )
 
 
-/**
- * Modern Dark Theme for Vanderwaals - Dark Mode Only
- * 
- * Features:
- * - Pure dark mode aesthetic (light mode removed)
- * - Optional AMOLED mode with true black backgrounds
- * - Optional dynamic color support on Android 12+
- * - Purple brand identity with modern gradient
- * - Optimized for OLED displays
- */
 @Composable
 fun VanderwaalsTheme(
-    darkMode: Boolean? = true, // Always dark, parameter kept for compatibility
+    darkMode: Boolean? = true, // always dark; kept for compatibility
     amoledMode: Boolean = false,
     dynamicTheming: Boolean = false,
     content: @Composable () -> Unit
@@ -101,19 +90,16 @@ fun VanderwaalsTheme(
     val context = LocalContext.current
     val dynamicThemingSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     
-    // Always use dark theme - Vanderwaals is dark mode only
     val colors = when {
         dynamicTheming && dynamicThemingSupported -> dynamicDarkColorScheme(context)
         amoledMode -> AmoledDarkColors
         else -> DarkColors
     }
 
-    // Set the status bar and navigation bar to dark with dark icons
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // Always use dark icons/buttons for dark theme
             WindowCompat.getInsetsController(window, view).apply {
                 isAppearanceLightStatusBars = false
                 isAppearanceLightNavigationBars = false

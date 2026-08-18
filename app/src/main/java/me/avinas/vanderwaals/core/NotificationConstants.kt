@@ -9,7 +9,6 @@ package me.avinas.vanderwaals.core
  */
 object NotificationConstants {
 
-    // ── Channel IDs ──────────────────────────────────────────────────────
     /** General wallpaper service operations (sync, batch download, etc.) */
     const val CHANNEL_WALLPAPER_SERVICE = "wallpaper_service_channel"
 
@@ -22,7 +21,6 @@ object NotificationConstants {
     /** WallpaperChangeService — short-lived change-in-progress notification */
     const val CHANNEL_WALLPAPER_CHANGE = "wallpaper_change_channel"
 
-    // ── Notification IDs ─────────────────────────────────────────────────
     /** WallpaperMonitorService foreground notification */
     const val NOTIFICATION_ID_MONITOR = 999
 

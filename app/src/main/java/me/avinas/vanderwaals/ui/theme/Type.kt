@@ -7,26 +7,8 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-/**
- * Vanderwaals Modern Typography System
- * 
- * Features:
- * - System sans-serif font with refined weights
- * - Optimized for readability and modern aesthetics
- * - Proper line heights and letter spacing
- * - Scales harmoniously across all text sizes
- * - Enhanced for dark mode display
- * 
- * Type Scale:
- * - Display: Hero text, splash screens (57sp - 36sp)
- * - Headline: Section headers, page titles (32sp - 24sp)
- * - Title: Card titles, dialog titles, app bar (22sp - 14sp)
- * - Body: Main content, paragraphs (16sp - 12sp)
- * - Label: Buttons, chips, captions (14sp - 11sp)
- */
-
 val VanderwaalsTypography = Typography(
-    // ===== DISPLAY STYLES - Hero Text =====
+    // display: hero text
     displayLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
@@ -49,7 +31,7 @@ val VanderwaalsTypography = Typography(
         letterSpacing = 0.sp
     ),
     
-    // ===== HEADLINE STYLES - Section Headers =====
+    // headline: section headers
     headlineLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
@@ -72,7 +54,7 @@ val VanderwaalsTypography = Typography(
         letterSpacing = 0.sp
     ),
     
-    // ===== TITLE STYLES - Card Titles, App Bar =====
+    // title: card titles, app bar
     titleLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
@@ -95,7 +77,7 @@ val VanderwaalsTypography = Typography(
         letterSpacing = 0.1.sp
     ),
     
-    // ===== BODY STYLES - Main Content =====
+    // body: main content
     bodyLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
@@ -118,7 +100,7 @@ val VanderwaalsTypography = Typography(
         letterSpacing = 0.4.sp
     ),
     
-    // ===== LABEL STYLES - Buttons, Chips, Small Text =====
+    // label: buttons, chips
     labelLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Medium,
@@ -182,19 +164,19 @@ val NumericTextStyle = TextStyle(
     letterSpacing = (-1).sp
 )
 
-// ===== LUXE FONT FAMILIES - Onboarding & Premium UI =====
+// luxe font families (onboarding)
 val PlayfairDisplayFamily = FontFamily.Serif
 
 val HankenGroteskFamily = FontFamily.SansSerif
 
-// ===== LUXE TEXT STYLES - Onboarding & Premium UI =====
+// luxe text styles (onboarding)
 val LuxeHeadlineStyle = TextStyle(
     fontFamily = PlayfairDisplayFamily,
     fontWeight = FontWeight.Bold,
     fontSize = 34.sp,
     lineHeight = 42.sp,
     letterSpacing = (-0.5).sp,
-    fontStyle = FontStyle.Italic
+    fontStyle = FontStyle.Normal
 )
 
 val LuxeSubheadlineStyle = TextStyle(

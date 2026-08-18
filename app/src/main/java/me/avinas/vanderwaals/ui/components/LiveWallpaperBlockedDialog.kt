@@ -17,33 +17,6 @@ import androidx.compose.ui.unit.dp
 import me.avinas.vanderwaals.core.BrandSettingsIntents
 import me.avinas.vanderwaals.core.LiveWallpaperDetector
 
-/**
- * Dialog shown when a live wallpaper service is detected that blocks wallpaper changes.
- * 
- * **Purpose:**
- * - Inform user that a live wallpaper (Glance, Dynamic Wallpaper) is blocking changes
- * - Provide three action options: direct settings, instructions, or dismiss
- * - Guide user through disabling the blocking service
- * 
- * **Design Pattern:**
- * - Similar to BatteryOptimizationDialog for consistency
- * - Material 3 AlertDialog with custom button layout
- * - Clear explanation with service name
- * - Non-blocking (user can dismiss)
- * 
- * **User Flow:**
- * 1. Dialog appears when live wallpaper is detected
- * 2. User chooses action:
- *    - "Take me there" → Opens brand-specific settings
- *    - "Show me how" → Opens instruction dialog
- *    - "Maybe later" → Dismisses (with cooldown)
- * 
- * @param serviceName Display name of the blocking service (e.g., "Glance", "Dynamic Wallpaper")
- * @param packageName Package name of the live wallpaper service
- * @param onOpenSettings Callback when user wants to open settings directly
- * @param onShowInstructions Callback when user wants step-by-step instructions
- * @param onDismiss Callback when user dismisses the dialog
- */
 @Composable
 fun LiveWallpaperBlockedDialog(
     serviceName: String,
@@ -75,7 +48,10 @@ fun LiveWallpaperBlockedDialog(
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
@@ -91,7 +67,6 @@ fun LiveWallpaperBlockedDialog(
                     textAlign = TextAlign.Start
                 )
                 
-                // Info card explaining the situation
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
@@ -154,7 +129,6 @@ fun LiveWallpaperBlockedDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Primary action: Open settings directly
                 Button(
                     onClick = {
                         val success = BrandSettingsIntents.openLiveWallpaperSettings(context, packageName)
@@ -180,7 +154,6 @@ fun LiveWallpaperBlockedDialog(
                     Text("Take me there")
                 }
                 
-                // Secondary action: Show instructions
                 OutlinedButton(
                     onClick = onShowInstructions,
                     modifier = Modifier.fillMaxWidth()
@@ -188,7 +161,6 @@ fun LiveWallpaperBlockedDialog(
                     Text("Show me how")
                 }
                 
-                // Tertiary action: Dismiss
                 TextButton(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth()
@@ -203,23 +175,6 @@ fun LiveWallpaperBlockedDialog(
     )
 }
 
-/**
- * Dialog displaying step-by-step instructions for disabling live wallpaper.
- * 
- * **Purpose:**
- * - Show brand-specific instructions when direct settings link fails
- * - Provide manual guidance for users who prefer written steps
- * - Fallback when automatic navigation doesn't work
- * 
- * **Content:**
- * - Brand-specific step-by-step instructions
- * - Formatted for readability (numbered steps, bold headers)
- * - Scrollable for longer instruction sets
- * - Retry button to attempt settings navigation again
- * 
- * @param onRetrySettings Callback when user wants to try opening settings again
- * @param onDismiss Callback when user closes the instructions
- */
 @Composable
 fun LiveWallpaperInstructionsDialog(
     onRetrySettings: () -> Unit,
@@ -254,7 +209,6 @@ fun LiveWallpaperInstructionsDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Device info
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
@@ -278,7 +232,6 @@ fun LiveWallpaperInstructionsDialog(
                     }
                 }
                 
-                // Instructions text
                 Text(
                     text = instructions,
                     style = MaterialTheme.typography.bodyMedium,
@@ -287,7 +240,6 @@ fun LiveWallpaperInstructionsDialog(
                 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 
-                // Additional tips
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
@@ -346,21 +298,6 @@ fun LiveWallpaperInstructionsDialog(
     )
 }
 
-/**
- * Compact info card showing live wallpaper status.
- * 
- * **Use Cases:**
- * - Display in settings screen
- * - Show in main screen when live wallpaper is detected
- * - Provide quick access to disable action
- * 
- * **States:**
- * - Live wallpaper detected: Warning card with action button
- * - No live wallpaper: Success card (optional, or hide completely)
- * 
- * @param onOpenSettings Callback when user wants to disable live wallpaper
- * @param modifier Modifier for the card
- */
 @Composable
 fun LiveWallpaperStatusCard(
     onOpenSettings: () -> Unit,
@@ -371,7 +308,6 @@ fun LiveWallpaperStatusCard(
     val serviceName = remember { LiveWallpaperDetector.getLiveWallpaperDisplayName(context) }
     
     if (!isLiveWallpaperActive) {
-        // Don't show card if no live wallpaper is active
         return
     }
     

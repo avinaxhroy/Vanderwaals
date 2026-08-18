@@ -2,55 +2,41 @@ package me.avinas.vanderwaals.ui.analytics
 
 import me.avinas.vanderwaals.data.model.CategoryStats
 
-/**
- * UI state for the Analytics screen
- * 
- * Comprehensive dashboard showing personalization effectiveness,
- * learning progress, and recommendation quality metrics.
- */
 data class AnalyticsState(
     val isLoading: Boolean = true,
     val error: String? = null,
     
-    // === Personalization Status ===
     val mode: String = "auto", // "auto" or "personalized"
     val isPersonalizationActive: Boolean = false, // True when learning is active (feedbackCount > 0)
     val isPersonalizationWorking: Boolean = false, // Same as isPersonalizationActive
     val personalizationQuality: PersonalizationQuality = PersonalizationQuality.NOT_INITIALIZED,
     
-    // === Learning Progress ===
     val totalFeedbackCount: Int = 0,
     val likeCount: Int = 0,
     val dislikeCount: Int = 0,
     val feedbackRatio: Float = 0f, // likes / (likes + dislikes)
     
-    // === Recommendation Impact ===
     val averageSimilarityScore: Float = 0f, // 0-100 scale
     val similarityTrend: SimilarityTrend = SimilarityTrend.STABLE,
     val hasOriginalEmbedding: Boolean = false, // True when user uploaded an image or selected categories during onboarding
     val originalAnchorInfluence: Float = 40f, // Only relevant when hasOriginalEmbedding is true
     val learnedAnchorInfluence: Float = 60f, // Only relevant when hasOriginalEmbedding is true
     
-    // === History Stats ===
     val totalWallpapersViewed: Int = 0,
     val averageWallpaperDuration: Long = 0, // In seconds
     val mostLikedCategory: String? = null,
     val mostDislikedCategory: String? = null,
     
-    // === Category Breakdown ===
     val categoryStats: List<CategoryStats> = emptyList(),
     val topCategories: List<CategoryInsight> = emptyList(),
     
-    // === Recent Activity ===
     val recentLikes: Int = 0, // Last 7 days
     val recentDislikes: Int = 0, // Last 7 days
     val activityTrend: ActivityTrend = ActivityTrend.STABLE,
     
-    // === Smart Insights ===
     val insights: List<SmartInsight> = emptyList(),
     val recommendations: List<String> = emptyList(),
     
-    // === Advanced Metrics ===
     val explorationRate: Float = 0f, // Epsilon value
     val preferenceVectorMagnitude: Float = 0f,
     val learningRate: Float = 0f,

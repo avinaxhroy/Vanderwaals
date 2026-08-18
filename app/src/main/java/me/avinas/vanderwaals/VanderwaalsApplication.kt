@@ -104,10 +104,8 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
         
         schedulePeriodicWorkers()
         
-        // Trigger initial catalog sync if database is empty
         ensureInitialCatalogSync()
         
-        // Initialize wallpaper auto-change scheduling
         initializeWallpaperScheduling()
         
         Log.d(TAG, "Vanderwaals application initialized successfully")
@@ -229,7 +227,6 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
     private fun ensureInitialCatalogSync() {
         applicationScope.launch {
             try {
-                // Check if database has any wallpapers
                 val isDatabaseInitialized = manifestRepository.isDatabaseInitialized()
                 
                 if (!isDatabaseInitialized) {
@@ -270,7 +267,6 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
                     return@launch
                 }
                 
-                // Skip if change interval is NEVER
                 val interval = when (settings.changeInterval) {
                     "unlock" -> me.avinas.vanderwaals.worker.ChangeInterval.EVERY_UNLOCK
                     "15min" -> me.avinas.vanderwaals.worker.ChangeInterval.FIFTEEN_MINUTES
@@ -290,8 +286,7 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
                     return@launch
                 }
                 
-                // Check if alarm permission is granted (Android 12+) for ALL alarm-based intervals
-                // CRITICAL FIX: Must include FIFTEEN_MINUTES and hour-based intervals - they use exact alarms!
+                // Exact alarms require permission check on Android 12+
                 if (interval == me.avinas.vanderwaals.worker.ChangeInterval.DAILY || 
                     interval == me.avinas.vanderwaals.worker.ChangeInterval.HOURLY ||
                     interval == me.avinas.vanderwaals.worker.ChangeInterval.THREE_HOURS ||
@@ -328,7 +323,6 @@ class VanderwaalsApplication : Application(), Configuration.Provider {
                     else -> "both"
                 }
                 
-                // Schedule wallpaper changes
                 workScheduler.scheduleWallpaperChange(
                     interval = interval,
                     time = settings.dailyTime,

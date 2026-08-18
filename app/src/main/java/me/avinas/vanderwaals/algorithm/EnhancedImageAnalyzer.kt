@@ -11,65 +11,33 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Enhanced image analyzer that extracts semantic features beyond embeddings.
- *
- * Extracts features that capture the "essence" of an image:
- * - Perceptual color analysis (LAB color space, dominant colors with weights)
- * - Visual composition (rule of thirds, symmetry, balance)
- * - Texture and complexity
- * - Mood and atmosphere
- *
- * These features complement MobileNetV4 embeddings to provide better matching
- * of user-uploaded wallpapers to recommendations.
- *
- * **Performance:** pixels are read once via a bulk [Bitmap.getPixels] call and
- * the resulting [IntArray] is shared across every per-pixel analysis pass.
- * This replaces tens of thousands of per-pixel `Bitmap.getPixel` JNI calls
- * (the dominant cost of [analyze]) with a single bulk read.
+ * Extracts semantic visual features (LAB color distribution, composition, texture, and mood)
+ * to complement MobileNetV4 embeddings.
  */
 class EnhancedImageAnalyzer {
 
-    /**
-     * Complete analysis result containing all extracted features.
-     */
     data class ImageAnalysis(
-        // Color features (LAB color space for perceptual similarity)
         val dominantColors: List<LabColor>,
         val colorWeights: List<Float>,
-        val saturation: Float,           // 0.0 to 1.0
-        val colorfulness: Float,          // 0.0 to 1.0
-
-        // Composition features
-        val compositionScore: Float,      // 0.0 to 1.0 (rule of thirds alignment)
-        val symmetryScore: Float,         // 0.0 to 1.0
-        val visualBalance: Float,         // 0.0 to 1.0
-        val complexity: Float,            // 0.0 to 1.0 (edge density)
-
-        // Mood/atmosphere
-        val warmth: Float,                // -1.0 (cool) to 1.0 (warm)
-        val energy: Float,                // 0.0 (calm) to 1.0 (energetic)
-        val brightness: Float,            // 0.0 (dark) to 1.0 (bright)
-        val contrast: Float               // 0.0 (low) to 1.0 (high)
+        val saturation: Float,
+        val colorfulness: Float,
+        val compositionScore: Float,
+        val symmetryScore: Float,
+        val visualBalance: Float,
+        val complexity: Float,
+        val warmth: Float,
+        val energy: Float,
+        val brightness: Float,
+        val contrast: Float
     )
 
-    /**
-     * LAB color representation for perceptual color matching.
-     * LAB color space is perceptually uniform - distances match human perception.
-     */
     data class LabColor(
-        val l: Float,  // Lightness: 0 (black) to 100 (white)
-        val a: Float,  // Green-red: -128 (green) to 127 (red)
-        val b: Float   // Blue-yellow: -128 (blue) to 127 (yellow)
+        val l: Float,
+        val a: Float,
+        val b: Float
     )
 
-    /**
-     * Analyzes an image and extracts comprehensive features.
-     *
-     * @param bitmap Input image (will be scaled down for performance if needed)
-     * @return ImageAnalysis containing all extracted features
-     */
     fun analyze(bitmap: Bitmap): ImageAnalysis {
-        // Scale down for performance (max 512px on longest side)
         val scaledBitmap = if (max(bitmap.width, bitmap.height) > 512) {
             val scale = 512f / max(bitmap.width, bitmap.height)
             val newWidth = (bitmap.width * scale).toInt()
@@ -80,32 +48,24 @@ class EnhancedImageAnalyzer {
         }
 
         try {
-            // Bulk-read every pixel once. Each downstream pass indexes into this
-            // array instead of calling Bitmap.getPixel (a JNI + bounds check per
-            // call), which was the dominant cost of analysis.
+            // Read pixels once to avoid per-pixel Bitmap.getPixel JNI overhead.
             val width = scaledBitmap.width
             val height = scaledBitmap.height
             val pixels = IntArray(width * height)
             scaledBitmap.getPixels(pixels, 0, width, 0, 0, width, height)
 
-            // Extract color palette using Android Palette library
             val palette = Palette.from(scaledBitmap).generate()
-
-            // Extract and convert dominant colors to LAB
             val dominantColors = extractDominantColors(palette, pixels, width, height)
             val colorWeights = calculateColorWeights(dominantColors)
 
-            // Color features
             val saturation = calculateSaturation(pixels, width, height)
             val colorfulness = calculateColorfulness(dominantColors)
 
-            // Composition features
             val compositionScore = analyzeComposition(pixels, width, height)
             val symmetryScore = analyzeSymmetry(pixels, width, height)
             val visualBalance = analyzeBalance(pixels, width, height)
             val complexity = analyzeComplexity(pixels, width, height)
 
-            // Mood features
             val warmth = calculateWarmth(dominantColors)
             val energy = calculateEnergy(colorfulness, complexity)
             val brightnessValue = calculateBrightness(pixels, width, height)
@@ -126,7 +86,6 @@ class EnhancedImageAnalyzer {
                 contrast = contrastValue
             )
         } finally {
-            // Clean up scaled bitmap if we created a new one
             if (scaledBitmap !== bitmap) {
                 scaledBitmap.recycle()
             }
@@ -144,7 +103,6 @@ class EnhancedImageAnalyzer {
     ): List<LabColor> {
         val colors = mutableListOf<Int>()
 
-        // Get palette swatches in order of prominence
         palette.vibrantSwatch?.let { colors.add(it.rgb) }
         palette.lightVibrantSwatch?.let { colors.add(it.rgb) }
         palette.darkVibrantSwatch?.let { colors.add(it.rgb) }
@@ -152,12 +110,11 @@ class EnhancedImageAnalyzer {
         palette.lightMutedSwatch?.let { colors.add(it.rgb) }
         palette.darkMutedSwatch?.let { colors.add(it.rgb) }
 
-        // If we have fewer than 3 colors, add most common colors from bitmap
+        // Backfill with the most common bitmap colors when the palette is sparse.
         if (colors.size < 3) {
             colors.addAll(extractMostCommonColors(pixels, width, height, 5 - colors.size))
         }
 
-        // Convert RGB to LAB
         return colors.distinct().take(5).map { rgbToLab(it) }
     }
 
@@ -184,9 +141,6 @@ class EnhancedImageAnalyzer {
             .map { it.key }
     }
 
-    /**
-     * Quantizes a color by reducing precision.
-     */
     private fun quantizeColor(color: Int, levels: Int): Int {
         val r = Color.red(color)
         val g = Color.green(color)
@@ -214,9 +168,6 @@ class EnhancedImageAnalyzer {
         return LabColor(l.toFloat(), a.toFloat(), b.toFloat())
     }
 
-    /**
-     * Calculates color weights based on visual importance.
-     */
     private fun calculateColorWeights(colors: List<LabColor>): List<Float> {
         if (colors.isEmpty()) return emptyList()
 
@@ -230,9 +181,6 @@ class EnhancedImageAnalyzer {
         return weights.map { it / sum }
     }
 
-    /**
-     * Calculates average saturation of the image.
-     */
     private fun calculateSaturation(pixels: IntArray, width: Int, height: Int): Float {
         var totalSaturation = 0f
         var pixelCount = 0
@@ -252,13 +200,10 @@ class EnhancedImageAnalyzer {
         return if (pixelCount > 0) totalSaturation / pixelCount else 0f
     }
 
-    /**
-     * Calculates colorfulness based on color variety and saturation.
-     */
     private fun calculateColorfulness(colors: List<LabColor>): Float {
         if (colors.size < 2) return 0f
 
-        // Measure color variety by calculating average distance between colors
+        // Average pairwise distance between colors.
         var totalDistance = 0f
         var pairCount = 0
 
@@ -275,9 +220,6 @@ class EnhancedImageAnalyzer {
         return (avgDistance / 200f).coerceIn(0f, 1f)
     }
 
-    /**
-     * Calculates Euclidean distance in LAB color space.
-     */
     private fun labDistance(c1: LabColor, c2: LabColor): Float {
         val dl = c1.l - c2.l
         val da = c1.a - c2.a
@@ -289,7 +231,7 @@ class EnhancedImageAnalyzer {
      * Analyzes image composition (rule of thirds alignment).
      */
     private fun analyzeComposition(pixels: IntArray, width: Int, height: Int): Float {
-        // Analyze edge density at rule of thirds intersections
+        // Edge density at the rule-of-thirds intersections.
         val intersections = listOf(
             Pair(width / 3, height / 3),
             Pair(2 * width / 3, height / 3),
@@ -300,7 +242,6 @@ class EnhancedImageAnalyzer {
         var totalEdgeDensity = 0f
 
         for ((x, y) in intersections) {
-            // Sample region around intersection point
             val regionSize = minOf(width, height) / 10
             totalEdgeDensity += getEdgeDensity(pixels, width, height, x, y, regionSize)
         }
@@ -308,14 +249,10 @@ class EnhancedImageAnalyzer {
         return (totalEdgeDensity / 4f).coerceIn(0f, 1f)
     }
 
-    /**
-     * Analyzes horizontal and vertical symmetry.
-     */
     private fun analyzeSymmetry(pixels: IntArray, width: Int, height: Int): Float {
         var symmetryScore = 0f
         var comparisons = 0
 
-        // Sample points for horizontal symmetry
         val step = 20
         for (y in 0 until height step step) {
             for (x in 0 until width / 2 step step) {
@@ -331,9 +268,6 @@ class EnhancedImageAnalyzer {
         return if (comparisons > 0) symmetryScore / comparisons else 0f
     }
 
-    /**
-     * Analyzes visual balance (weight distribution).
-     */
     private fun analyzeBalance(pixels: IntArray, width: Int, height: Int): Float {
         var leftWeight = 0f
         var rightWeight = 0f
@@ -359,9 +293,6 @@ class EnhancedImageAnalyzer {
         return balance * 2f // Scale to 0-1 range
     }
 
-    /**
-     * Analyzes image complexity (edge density).
-     */
     private fun analyzeComplexity(pixels: IntArray, width: Int, height: Int): Float {
         var edgeCount = 0
         var totalPixels = 0
@@ -386,9 +317,6 @@ class EnhancedImageAnalyzer {
         return if (totalPixels > 0) edgeCount.toFloat() / totalPixels else 0f
     }
 
-    /**
-     * Calculates warmth of the image (cool to warm colors).
-     */
     private fun calculateWarmth(colors: List<LabColor>): Float {
         if (colors.isEmpty()) return 0f
 
@@ -400,17 +328,10 @@ class EnhancedImageAnalyzer {
         return (avgA / 127f).coerceIn(-1f, 1f)
     }
 
-    /**
-     * Calculates energy level (calm to energetic).
-     */
     private fun calculateEnergy(colorfulness: Float, complexity: Float): Float {
-        // Energy is combination of colorfulness and complexity
         return (colorfulness * 0.6f + complexity * 0.4f).coerceIn(0f, 1f)
     }
 
-    /**
-     * Calculates average brightness.
-     */
     private fun calculateBrightness(pixels: IntArray, width: Int, height: Int): Float {
         var totalBrightness = 0f
         var pixelCount = 0
@@ -514,36 +435,16 @@ class EnhancedImageAnalyzer {
     }
 
     companion object {
-        /**
-         * Calculates semantic similarity between two image analyses.
-         *
-         * This goes beyond embedding similarity to match the "essence" of images:
-         * - Color harmony (LAB color space)
-         * - Composition style
-         * - Mood and atmosphere
-         *
-         * @param analysis1 First image analysis
-         * @param analysis2 Second image analysis
-         * @return Similarity score 0.0 to 1.0
-         */
         fun calculateSemanticSimilarity(analysis1: ImageAnalysis, analysis2: ImageAnalysis): Float {
-            var totalSimilarity = 0f
-
-            // 1. Color similarity (40% weight) - perceptual LAB distance
             val colorSim = calculateColorSimilarity(analysis1, analysis2)
-            totalSimilarity += colorSim * 0.40f
-
-            // 2. Composition similarity (25% weight)
             val compSim = calculateCompositionSimilarity(analysis1, analysis2)
-            totalSimilarity += compSim * 0.25f
-
-            // 3. Mood similarity (20% weight)
             val moodSim = calculateMoodSimilarity(analysis1, analysis2)
-            totalSimilarity += moodSim * 0.20f
-
-            // 4. Energy/complexity similarity (15% weight)
             val energySim = 1f - abs(analysis1.energy - analysis2.energy)
-            totalSimilarity += energySim * 0.15f
+
+            val totalSimilarity = (colorSim * 0.40f) +
+                (compSim * 0.25f) +
+                (moodSim * 0.20f) +
+                (energySim * 0.15f)
 
             return totalSimilarity.coerceIn(0f, 1f)
         }
@@ -553,7 +454,6 @@ class EnhancedImageAnalyzer {
                 return 0.5f
             }
 
-            // Match dominant colors using LAB distance
             var totalSimilarity = 0f
             var weightSum = 0f
 
@@ -561,7 +461,6 @@ class EnhancedImageAnalyzer {
                 val color1 = analysis1.dominantColors[i]
                 val weight1 = analysis1.colorWeights.getOrElse(i) { 0f }
 
-                // Find best matching color in analysis2
                 val bestMatch = analysis2.dominantColors.minOfOrNull { color2 ->
                     val dl = color1.l - color2.l
                     val da = color1.a - color2.a
@@ -569,7 +468,7 @@ class EnhancedImageAnalyzer {
                     sqrt(dl * dl + da * da + db * db)
                 } ?: 200f
 
-                // Convert distance to similarity (max LAB distance ~200)
+                // LAB Euclidean distance ranges up to ~200 in standard color spaces.
                 val similarity = 1f - (bestMatch / 200f).coerceIn(0f, 1f)
                 totalSimilarity += similarity * weight1
                 weightSum += weight1
@@ -584,12 +483,11 @@ class EnhancedImageAnalyzer {
             val balanceDiff = abs(analysis1.visualBalance - analysis2.visualBalance)
             val complexityDiff = abs(analysis1.complexity - analysis2.complexity)
 
-            // Average similarity
             return 1f - ((compDiff + symDiff + balanceDiff + complexityDiff) / 4f)
         }
 
         private fun calculateMoodSimilarity(analysis1: ImageAnalysis, analysis2: ImageAnalysis): Float {
-            val warmthDiff = abs(analysis1.warmth - analysis2.warmth) / 2f // Scale from 0-2 to 0-1
+            val warmthDiff = abs(analysis1.warmth - analysis2.warmth) / 2f
             val brightnessDiff = abs(analysis1.brightness - analysis2.brightness)
             val contrastDiff = abs(analysis1.contrast - analysis2.contrast)
 

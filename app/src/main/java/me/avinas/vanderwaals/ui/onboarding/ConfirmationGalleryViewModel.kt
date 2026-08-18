@@ -12,31 +12,8 @@ import me.avinas.vanderwaals.domain.usecase.InitializePreferencesUseCase
 import javax.inject.Inject
 
 /**
- * ViewModel for confirmation gallery screen.
- * 
- * Displays 12 diverse wallpapers from top 20 matches (optimized for onboarding speed).
- * User can:
- * - Tap to like (heart icon)
- * - Long-press to dislike (X icon)
- * - Must like minimum 4 before continuing
- * 
- * **Preference Initialization:**
- * When user finishes:
- * 1. Calculate average embedding of liked wallpapers
- * 2. Initialize preference vector
- * 3. Store initial feedback in database
- * 
- * **First Wallpaper Application:**
  * First liked wallpaper is applied later in ApplicationSettingsViewModel
- * when user clicks "Start Using Vanderwaals"
- * 
- * **State:**
- * - displayedWallpapers: 8 diverse samples
- * - likedWallpapers: User's likes
- * - dislikedWallpapers: User's dislikes
- * - canContinue: True if 3+ likes
- * 
- * @param initializePreferencesUseCase Initializes user preferences from feedback
+ * when the user clicks "Start Using Vanderwaals".
  */
 @HiltViewModel
 class ConfirmationGalleryViewModel @Inject constructor(
@@ -67,11 +44,7 @@ class ConfirmationGalleryViewModel @Inject constructor(
     private val wallpapersPerPage = 12  // How many wallpapers to show at once
     
     /**
-     * Set similar wallpapers and original embedding from upload screen.
      * Selects 12 diverse samples for display.
-     * 
-     * @param wallpapers Top 50 similar wallpapers (optimized for onboarding speed)
-     * @param userEmbedding Original embedding from upload/category (prime reference)
      */
     fun setSimilarWallpapers(wallpapers: List<WallpaperMetadata>, userEmbedding: FloatArray?) {
         if (wallpapers.isEmpty()) {
@@ -88,14 +61,11 @@ class ConfirmationGalleryViewModel @Inject constructor(
         allWallpapers = wallpapers
         currentOffset = 0
         
-        // Display initial set of 12 wallpapers
         displayNextBatch()
     }
     
     /**
-     * Refresh to show the next batch of unique wallpapers.
-     * IMPORTANT: Does NOT clear user's previous likes/dislikes.
-     * Shows next 12 wallpapers from the pool.
+     * Does NOT clear the user's previous likes/dislikes.
      */
     fun refreshWallpapers() {
         if (allWallpapers.isEmpty()) {
@@ -103,7 +73,6 @@ class ConfirmationGalleryViewModel @Inject constructor(
             return
         }
         
-        // Move to next batch of wallpapers
         currentOffset += wallpapersPerPage
         
         // If we've shown all wallpapers, loop back to start
@@ -121,17 +90,7 @@ class ConfirmationGalleryViewModel @Inject constructor(
         displayNextBatch()
     }
     
-    /**
-     * Display the next batch of unique wallpapers.
-     * Shows wallpapers starting from currentOffset, up to wallpapersPerPage (12).
-     * 
-     * Logic:
-     * - First call (offset=0): Show wallpapers 0-11
-     * - Second call (offset=12): Show wallpapers 12-19 (if available)
-     * - Third call (offset=24): Loop back to 0 if needed
-     * 
-     * This ensures users see NEW wallpapers on each refresh, not the same ones shuffled.
-     */
+    // Shows NEW wallpapers on each refresh rather than the same ones shuffled.
     private fun displayNextBatch() {
         if (allWallpapers.isEmpty()) {
             android.util.Log.w("ConfirmationGallery", "Cannot display wallpapers: list is empty")
@@ -139,16 +98,12 @@ class ConfirmationGalleryViewModel @Inject constructor(
             return
         }
         
-        // Calculate how many wallpapers we can show from current offset
         val remainingWallpapers = allWallpapers.size - currentOffset
         val countToShow = minOf(wallpapersPerPage, remainingWallpapers)
         
-        // Get the next batch of wallpapers
         val batch = if (countToShow >= wallpapersPerPage) {
-            // We have enough wallpapers, show full batch
             allWallpapers.subList(currentOffset, currentOffset + wallpapersPerPage)
         } else {
-            // Not enough wallpapers remaining, wrap around
             val endPart = allWallpapers.subList(currentOffset, allWallpapers.size)
             val startPart = allWallpapers.subList(0, wallpapersPerPage - endPart.size)
             endPart + startPart
@@ -157,7 +112,6 @@ class ConfirmationGalleryViewModel @Inject constructor(
         android.util.Log.d("ConfirmationGallery", 
             "Displaying ${batch.size} wallpapers (offset: $currentOffset, total: ${allWallpapers.size})")
         
-        // LOG: Show which wallpapers are being displayed
         android.util.Log.d("ConfirmationGallery", "Displayed wallpaper IDs:")
         batch.take(5).forEachIndexed { index, wallpaper ->
             android.util.Log.d("ConfirmationGallery", "  ${index + 1}. ${wallpaper.id} (category: ${wallpaper.category})")
@@ -169,14 +123,6 @@ class ConfirmationGalleryViewModel @Inject constructor(
         _displayedWallpapers.value = batch
     }
     
-    /**
-     * Toggle like for a wallpaper.
-     * 
-     * - If already liked: Remove from likes
-     * - If not liked: Add to likes, remove from dislikes
-     * 
-     * @param wallpaperId Wallpaper ID
-     */
     fun toggleLike(wallpaperId: String) {
         val currentLikes = _likedWallpapers.value.toMutableSet()
         val currentDislikes = _dislikedWallpapers.value.toMutableSet()
@@ -193,13 +139,6 @@ class ConfirmationGalleryViewModel @Inject constructor(
         _canContinue.value = currentLikes.size >= 4
     }
     
-    /**
-     * Mark wallpaper as disliked.
-     * 
-     * Removes from likes if present.
-     * 
-     * @param wallpaperId Wallpaper ID
-     */
     fun markDislike(wallpaperId: String) {
         val currentLikes = _likedWallpapers.value.toMutableSet()
         val currentDislikes = _dislikedWallpapers.value.toMutableSet()
@@ -212,30 +151,16 @@ class ConfirmationGalleryViewModel @Inject constructor(
         _canContinue.value = currentLikes.size >= 4
     }
     
-    /**
-     * Finish onboarding and initialize preferences with DUAL-ANCHOR system.
-     * 
-     * Steps:
-     * 1. Get embeddings for liked/disliked wallpapers
-     * 2. Calculate average embedding of likes (preferenceVector)
-     * 3. Store BOTH originalEmbedding (prime reference) and preferenceVector
-     * 4. Store feedback in database
-     * 
-     * NOTE: First liked wallpaper is applied later in ApplicationSettingsViewModel
-     * when user clicks "Start Using Vanderwaals"
-     */
     fun finishOnboarding() {
         viewModelScope.launch {
             _finishState.value = FinishState.Initializing
             
-            // Validate original embedding exists
             val embedding = originalEmbedding
             if (embedding == null) {
                 _finishState.value = FinishState.Error("Original embedding not found")
                 return@launch
             }
             
-            // Get liked and disliked wallpaper metadata
             val likedMetadata = allWallpapers.filter { 
                 _likedWallpapers.value.contains(it.id) 
             }
@@ -260,19 +185,13 @@ class ConfirmationGalleryViewModel @Inject constructor(
         }
     }
     
-    /**
-     * Reset finish state.
-     */
     fun resetFinishState() {
         _finishState.value = FinishState.Idle
     }
     
     /**
-     * Reset all state for back navigation.
-     * 
-     * Called when user navigates back to UploadWallpaperScreen.
-     * Clears all selections and data so user can start fresh if they
-     * upload a different wallpaper.
+     * Call when navigating back to UploadWallpaperScreen so the user can
+     * start fresh with a different wallpaper.
      */
     fun resetStateForBackNavigation() {
         android.util.Log.d("ConfirmationGalleryViewModel", "Resetting state for back navigation")
@@ -286,40 +205,17 @@ class ConfirmationGalleryViewModel @Inject constructor(
         originalEmbedding = null
     }
     
-    /**
-     * Check if this screen has been initialized with wallpapers.
-     * Used to determine if user is returning to an initialized screen.
-     * 
-     * @return true if wallpapers have been loaded
-     */
     fun hasWallpapers(): Boolean {
         return allWallpapers.isNotEmpty()
     }
 }
 
-/**
- * Preference initialization state.
- */
 sealed class FinishState {
-    /**
-     * Idle, no initialization started.
-     */
     data object Idle : FinishState()
     
-    /**
-     * Initializing preferences.
-     */
     data object Initializing : FinishState()
     
-    /**
-     * Successfully initialized.
-     */
     data object Success : FinishState()
     
-    /**
-     * Error during initialization.
-     * 
-     * @param message Error description
-     */
     data class Error(val message: String) : FinishState()
 }

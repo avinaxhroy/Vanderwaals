@@ -57,10 +57,6 @@ object SmartCrop {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CropRect>): Boolean = size > 64
     }
 
-    // =====================================================================================
-    // Public entry points
-    // =====================================================================================
-
     /**
      * Synchronous smart crop (saliency-only). Used by the Glide preview
      * transformation and as the fallback for the async face-aware path.
@@ -90,10 +86,6 @@ object SmartCrop {
         } else null
         smartCropInternal(source, targetWidth, targetHeight, mode, preserveQuality, faces)
     }
-
-    // =====================================================================================
-    // Core
-    // =====================================================================================
 
     private fun smartCropInternal(
         source: Bitmap,
@@ -217,10 +209,6 @@ object SmartCrop {
 
     /** Internal focal point carrying the engine [FocalType]. */
     private data class Focal(val x: Float, val y: Float, val weight: Float, val type: FocalType)
-
-    // =====================================================================================
-    // Bitmap operations
-    // =====================================================================================
 
     /**
      * Cut [rect] out of [source] and scale to [targetWidth]*[targetHeight].
@@ -412,10 +400,6 @@ object SmartCrop {
         return out
     }
 
-    // =====================================================================================
-    // Horizon detection — strongest horizontal luminance edge, cheap on a downscale
-    // =====================================================================================
-
     /** Return the source-space y of a dominant horizon, or null if none is found. */
     private fun detectHorizon(source: Bitmap): Float? {
         if (source.width < 8 || source.height < 8) return null
@@ -445,17 +429,13 @@ object SmartCrop {
                 val g = abs(rowLum[y] - rowLum[y - 1])
                 if (g > bestGrad) { bestGrad = g; bestY = y }
             }
-            // Only accept a clear horizon: gradient must be a meaningful fraction of range.
+            // Only accept a clear horizon: gradient must exceed 25% of the luminance range.
             val range = (rowLum.maxOrNull() ?: 0f) - (rowLum.minOrNull() ?: 0f)
             if (bestY < 0 || bestGrad < range * 0.25f) null else bestY / scale
         } catch (e: Exception) {
             null
         }
     }
-
-    // =====================================================================================
-    // Cache key
-    // =====================================================================================
 
     private fun cropCacheKey(
         source: Bitmap,

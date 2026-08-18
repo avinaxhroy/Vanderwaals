@@ -34,7 +34,7 @@ import okhttp3.OkHttpClient
 import javax.inject.Singleton
 import me.avinas.vanderwaals.data.VanderwaalsDatabase
 import me.avinas.vanderwaals.algorithm.SimilarityCalculator
-import me.avinas.vanderwaals.algorithm.PreferenceUpdater
+import me.avinas.vanderwaals.algorithm.RankingEngine
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -145,11 +145,20 @@ object AppModule {
     @Provides
     @Singleton
     fun provideSimilarityCalculator(): SimilarityCalculator = SimilarityCalculator()
-    
+
     @Provides
     @Singleton
-    fun providePreferenceUpdater(): PreferenceUpdater = PreferenceUpdater()
-    
+    fun provideRankingEngine(): me.avinas.vanderwaals.algorithm.RankingEngine =
+        me.avinas.vanderwaals.algorithm.RankingEngine()
+
+    @Provides
+    @Singleton
+    fun provideTasteAnchorRepository(
+        tasteAnchorDao: me.avinas.vanderwaals.data.dao.TasteAnchorDao,
+        userPreferenceDao: me.avinas.vanderwaals.data.dao.UserPreferenceDao
+    ): me.avinas.vanderwaals.data.repository.TasteAnchorRepository =
+        me.avinas.vanderwaals.data.repository.TasteAnchorRepositoryImpl(tasteAnchorDao, userPreferenceDao)
+
     @Provides
     @Singleton
     fun provideEnhancedImageAnalyzer(): me.avinas.vanderwaals.algorithm.EnhancedImageAnalyzer = 

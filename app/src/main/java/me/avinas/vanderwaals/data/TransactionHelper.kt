@@ -14,17 +14,6 @@ object TransactionHelper {
     // Delay between retries in milliseconds
     private const val RETRY_DELAY_MS = 100L
     
-    /**
-     * Executes a block within a Room database transaction.
-     * 
-     * If the block throws an exception, the transaction is automatically rolled back.
-     * If the block completes successfully, the transaction is committed.
-     * 
-     * @param database VanderwaalsDatabase instance
-     * @param block Suspend function to execute within transaction
-     * @return Result of the block
-     * @throws Exception if block fails and rollback occurs
-     */
     suspend fun <T> withTransaction(
         database: VanderwaalsDatabase,
         block: suspend () -> T
@@ -39,18 +28,6 @@ object TransactionHelper {
         }
     }
     
-    /**
-     * Executes a block within a transaction with automatic retry on failure.
-     * 
-     * Useful for operations that may encounter temporary locks or conflicts.
-     * Implements exponential backoff between retries.
-     * 
-     * @param database VanderwaalsDatabase instance
-     * @param maxRetries Maximum number of retry attempts (default: 3)
-     * @param block Suspend function to execute within transaction
-     * @return Result of the block
-     * @throws Exception if all retry attempts fail
-     */
     suspend fun <T> withRetryableTransaction(
         database: VanderwaalsDatabase,
         maxRetries: Int = DEFAULT_MAX_RETRIES,
@@ -80,18 +57,6 @@ object TransactionHelper {
         throw lastException ?: IllegalStateException("Transaction failed with no exception")
     }
     
-    /**
-     * Executes a block within a transaction with custom retry logic.
-     * 
-     * Allows caller to determine whether to retry based on the exception type.
-     * 
-     * @param database VanderwaalsDatabase instance
-     * @param maxRetries Maximum number of retry attempts
-     * @param shouldRetry Function that determines if retry should occur based on exception
-     * @param block Suspend function to execute within transaction
-     * @return Result of the block
-     * @throws Exception if retry logic determines failure or max retries exceeded
-     */
     suspend fun <T> withConditionalRetryTransaction(
         database: VanderwaalsDatabase,
         maxRetries: Int = DEFAULT_MAX_RETRIES,

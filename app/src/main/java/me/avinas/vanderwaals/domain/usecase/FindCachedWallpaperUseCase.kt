@@ -27,17 +27,10 @@ class FindCachedWallpaperUseCase @Inject constructor(
         private const val RECENT_HISTORY_WINDOW = 5
     }
     
-    /**
-     * Finds a cached wallpaper to use as offline fallback.
-     * 
-     * @param excludeWallpaperId ID of wallpaper to exclude (typically the one that failed to download)
-     * @return Pair of (WallpaperMetadata, File) if found, null otherwise
-     */
     suspend operator fun invoke(
         excludeWallpaperId: String? = null
     ): Pair<WallpaperMetadata, File>? {
         return try {
-            // Get all wallpapers marked as downloaded in the queue
             val downloadedWallpapers = wallpaperRepository.getDownloadedWallpapers().first()
             
             if (downloadedWallpapers.isEmpty()) {
@@ -51,10 +44,6 @@ class FindCachedWallpaperUseCase @Inject constructor(
                 .map { it.wallpaperId }
                 .toSet()
             
-            // Filter candidates:
-            // 1. Exclude the wallpaper that failed to download
-            // 2. Exclude recently shown wallpapers
-            // 3. Verify file actually exists on disk
             val cacheDir = File(context.cacheDir, "wallpapers")
             
             val validCachedWallpapers = downloadedWallpapers
@@ -88,13 +77,11 @@ class FindCachedWallpaperUseCase @Inject constructor(
                     return null
                 }
                 
-                // Return a random cached wallpaper
                 val selected = allCached.random()
                 Log.d(TAG, "Fallback: Selected random cached wallpaper: ${selected.first.id}")
                 return selected
             }
             
-            // Return a random wallpaper from valid candidates
             val selected = validCachedWallpapers.random()
             Log.d(TAG, "Fallback: Selected cached wallpaper: ${selected.first.id} from ${validCachedWallpapers.size} candidates")
             selected

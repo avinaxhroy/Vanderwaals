@@ -21,14 +21,12 @@ data class WallpaperSummary(
     val brightness: Int,
     val contrast: Int,
     val resolution: String,
-    val attribution: String?
+    val attribution: String?,
+    val aestheticScore: Float = 0f,
+    val mood: List<String> = emptyList(),
+    val style: List<String> = emptyList()
 ) {
-    /**
-     * Converts this summary to a full [WallpaperMetadata] object.
-     * 
-     * The embedding field will be initialized with an empty FloatArray since
-     * it wasn't loaded from the database.
-     */
+    /** Converts back to a full [WallpaperMetadata] (embedding left empty). */
     fun toWallpaperMetadata(): WallpaperMetadata {
         return WallpaperMetadata(
             id = id,
@@ -39,9 +37,12 @@ data class WallpaperSummary(
             colors = colors,
             brightness = brightness,
             contrast = contrast,
-            embedding = FloatArray(0), // Empty embedding
+            embedding = FloatArray(0),
             resolution = resolution,
-            attribution = attribution
+            attribution = attribution,
+            aestheticScore = aestheticScore,
+            mood = mood,
+            style = style
         )
     }
 }

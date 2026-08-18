@@ -20,28 +20,6 @@ import me.avinas.vanderwaals.domain.usecase.ExtractEmbeddingUseCase
 import me.avinas.vanderwaals.domain.usecase.FindSimilarWallpapersUseCase
 import javax.inject.Inject
 
-/**
- * ViewModel for wallpaper upload screen.
- * 
- * Handles:
- * - User uploading their favorite wallpaper
- * - Selecting from 6 style samples (nature, minimal, dark, abstract, colorful, anime)
- * - Extracting embedding from selected image
- * - Finding top 50 similar wallpapers
- * 
- * **State:**
- * - uploadState: Current upload/processing state
- * - similarWallpapers: Top 50 matches based on embedding similarity
- * 
- * **Flow:**
- * 1. User selects image (upload or sample)
- * 2. Extract embedding (40-50ms)
- * 3. Find similar wallpapers (50ms)
- * 4. Navigate to confirmation gallery
- * 
- * @param extractEmbeddingUseCase Extracts 1280-dim embedding from image
- * @param findSimilarWallpapersUseCase Finds top N similar wallpapers
- */
 @HiltViewModel
 class UploadWallpaperViewModel @Inject constructor(
     private val extractEmbeddingUseCase: ExtractEmbeddingUseCase,
@@ -65,16 +43,7 @@ class UploadWallpaperViewModel @Inject constructor(
     val userImageAnalysis: StateFlow<EnhancedImageAnalyzer.ImageAnalysis?> = _userImageAnalysis.asStateFlow()
     
     /**
-     * Upload and process user's wallpaper with ENHANCED ANALYSIS.
-     * 
-     * Steps:
-     * 1. Load bitmap from URI
-     * 2. Extract embedding from URI (MobileNetV4 deep features)
-     * 3. Extract enhanced features (color, composition, mood)
-     * 4. Find top 20 similar wallpapers using both analyses
-     * 5. Update state
-     * 
-     * @param uri Image URI from picker
+     * Extract embedding (MobileNetV4) plus enhanced features (color, composition, mood).
      */
     fun uploadWallpaper(uri: Uri) {
         viewModelScope.launch {
@@ -83,7 +52,6 @@ class UploadWallpaperViewModel @Inject constructor(
             var bitmap: android.graphics.Bitmap? = null
             
             try {
-                // Load bitmap for enhanced analysis using BitmapManager
                 bitmap = withContext(Dispatchers.IO) {
                     me.avinas.vanderwaals.core.BitmapManager.loadBitmap(uri)
                 }
@@ -93,12 +61,10 @@ class UploadWallpaperViewModel @Inject constructor(
                     return@launch
                 }
                 
-                // Extract embedding (MobileNetV4)
                 extractEmbeddingUseCase(uri).fold(
                     onSuccess = { embedding ->
                         _userEmbedding.value = embedding
                         
-                        // LOG: Debug embedding extraction
                         val embeddingPreview = embedding.take(10).joinToString(", ", "[", ", ...]")
                         val embeddingEnd = embedding.takeLast(5).joinToString(", ", "[", "]")
                         android.util.Log.d("UploadWallpaper", "Extracted embedding from uploaded image")
@@ -107,7 +73,6 @@ class UploadWallpaperViewModel @Inject constructor(
                         android.util.Log.d("UploadWallpaper", "Embedding magnitude: ${embedding.map { it * it }.sum().let { kotlin.math.sqrt(it) }}")
                         android.util.Log.d("UploadWallpaper", "Embedding stats: min=${embedding.minOrNull()}, max=${embedding.maxOrNull()}, avg=${embedding.average()}")
                         
-                        // Extract enhanced features (color, composition, mood)
                         val analysis = withContext(Dispatchers.IO) {
                             // Create local val for smart cast
                             val bitmapForAnalysis = bitmap ?: return@withContext null
@@ -118,7 +83,6 @@ class UploadWallpaperViewModel @Inject constructor(
                         // Find similar wallpapers using BOTH embedding and enhanced analysis
                         findSimilarWallpapers(embedding, analysis)
                         
-                        // Clean up bitmap using BitmapManager
                         me.avinas.vanderwaals.core.BitmapManager.recycleSafely(bitmap)
                         bitmap = null
                     },
@@ -140,21 +104,8 @@ class UploadWallpaperViewModel @Inject constructor(
     }
     
     /**
-     * Select a pre-defined style sample.
-     * 
-     * Style samples:
-     * - Nature: Green/blue tones, outdoor scenes
-     * - Minimal: Simple, clean, monochromatic
-     * - Dark: Dark backgrounds, high contrast
-     * - Abstract: Geometric, artistic patterns
-     * - Colorful: Vibrant, multi-colored
-     * - Anime: Anime/manga art style
-     * 
-     * IMPROVED (Nov 2025): Uses actual wallpapers from category to generate
-     * a real representative embedding, rather than placeholder vectors.
-     * This ensures better matching quality.
-     * 
-     * @param style Sample style category
+     * Uses actual wallpapers from the category to build a real representative
+     * embedding rather than placeholder vectors.
      */
     fun selectSampleWallpaper(style: WallpaperStyle) {
         viewModelScope.launch {
@@ -163,7 +114,6 @@ class UploadWallpaperViewModel @Inject constructor(
             android.util.Log.d("UploadWallpaper", "Selecting sample wallpaper for style: ${style.displayName}")
             
             try {
-                // Get user's enabled sources
                 val settings = settingsDataStore.settings.first()
                 val enabledSources = mutableListOf<String>()
                 if (settings.githubEnabled) enabledSources.add("github")
@@ -177,7 +127,6 @@ class UploadWallpaperViewModel @Inject constructor(
                         .first()
                 }
                 
-                // Filter by enabled sources
                 val categoryWallpapers = if (enabledSources.isEmpty()) {
                     allCategoryWallpapers
                 } else {
@@ -192,8 +141,8 @@ class UploadWallpaperViewModel @Inject constructor(
                     return@launch
                 }
                 
-                // Calculate average embedding from top wallpapers in this category
-                // This creates a "prototype" that represents the category's essence
+                // Average a sample of the category's wallpapers into a prototype
+                // used as the taste seed for matching.
                 val sampleSize = minOf(5, categoryWallpapers.size)
                 val sampleWallpapers = categoryWallpapers.shuffled().take(sampleSize)
                 
@@ -209,15 +158,11 @@ class UploadWallpaperViewModel @Inject constructor(
                 
                 _userEmbedding.value = avgEmbedding
                 
-                // LOG: Debug embedding generation
                 val embeddingPreview = avgEmbedding.take(5).joinToString(", ", "[", ", ...]")
                 android.util.Log.d("UploadWallpaper", "Created representative embedding from $sampleSize sample wallpapers")
                 android.util.Log.d("UploadWallpaper", "Embedding preview: $embeddingPreview")
                 android.util.Log.d("UploadWallpaper", "Embedding magnitude: ${avgEmbedding.map { it * it }.sum().let { kotlin.math.sqrt(it) }}")
                 
-                // CRITICAL: Use category filtering to show relevant wallpapers
-                // When user selects a category, show wallpapers FROM that category
-                // This ensures the confirmation gallery matches user's expectation
                 findSimilarWallpapersByCategory(style.categoryName)
                 
             } catch (e: Exception) {
@@ -229,27 +174,6 @@ class UploadWallpaperViewModel @Inject constructor(
         }
     }
     
-    /**
-     * Find similar wallpapers based on embedding AND enhanced analysis.
-     * 
-     * ENHANCED MATCHING: Uses both MobileNetV4 embeddings and semantic features
-     * (color palette, composition, mood) to capture the ESSENCE of the image.
-     * 
-     * Returns top 50 matches for onboarding.
-     * 
-     * FLOW:
-     * 1. User uploads image OR selects category → Generate embedding
-     * 2. Find 50 similar wallpapers using cosine similarity
-     * 3. Show 12 in confirmation gallery
-     * 4. User likes/dislikes wallpapers
-     * 5. Initialize preference vector from LIKED wallpapers
-     * 6. Keep original embedding as prime reference
-     * 
-     * CRITICAL FIX: If database is empty, show helpful error message to sync catalog.
-     * 
-     * @param embedding User's wallpaper embedding (from upload or category prototype)
-     * @param analysis Enhanced image analysis (color, composition, mood) - null for category samples
-     */
     private suspend fun findSimilarWallpapers(
         embedding: FloatArray,
         analysis: EnhancedImageAnalyzer.ImageAnalysis?
@@ -267,11 +191,10 @@ class UploadWallpaperViewModel @Inject constructor(
         // These will be the pool for like/dislike feedback
         findSimilarWallpapersUseCase(
             userEmbedding = embedding,
-            userAnalysis = analysis,  // ENHANCED: Pass image analysis for semantic matching (null for category samples)
-            limit = 50  // INCREASED: More variety for refresh functionality
+            userAnalysis = analysis,
+            limit = 50
         ).fold(
             onSuccess = { wallpapers ->
-                // CRITICAL FIX: Check if database is empty
                 if (wallpapers.isEmpty()) {
                     android.util.Log.w("UploadWallpaper", "No wallpapers found in database!")
                     _uploadState.value = UploadState.Error(
@@ -310,7 +233,6 @@ class UploadWallpaperViewModel @Inject constructor(
         android.util.Log.d("UploadWallpaper", "Finding wallpapers by category: $category")
         
         try {
-            // Get user's enabled sources
             val settings = settingsDataStore.settings.first()
             val enabledSources = mutableListOf<String>()
             if (settings.githubEnabled) enabledSources.add("github")
@@ -319,13 +241,11 @@ class UploadWallpaperViewModel @Inject constructor(
             
             android.util.Log.d("UploadWallpaper", "Enabled sources: $enabledSources")
             
-            // Get wallpapers directly from category
             val allCategoryWallpapers = withContext(Dispatchers.IO) {
                 wallpaperRepository.getWallpapersByCategory(category)
                     .first()
             }
             
-            // CRITICAL FIX: Filter by enabled sources
             val filteredWallpapers = if (enabledSources.isEmpty()) {
                 allCategoryWallpapers
             } else {
@@ -399,9 +319,6 @@ class UploadWallpaperViewModel @Inject constructor(
         }
     }
     
-    /**
-     * Reset upload state.
-     */
     fun resetState() {
         _uploadState.value = UploadState.Initial
         _similarWallpapers.value = emptyList()
@@ -449,37 +366,15 @@ class UploadWallpaperViewModel @Inject constructor(
     }
 }
 
-/**
- * Upload and processing state.
- */
 sealed class UploadState {
-    /**
-     * Initial state, no upload started.
-     */
     data object Initial : UploadState()
     
-    /**
-     * Extracting embedding from image.
-     */
     data object Extracting : UploadState()
     
-    /**
-     * Finding similar wallpapers.
-     */
     data object FindingMatches : UploadState()
     
-    /**
-     * Successfully found matches.
-     * 
-     * @param matchCount Number of matches found
-     */
     data class Success(val matchCount: Int) : UploadState()
     
-    /**
-     * Error occurred during processing.
-     * 
-     * @param message Error description
-     */
     data class Error(val message: String) : UploadState()
 }
 

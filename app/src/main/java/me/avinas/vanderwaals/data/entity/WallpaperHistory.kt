@@ -27,47 +27,21 @@ data class WallpaperHistory(
     val downloadedToStorage: Boolean,
     val feedbackContext: FeedbackContext? = null
 ) {
-    /**
-     * Calculates the duration the wallpaper was displayed in seconds.
-     * 
-     * Used for implicit feedback learning:
-     * - Duration < 5 minutes: Strong dislike (user changed quickly)
-     * - Duration > 24 hours: Strong like (user kept it for a long time)
-     * - Duration in between: Neutral (no learning applied)
-     * 
-     * @return Duration in seconds, or null if wallpaper is still active (removedAt is null)
-     */
     fun getDurationSeconds(): Long? {
         return removedAt?.let { (it - appliedAt) / 1000 }
     }
 
-    /**
-     * Checks if the wallpaper is currently active (not yet removed).
-     * 
-     * @return true if this is the current wallpaper, false if it was removed
-     */
     fun isActive(): Boolean {
         return removedAt == null
     }
 
-    /**
-     * Checks if the user provided explicit feedback (like or dislike).
-     * 
-     * @return true if user liked or disliked, false if no feedback
-     */
     fun hasFeedback(): Boolean {
         return userFeedback != null
     }
 
     companion object {
-        /**
-         * Feedback constant for liked wallpapers.
-         */
         const val FEEDBACK_LIKE = "like"
 
-        /**
-         * Feedback constant for disliked wallpapers.
-         */
         const val FEEDBACK_DISLIKE = "dislike"
 
         /**

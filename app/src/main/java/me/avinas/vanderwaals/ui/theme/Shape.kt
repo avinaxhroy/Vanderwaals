@@ -4,16 +4,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
 
-/**
- * Vanderwaals Modern Shape System
- * 
- * Premium, refined corner radii for a sophisticated aesthetic:
- * - Cards: 14dp - modern, slightly tighter than before
- * - Buttons: 10dp - crisp, professional
- * - Dialogs: 20dp - friendly, approachable
- * - Small elements: 8dp - subtle rounding
- */
-
 val VanderwaalsShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
     small = RoundedCornerShape(10.dp),

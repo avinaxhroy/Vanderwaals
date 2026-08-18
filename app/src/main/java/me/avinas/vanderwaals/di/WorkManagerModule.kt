@@ -21,17 +21,6 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object WorkManagerModule {
     
-    /**
-     * Provides custom WorkManager Configuration.
-     * 
-     * Configuration details:
-     * - Sets HiltWorkerFactory for dependency injection
-     * - Sets logging level based on build variant (DEBUG/ERROR)
-     * - Configures custom executor with limited threads
-     * 
-     * @param workerFactory HiltWorkerFactory for creating Workers
-     * @return WorkManager Configuration
-     */
     @Provides
     @Singleton
     fun provideWorkManagerConfiguration(

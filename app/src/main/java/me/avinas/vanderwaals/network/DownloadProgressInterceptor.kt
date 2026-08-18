@@ -11,10 +11,6 @@ import okio.Source
 import okio.buffer
 import java.io.IOException
 
-/**
- * OkHttp network interceptor that wraps the response body to report
- * download progress via [progressListener].
- */
 class DownloadProgressInterceptor(
     private val progressListener: (bytesRead: Long, totalBytes: Long, isDone: Boolean) -> Unit
 ) : Interceptor {
@@ -22,8 +18,6 @@ class DownloadProgressInterceptor(
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalResponse = chain.proceed(chain.request())
         
-        // Get the actual content length from headers
-        // If Content-Length is missing or -1, we'll estimate based on what we download
         val contentLength = originalResponse.header("Content-Length")?.toLongOrNull()
             ?: originalResponse.body?.contentLength() ?: -1L
         
@@ -35,17 +29,8 @@ class DownloadProgressInterceptor(
 
 /**
  * ResponseBody wrapper that tracks bytes read during download.
- * 
- * Wraps the original source with a ForwardingSource that counts bytes
- * as they are read from the network.
- * 
- * **Note on compressed responses:**
- * GitHub/CDNs may send gzip-compressed responses. OkHttp automatically
- * decompresses them, so we track actual bytes read (decompressed size).
- * 
- * @param responseBody Original response body
- * @param expectedContentLength Expected content length from headers (may be compressed or uncompressed)
- * @param progressListener Progress callback
+ * GitHub/CDNs may send gzip-compressed responses; OkHttp auto-decompresses,
+ * so what we track here is the actual (decompressed) size.
  */
 private class ProgressResponseBody(
     private val responseBody: ResponseBody,
@@ -71,7 +56,7 @@ private class ProgressResponseBody(
             override fun read(sink: Buffer, byteCount: Long): Long {
                 val bytesRead = super.read(sink, byteCount)
                 
-                // Update total bytes read (this is the actual decompressed data)
+                // this is the actual decompressed data
                 totalBytesRead += if (bytesRead != -1L) bytesRead else 0L
                 
                 // Use actual bytes read as total if we're reading more than expected

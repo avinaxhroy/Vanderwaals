@@ -20,13 +20,6 @@ class MediaSaver @Inject constructor(
     @param:ApplicationContext private val context: Context
 ) {
 
-    /**
-     * Saves an image file to the public Pictures directory.
-     *
-     * @param file The source file to save.
-     * @param fileName The desired name for the saved file (without extension).
-     * @return Result<Uri> containing the URI of the saved image on success.
-     */
     fun saveImageToGallery(file: File, fileName: String): Result<Uri> {
         return try {
             if (!file.exists() || file.length() <= 0) {

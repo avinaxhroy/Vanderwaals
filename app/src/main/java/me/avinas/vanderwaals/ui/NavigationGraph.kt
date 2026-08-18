@@ -70,12 +70,8 @@ fun VanderwaalsNavGraph(
 
     NavHost(
         navController = navController,
-        // Start with Welcome for new users
         startDestination = if (onboardingComplete) Screen.Main.route else Screen.Welcome.route
     ) {
-        // ========== ONBOARDING FLOW ==========
-        
-        // Step 0: Welcome Screen (Introductory)
         composable(Screen.Welcome.route) {
             WelcomeScreen(
                 onGetStarted = {
@@ -91,7 +87,6 @@ fun VanderwaalsNavGraph(
             )
         }
         
-        // Step 1: Source Selection
         composable(Screen.SourceSelection.route) {
             WallpaperSourceSelectionScreen(
                 onContinue = {
@@ -105,11 +100,9 @@ fun VanderwaalsNavGraph(
             )
         }
         
-        // Step 2: Initial Sync (Manual download)
         composable(Screen.InitialSync.route) {
             InitialSyncScreen(
                 onSyncComplete = {
-                    // Navigate to Mode Selection, pop off initial sync so user can't go back to download
                     navController.navigate(Screen.ModeSelection.route) {
                         popUpTo(Screen.SourceSelection.route) { inclusive = true }
                     }
@@ -119,18 +112,15 @@ fun VanderwaalsNavGraph(
             )
         }
         
-        // Step 3: Mode Selection
         composable(Screen.ModeSelection.route) {
             ModeSelectionScreen(
                 onModeSelected = { mode ->
                     when (mode) {
                         OnboardingMode.AUTO -> {
-                             // Auto mode: Go to Application Settings
-                             navController.navigate(Screen.ApplicationSettings.route)
+                            navController.navigate(Screen.ApplicationSettings.route)
                         }
                         OnboardingMode.PERSONALIZE -> {
-                             // Personalize: Go to upload
-                             navController.navigate(Screen.UploadWallpaper.route)
+                            navController.navigate(Screen.UploadWallpaper.route)
                         }
                     }
                 },
@@ -232,7 +222,6 @@ fun VanderwaalsNavGraph(
             )
         }
         
-        // ========== MAIN APP FLOW ==========
         
         composable(Screen.Main.route) {
             MainScreen(
@@ -293,18 +282,12 @@ fun VanderwaalsNavGraph(
     }
 }
 
-/**
- * Determines if user has completed onboarding by checking UserPreferences.
- * Returns true if user preferences exist in the database (onboarding completed).
- */
 @Composable
 fun rememberOnboardingComplete(): Boolean {
     val context = androidx.compose.ui.platform.LocalContext.current
     val database = me.avinas.vanderwaals.data.VanderwaalsDatabase.getInstance(context)
     
-    // Collect the user preferences flow
     val userPreferences by database.userPreferenceDao.get().collectAsState(initial = null)
     
-    // Onboarding is complete if user preferences exist
     return userPreferences != null
 }

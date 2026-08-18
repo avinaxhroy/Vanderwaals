@@ -24,9 +24,6 @@ class ServiceStarterWorker(
         const val WORK_NAME = "service_starter_work"
     }
 
-    /**
-     * Entry point for Hilt dependency injection.
-     */
     @dagger.hilt.EntryPoint
     @dagger.hilt.InstallIn(dagger.hilt.components.SingletonComponent::class)
     interface ServiceStarterEntryPoint {
@@ -50,7 +47,6 @@ class ServiceStarterWorker(
                 return Result.success()
             }
             
-            // Start the foreground service
             val intent = Intent(applicationContext, me.avinas.vanderwaals.service.WallpaperMonitorService::class.java)
             
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

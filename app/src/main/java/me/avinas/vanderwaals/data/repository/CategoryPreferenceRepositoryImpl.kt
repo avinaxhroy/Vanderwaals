@@ -8,10 +8,7 @@ import me.avinas.vanderwaals.data.entity.CategoryPreference
 import javax.inject.Inject
 
 /**
- * Implementation of CategoryPreferenceRepository for category-level tracking.
- * 
  * Manages category preferences using Room database with reactive Flow updates.
- * All database operations run on IO dispatcher via Room's suspend functions.
  */
 class CategoryPreferenceRepositoryImpl @Inject constructor(
     private val categoryPreferenceDao: CategoryPreferenceDao

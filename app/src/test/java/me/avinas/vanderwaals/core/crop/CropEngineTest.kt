@@ -16,7 +16,6 @@ class CropEngineTest {
     private fun px(r: Int, g: Int, b: Int): Int =
         (0xff shl 24) or (r shl 16) or (g shl 8) or b
 
-    /** Fill a [w]*[h] image with [value] everywhere. */
     private fun solid(w: Int, h: Int, value: Int): IntArray = IntArray(w * h) { value }
 
     /** A [w]*[h] dark image with a [sq]*[sq] bright square centred at (cx,cy). */

@@ -18,7 +18,6 @@ import kotlin.math.pow
 
 /**
  * Syncs the wallpaper manifest from jsDelivr/GitHub into the local Room database.
- * Handles download, JSON parsing, entity conversion, and batch insert with retry logic.
  */
 @Singleton
 class ManifestRepository @Inject constructor(
@@ -47,27 +46,7 @@ class ManifestRepository @Inject constructor(
         private const val MAX_DELAY_MS = 30_000L
     }
     
-    /**
-     * Synchronizes the wallpaper manifest from the network to local database.
-     * 
-     * **Smart Update Logic:**
-     * Uses HTTP If-Modified-Since header to check if manifest has changed.
-     * If unchanged (304 response), skips download entirely.
-     * 
-     * **Process:**
-     * 1. Check if manifest has been modified since last sync (If-Modified-Since)
-     * 2. If not modified (304): Return existing count, skip download
-     * 3. If modified (200): Download, validate, and save manifest
-     * 
-     * **Retry Logic:**
-     * - Retries network failures up to 3 times
-     * - Uses exponential backoff: 1s, 2s, 4s
-     * - Immediate failure for parse/validation errors
-     * 
-     * @param onProgress Optional progress callback with (message, progress 0.0-1.0, count)
-     * @param forceUpdate If true, skip If-Modified-Since check and always download
-     * @return Result<Int> Success with wallpaper count, or Failure with error
-     */
+    // Uses the HTTP If-Modified-Since header to skip the download when the manifest is unchanged (304).
     suspend fun syncManifest(
         onProgress: ((message: String, progress: Float, count: Int) -> Unit)? = null,
         forceUpdate: Boolean = false
@@ -76,17 +55,14 @@ class ManifestRepository @Inject constructor(
         
         var lastError: Exception? = null
         
-        // Get stored Last-Modified timestamp for conditional request
         val prefs = context.getSharedPreferences("vanderwaals_sync", android.content.Context.MODE_PRIVATE)
         val lastModified = if (forceUpdate) null else prefs.getString("manifest_last_modified", null)
         
-        // Retry loop with exponential backoff
         repeat(MAX_RETRIES) { attempt ->
             try {
                 Log.d(TAG, "Sync attempt ${attempt + 1}/$MAX_RETRIES")
                 onProgress?.invoke("Connecting to server...", 0.05f, 0)
                 
-                // Download or load manifest based on configuration
                 val manifest = if (BuildConfig.USE_LOCAL_MANIFEST) {
                     Log.d(TAG, "Loading manifest from local assets")
                     onProgress?.invoke("Loading wallpaper catalog...", 0.2f, 0)
@@ -95,14 +71,12 @@ class ManifestRepository @Inject constructor(
                     Log.d(TAG, "Downloading manifest from network")
                     onProgress?.invoke("Checking for updates...", 0.1f, 0)
                     
-                    // Use conditional request if we have a previous Last-Modified
                     val response = if (lastModified != null) {
                         manifestService.getManifestConditional(lastModified)
                     } else {
                         manifestService.getManifest()
                     }
                     
-                    // Check for "Not Modified" response - manifest unchanged
                     if (response.code() == 304) {
                         Log.d(TAG, "Manifest not modified since last sync, skipping download")
                         onProgress?.invoke("Catalog is up to date!", 1.0f, wallpaperDao.getCount())
@@ -110,7 +84,6 @@ class ManifestRepository @Inject constructor(
                         return Result.success(wallpaperDao.getCount())
                     }
                     
-                    // Check HTTP response
                     if (!response.isSuccessful) {
                         val errorMessage = "HTTP ${response.code()}: ${response.message()}"
                         Log.e(TAG, errorMessage)
@@ -125,13 +98,11 @@ class ManifestRepository @Inject constructor(
                         }
                     }
                     
-                    // Save new Last-Modified header for next sync
                     response.headers()["Last-Modified"]?.let { newLastModified ->
                         prefs.edit().putString("manifest_last_modified", newLastModified).apply()
                         Log.d(TAG, "Saved Last-Modified: $newLastModified")
                     }
                     
-                    // Extract manifest
                     response.body()
                 }
                 
@@ -148,7 +119,6 @@ class ManifestRepository @Inject constructor(
                 
                 onProgress?.invoke("Processing wallpapers...", 0.5f, manifest.wallpapers.size)
                 
-                // Validate manifest has content
                 if (manifest.wallpapers.isEmpty()) {
                     val errorMessage = "Invalid manifest: empty wallpapers list"
                     Log.e(TAG, errorMessage)
@@ -173,7 +143,6 @@ class ManifestRepository @Inject constructor(
                     val finalCount = wallpaperDao.getCount()
                     Log.d(TAG, "Sync successful: $finalCount wallpapers in database")
                     
-                    // Save sync timestamp
                     saveLastSyncTimestamp(System.currentTimeMillis())
                     
                     onProgress?.invoke("Sync complete!", 1.0f, finalCount)
@@ -206,31 +175,18 @@ class ManifestRepository @Inject constructor(
                 return Result.failure(Exception("Out of memory parsing manifest. Try closing other apps and retry."))
                 
             } catch (e: Exception) {
-                // Unexpected errors - fail immediately
                 val errorMessage = "Unexpected error: ${e.message}"
                 Log.e(TAG, errorMessage, e)
                 return Result.failure(Exception(errorMessage, e))
             }
         }
         
-        // All retries exhausted
         val errorMessage = "Sync failed after $MAX_RETRIES attempts: ${lastError?.message}"
         Log.e(TAG, errorMessage)
         return Result.failure(Exception(errorMessage, lastError))
     }
 
     
-    /**
-     * Applies exponential backoff delay before retry.
-     * 
-     * Delay formula: min(BASE_DELAY * (2 ^ attempt), MAX_DELAY)
-     * - Attempt 0: 1 second
-     * - Attempt 1: 2 seconds
-     * - Attempt 2: 4 seconds
-     * - Max: 30 seconds
-     * 
-     * @param attempt Current retry attempt (0-indexed)
-     */
     private suspend fun applyExponentialBackoff(attempt: Int) {
         val delayMs = minOf(
             BASE_DELAY_MS * (2.0.pow(attempt.toDouble())).toLong(),
@@ -240,36 +196,18 @@ class ManifestRepository @Inject constructor(
         delay(delayMs)
     }
     
-    /**
-     * Gets the last sync timestamp from SharedPreferences.
-     * 
-     * @return Last sync timestamp in milliseconds, or null if never synced
-     */
     suspend fun getLastSyncTimestamp(): Long? {
         val prefs = context.getSharedPreferences("vanderwaals_sync", android.content.Context.MODE_PRIVATE)
         val timestamp = prefs.getLong("last_sync_timestamp", 0L)
         return if (timestamp > 0) timestamp else null
     }
     
-    /**
-     * Saves the sync timestamp to SharedPreferences.
-     * 
-     * @param timestamp Sync timestamp in milliseconds
-     */
     suspend fun saveLastSyncTimestamp(timestamp: Long) {
         val prefs = context.getSharedPreferences("vanderwaals_sync", android.content.Context.MODE_PRIVATE)
         prefs.edit().putLong("last_sync_timestamp", timestamp).apply()
     }
     
-    /**
-     * Checks if a sync is needed based on last sync time.
-     * 
-     * Sync is needed if:
-     * - Never synced before
-     * - Last sync was more than 7 days ago
-     * 
-     * @return true if sync is needed, false otherwise
-     */
+    // Sync when never synced or last synced more than 7 days ago.
     suspend fun isSyncNeeded(): Boolean {
         val lastSync = getLastSyncTimestamp() ?: return true
         val now = System.currentTimeMillis()
@@ -277,32 +215,15 @@ class ManifestRepository @Inject constructor(
         return (now - lastSync) > weekInMs
     }
     
-    /**
-     * Gets the current wallpaper count from database.
-     * 
-     * @return Number of wallpapers in local database
-     */
     suspend fun getWallpaperCount(): Int {
         return wallpaperDao.getCount()
     }
     
-    /**
-     * Checks if the database has been initialized with wallpapers.
-     * 
-     * @return true if database has wallpapers, false if empty
-     */
     suspend fun isDatabaseInitialized(): Boolean {
         return getWallpaperCount() > 0
     }
     
-    /**
-     * Inserts Bing wallpapers into the database.
-     * 
-     * Unlike the manifest sync which replaces all wallpapers, this method
-     * only inserts new Bing wallpapers or updates existing ones.
-     * 
-     * @param wallpapers List of WallpaperMetadata entities to insert
-     */
+    // Unlike the manifest sync (which replaces all wallpapers), this only inserts/updates the given entries.
     suspend fun insertBingWallpapers(wallpapers: List<me.avinas.vanderwaals.data.entity.WallpaperMetadata>) {
         try {
             wallpaperDao.insertAll(wallpapers)

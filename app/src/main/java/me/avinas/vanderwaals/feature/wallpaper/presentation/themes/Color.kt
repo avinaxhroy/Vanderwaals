@@ -1,20 +1,19 @@
 package me.avinas.vanderwaals.feature.wallpaper.presentation.themes
 import androidx.compose.ui.graphics.Color
 
-// Modern Dark Theme Colors - Vanderwaals Purple Aesthetic
-// Primary colors - Brand purple
+// Material 3 dark theme
 val md_theme_dark_primary = Color(0xFF8B7FFF)
 val md_theme_dark_onPrimary = Color(0xFFFFFFFF)
 val md_theme_dark_primaryContainer = Color(0xFF7165E3)
 val md_theme_dark_onPrimaryContainer = Color(0xFFB39DDB)
 
-// Secondary colors - Indigo accent
+// secondary
 val md_theme_dark_secondary = Color(0xFF6366F1)
 val md_theme_dark_onSecondary = Color(0xFFFFFFFF)
 val md_theme_dark_secondaryContainer = Color(0xFF1E1E2D)
 val md_theme_dark_onSecondaryContainer = Color(0xFF9CA3AF)
 
-// Tertiary colors - Pink accent
+// tertiary
 val md_theme_dark_tertiary = Color(0xFFFF6B9D)
 val md_theme_dark_onTertiary = Color(0xFFFFFFFF)
 val md_theme_dark_tertiaryContainer = Color(0xFF2A2A3E)

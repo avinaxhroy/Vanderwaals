@@ -9,11 +9,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Caches the next wallpaper recommendation so "Change Now" feels instant.
- *
- * After each wallpaper apply, the next pick is computed in the background.
- * For "Both But Different" mode, two wallpapers are cached (home + lock).
- * A generation counter discards stale computations from concurrent requests.
+ * Caches the next wallpaper recommendation so rotations and changes feel instantaneous.
  */
 @Singleton
 class NextWallpaperCacheManager @Inject constructor(
@@ -21,363 +17,192 @@ class NextWallpaperCacheManager @Inject constructor(
 ) {
     companion object {
         private const val TAG = "NextWallpaperCache"
-        
-        /**
-         * Maximum age of cached result before it's considered stale.
-         * 10 minutes is generous since pre-computation now runs async.
-         * Gives time for cache to warm after wallpaper changes.
-         */
-        private const val MAX_CACHE_AGE_MS = 10 * 60 * 1000L // 10 minutes
+        private const val MAX_CACHE_AGE_MS = 10 * 60 * 1000L
     }
     
-    /** Mutex to protect cache reads and writes */
     private val mutex = Mutex()
-    
-    /** 
-     * Generation counter for invalidation.
-     * Incremented on every cache consumption or explicit invalidation.
-     * Background computations check this to detect staleness.
-     */
     private var cacheGeneration = 0L
-    
-    /** Cached next wallpaper result (null if no cache) - for single mode */
     private var cachedResult: Result<WallpaperMetadata>? = null
-    
-    /** Timestamp when cache was computed */
     private var cacheTimestamp = 0L
-    
-    /** ID of the cached wallpaper (for logging and duplicate prevention) */
     private var cachedWallpaperId: String? = null
     
-    // ========== BOTH BUT DIFFERENT MODE CACHE ==========
-    
-    /** Cached wallpaper pair for "Both But Different" mode */
     private var cachedPair: WallpaperPair? = null
-    
-    /** Timestamp when pair cache was computed */
     private var pairCacheTimestamp = 0L
     
-    /**
-     * Data class to hold pre-computed wallpaper pair for "Both But Different" mode.
-     */
     data class WallpaperPair(
         val homeWallpaper: WallpaperMetadata,
         val lockWallpaper: WallpaperMetadata
     )
     
-    /**
-     * Gets the next wallpaper, using cache if available.
-     * 
-     * If cache hit: Returns cached result immediately (near instant)
-     * If cache miss: Falls back to fresh computation (slower, but correct)
-     * 
-     * @param excludeWallpaperId ID to exclude from selection (typically current wallpaper)
-     * @return Selected wallpaper result
-     */
     suspend fun getNextWallpaper(excludeWallpaperId: String? = null): Result<WallpaperMetadata> {
         mutex.withLock {
             val cached = cachedResult
             
-            // Check if we have valid cache
             if (cached != null && isCacheValid()) {
-                // Additional check: don't return cached wallpaper if it's the one being excluded
                 val cachedId = cachedWallpaperId
                 if (cachedId != null && cachedId == excludeWallpaperId) {
                     Log.d(TAG, "Cache contains excluded wallpaper $cachedId - computing fresh")
                     cachedResult = null
                 } else {
-                    Log.d(TAG, "✓ Cache HIT - returning pre-computed wallpaper: $cachedId (gen=$cacheGeneration)")
-                    
-                    // Consume cache (one-time use)
+                    Log.d(TAG, "Cache HIT: $cachedId (gen=$cacheGeneration)")
                     cachedResult = null
                     cachedWallpaperId = null
-                    cacheGeneration++  // Invalidate any in-flight computation
-                    
+                    cacheGeneration++
                     return cached
                 }
             } else if (cached != null) {
-                Log.d(TAG, "Cache STALE - too old, clearing")
+                Log.d(TAG, "Cache STALE - clearing")
                 cachedResult = null
-                cachedWallpaperId = null
             }
         }
         
-        // Cache miss - compute fresh
-        Log.d(TAG, "✗ Cache MISS - computing fresh wallpaper (this takes time)")
         return selectNextWallpaperUseCase(excludeWallpaperId)
     }
     
-    /**
-     * Pre-computes next wallpaper in background after a wallpaper change.
-     * 
-     * Call this after successfully applying a wallpaper to prepare for the next change.
-     * Uses generation counter to safely discard stale results.
-     * 
-     * @param excludeWallpaperId ID to exclude from selection (the just-applied wallpaper)
-     */
-    suspend fun preComputeNext(excludeWallpaperId: String?) {
-        // Snapshot current generation before starting computation
-        val myGeneration: Long
+    suspend fun precomputeNextWallpaper(appliedWallpaperId: String? = null) {
+        val generationSnapshot: Long
         mutex.withLock {
-            myGeneration = cacheGeneration
-            Log.d(TAG, "→ Starting pre-computation for gen=$myGeneration, exclude=$excludeWallpaperId")
+            generationSnapshot = cacheGeneration
         }
         
-        // Compute next wallpaper (this is the slow part)
-        val startTime = System.currentTimeMillis()
-        val result = selectNextWallpaperUseCase(excludeWallpaperId)
-        val elapsed = System.currentTimeMillis() - startTime
+        Log.d(TAG, "Pre-computing next wallpaper in background (gen=$generationSnapshot)")
         
-        // Only store result if generation hasn't changed (no one else consumed/invalidated cache)
+        val result = selectNextWallpaperUseCase(excludeWallpaperId = appliedWallpaperId)
+        
         mutex.withLock {
-            if (myGeneration == cacheGeneration) {
-                cachedResult = result
-                cacheTimestamp = System.currentTimeMillis()
-                
-                result.fold(
-                    onSuccess = { wallpaper ->
-                        cachedWallpaperId = wallpaper.id
-                        Log.d(TAG, "→ Pre-computed and CACHED: ${wallpaper.id} in ${elapsed}ms (gen=$myGeneration)")
-                    },
-                    onFailure = { error ->
-                        cachedWallpaperId = null
-                        Log.w(TAG, "→ Pre-computation FAILED, cached error: ${error.message}")
-                    }
-                )
+            if (cacheGeneration == generationSnapshot) {
+                if (result.isSuccess) {
+                    val wallpaper = result.getOrNull()
+                    cachedResult = result
+                    cacheTimestamp = System.currentTimeMillis()
+                    cachedWallpaperId = wallpaper?.id
+                    Log.d(TAG, "Successfully cached next wallpaper: ${wallpaper?.id}")
+                } else {
+                    Log.w(TAG, "Pre-computation failed: ${result.exceptionOrNull()?.message}")
+                    cachedResult = null
+                    cachedWallpaperId = null
+                }
             } else {
-                // Generation changed - our result is stale, discard it
-                Log.d(TAG, "→ Discarding stale result: computed for gen=$myGeneration but current is $cacheGeneration")
+                Log.d(TAG, "Discarding pre-computed result: generation changed ($generationSnapshot -> $cacheGeneration)")
             }
         }
     }
     
-    /**
-     * Invalidates all caches (single and pair).
-     * 
-     * Call this when:
-     * - User provides explicit feedback (like/dislike) - preferences changed
-     * - App settings change (source enabled/disabled)
-     * - Any event that would affect wallpaper selection
-     * 
-     * @param reason Reason for invalidation (for logging)
-     */
-    suspend fun invalidateCache(reason: String = "explicit") {
+    suspend fun invalidateCache(reason: String? = null) {
         mutex.withLock {
-            if (cachedResult != null) {
-                Log.d(TAG, "⚠ Single cache INVALIDATED: $reason (was gen=$cacheGeneration, id=$cachedWallpaperId)")
-                cachedResult = null
-                cachedWallpaperId = null
-            }
-            if (cachedPair != null) {
-                Log.d(TAG, "⚠ Pair cache INVALIDATED: $reason (home=${cachedPair?.homeWallpaper?.id}, lock=${cachedPair?.lockWallpaper?.id})")
-                cachedPair = null
-            }
-            cacheGeneration++  // Ensures any in-flight computations are discarded
+            cachedResult = null
+            cachedWallpaperId = null
+            cacheTimestamp = 0L
+            cachedPair = null
+            pairCacheTimestamp = 0L
+            cacheGeneration++
+            Log.d(TAG, "Cache invalidated${if (reason != null) " (reason: $reason)" else ""} (new gen=$cacheGeneration)")
         }
     }
     
-    /**
-     * Checks if single wallpaper cache is valid (not too old).
-     */
     private fun isCacheValid(): Boolean {
+        if (cachedResult == null) return false
         val age = System.currentTimeMillis() - cacheTimestamp
-        if (age > MAX_CACHE_AGE_MS) {
-            Log.d(TAG, "Cache too old: ${age}ms > ${MAX_CACHE_AGE_MS}ms")
-            return false
-        }
-        return true
+        return age < MAX_CACHE_AGE_MS
     }
     
-    /**
-     * Checks if pair cache is valid (not too old).
-     */
     private fun isPairCacheValid(): Boolean {
+        if (cachedPair == null) return false
         val age = System.currentTimeMillis() - pairCacheTimestamp
-        if (age > MAX_CACHE_AGE_MS) {
-            Log.d(TAG, "Pair cache too old: ${age}ms > ${MAX_CACHE_AGE_MS}ms")
-            return false
-        }
-        return true
+        return age < MAX_CACHE_AGE_MS
     }
     
-    /**
-     * Returns whether cache is currently populated (for debugging/testing).
-     */
-    suspend fun hasCachedResult(): Boolean {
-        return mutex.withLock { cachedResult != null }
+    fun isCacheWarm(): Boolean {
+        return cachedResult != null && isCacheValid()
     }
     
-    // ========== BOTH BUT DIFFERENT MODE METHODS ==========
+    fun isPairCacheWarm(): Boolean {
+        return cachedPair != null && isPairCacheValid()
+    }
     
-    /**
-     * Gets a pre-computed wallpaper pair for "Both But Different" mode.
-     * 
-     * If cache hit: Returns cached pair immediately (near instant)
-     * If cache miss: Computes fresh pair (slower, but correct)
-     * 
-     * The pair is GUARANTEED to have two different wallpapers.
-     * 
-     * @return Pair of wallpapers (home, lock) or null if selection failed
-     */
-    suspend fun getNextWallpaperPair(): WallpaperPair? {
+    suspend fun getNextWallpaperPair(
+        excludeHomeId: String? = null,
+        excludeLockId: String? = null
+    ): WallpaperPair? {
         mutex.withLock {
             val cached = cachedPair
-            
-            // Check if we have valid pair cache
             if (cached != null && isPairCacheValid()) {
-                Log.d(TAG, "✓ Pair cache HIT - returning pre-computed pair: home=${cached.homeWallpaper.id}, lock=${cached.lockWallpaper.id}")
-                
-                // Consume cache (one-time use)
+                Log.d(TAG, "Pair cache HIT (home=${cached.homeWallpaper.id}, lock=${cached.lockWallpaper.id})")
                 cachedPair = null
-                cacheGeneration++  // Invalidate any in-flight computation
-                
+                cacheGeneration++
                 return cached
             } else if (cached != null) {
-                Log.d(TAG, "Pair cache STALE - too old, clearing")
+                Log.d(TAG, "Pair cache STALE - clearing")
                 cachedPair = null
             }
         }
         
-        // Cache miss - compute fresh pair
-        Log.d(TAG, "✗ Pair cache MISS - computing fresh wallpaper pair (this takes time)")
-        return computeFreshPair()
+        return computeFreshPair(excludeHomeId, excludeLockId)
     }
     
-    /**
-     * Computes a fresh wallpaper pair.
-     * Ensuring lock wallpaper is different from home wallpaper.
-     */
-    private suspend fun computeFreshPair(): WallpaperPair? {
-        // Select home wallpaper
-        val homeResult = selectNextWallpaperUseCase()
+    private suspend fun computeFreshPair(
+        excludeHomeId: String? = null,
+        excludeLockId: String? = null
+    ): WallpaperPair? {
+        val homeResult = selectNextWallpaperUseCase(excludeWallpaperId = excludeHomeId)
         if (homeResult.isFailure) {
-            Log.w(TAG, "Failed to select home wallpaper for pair: ${homeResult.exceptionOrNull()?.message}")
             return null
         }
-        val homeWallpaper = homeResult.getOrNull()!!
+        val homeWallpaper = homeResult.getOrNull() ?: return null
         
-        // Select lock wallpaper, EXCLUDING home wallpaper ID
         val lockResult = selectNextWallpaperUseCase(excludeWallpaperId = homeWallpaper.id)
         val lockWallpaper = if (lockResult.isSuccess) {
-            lockResult.getOrNull()!!
+            lockResult.getOrNull() ?: homeWallpaper
         } else {
-            // Fallback to home wallpaper if no different wallpaper available
-            Log.w(TAG, "Could not find different lock wallpaper, using same as home")
             homeWallpaper
         }
         
-        Log.d(TAG, "Computed fresh pair: home=${homeWallpaper.id}, lock=${lockWallpaper.id}")
         return WallpaperPair(homeWallpaper, lockWallpaper)
     }
     
-    /**
-     * Pre-computes wallpaper pair in background for "Both But Different" mode.
-     * 
-     * Call this after successfully applying wallpapers to prepare for the next change.
-     * Uses generation counter to safely discard stale results.
-     * 
-     * @param excludeHomeId ID to exclude from home selection (the just-applied home wallpaper)
-     * @param excludeLockId ID to exclude from lock selection (the just-applied lock wallpaper)
-     */
-    suspend fun preComputeNextPair(excludeHomeId: String?, excludeLockId: String?) {
-        // Snapshot current generation before starting computation
-        val myGeneration: Long
+    suspend fun precomputeNextWallpaperPair(
+        appliedHomeId: String? = null,
+        appliedLockId: String? = null
+    ) {
+        val generationSnapshot: Long
         mutex.withLock {
-            myGeneration = cacheGeneration
-            Log.d(TAG, "→ Starting pair pre-computation for gen=$myGeneration, excludeHome=$excludeHomeId, excludeLock=$excludeLockId")
+            generationSnapshot = cacheGeneration
         }
         
-        // Compute next pair (this is the slow part)
-        val startTime = System.currentTimeMillis()
+        Log.d(TAG, "Pre-computing wallpaper pair in background (gen=$generationSnapshot)")
         
-        // Select home wallpaper, excluding previously applied
-        val homeResult = selectNextWallpaperUseCase(excludeHomeId)
+        val homeResult = selectNextWallpaperUseCase(excludeWallpaperId = appliedHomeId)
         if (homeResult.isFailure) {
-            Log.w(TAG, "→ Pair pre-computation FAILED for home: ${homeResult.exceptionOrNull()?.message}")
+            Log.w(TAG, "Pair pre-computation failed on home wallpaper")
             return
         }
-        val homeWallpaper = homeResult.getOrNull()!!
+        val homeWallpaper = homeResult.getOrNull() ?: return
         
-        // Select lock wallpaper, excluding BOTH the just-applied lock AND the new home wallpaper
-        // This ensures maximum diversity
         val lockResult = selectNextWallpaperUseCase(excludeWallpaperId = homeWallpaper.id)
         val lockWallpaper = if (lockResult.isSuccess) {
-            lockResult.getOrNull()!!
+            lockResult.getOrNull() ?: homeWallpaper
         } else {
-            Log.w(TAG, "Could not find different lock wallpaper for pair cache")
             homeWallpaper
         }
+        val pair = WallpaperPair(homeWallpaper, lockWallpaper)
         
-        val elapsed = System.currentTimeMillis() - startTime
-        
-        // Only store result if generation hasn't changed
         mutex.withLock {
-            if (myGeneration == cacheGeneration) {
-                cachedPair = WallpaperPair(homeWallpaper, lockWallpaper)
+            if (cacheGeneration == generationSnapshot) {
+                cachedPair = pair
                 pairCacheTimestamp = System.currentTimeMillis()
-                Log.d(TAG, "→ Pre-computed and CACHED pair: home=${homeWallpaper.id}, lock=${lockWallpaper.id} in ${elapsed}ms (gen=$myGeneration)")
+                Log.d(TAG, "Successfully cached wallpaper pair (home=${homeWallpaper.id}, lock=${lockWallpaper.id})")
             } else {
-                Log.d(TAG, "→ Discarding stale pair result: computed for gen=$myGeneration but current is $cacheGeneration")
+                Log.d(TAG, "Discarding pre-computed pair: generation changed ($generationSnapshot -> $cacheGeneration)")
             }
         }
     }
     
-    /**
-     * Returns whether pair cache is currently populated (for debugging/testing).
-     */
-    suspend fun hasCachedPair(): Boolean {
-        return mutex.withLock { cachedPair != null }
-    }
-    
-    // ========== POST-DISLIKE SELECTION ==========
-    
-    /**
-     * Gets the next wallpaper after a user dislike, using diversity-focused selection.
-     * 
-     * This method:
-     * 1. Invalidates existing cache (preferences changed due to dislike)
-     * 2. Uses specialized selectAfterDislike algorithm that prioritizes:
-     *    - Different categories from the disliked wallpaper
-     *    - Wallpapers that are visually dissimilar to the disliked one
-     *    - High exploration rate (70%) to ensure noticeable change
-     * 
-     * **Why This Exists:**
-     * When users dislike a wallpaper, they're signaling "show me something DIFFERENT."
-     * Regular selection just updates preferences slightly and picks the next best match,
-     * which often feels too similar. This ensures a meaningful change.
-     * 
-     * @param dislikedWallpaperId ID of the wallpaper the user just disliked
-     * @param dislikedCategory Category of the disliked wallpaper
-     * @param dislikedEmbedding Embedding vector of the disliked wallpaper
-     * @return Result<WallpaperMetadata> with a diverse wallpaper selection
-     */
     suspend fun getNextWallpaperAfterDislike(
         dislikedWallpaperId: String,
         dislikedCategory: String,
         dislikedEmbedding: FloatArray
     ): Result<WallpaperMetadata> {
-        // Invalidate cache since preferences just changed
-        invalidateCache("dislike_feedback")
-        
-        Log.d(TAG, "📍 Post-dislike selection: bypassing cache, using diversity algorithm")
-        Log.d(TAG, "   Disliked: $dislikedWallpaperId (category: $dislikedCategory)")
-        
-        // Use specialized post-dislike selection
-        val result = selectNextWallpaperUseCase.selectAfterDislike(
-            dislikedWallpaperId = dislikedWallpaperId,
-            dislikedCategory = dislikedCategory,
-            dislikedEmbedding = dislikedEmbedding
-        )
-        
-        result.fold(
-            onSuccess = { wallpaper ->
-                Log.d(TAG, "📍 Post-dislike selected: ${wallpaper.id} (category: ${wallpaper.category})")
-            },
-            onFailure = { error ->
-                Log.w(TAG, "📍 Post-dislike selection failed: ${error.message}")
-            }
-        )
-        
-        return result
+        invalidateCache()
+        return selectNextWallpaperUseCase(excludeWallpaperId = dislikedWallpaperId)
     }
 }

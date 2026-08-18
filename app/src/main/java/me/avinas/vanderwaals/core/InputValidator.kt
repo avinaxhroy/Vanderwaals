@@ -9,17 +9,6 @@ import java.net.URLEncoder
  */
 object InputValidator {
     
-    /**
-     * Validates a wallpaper ID.
-     * 
-     * Requirements:
-     * - Non-null and non-empty
-     * - Contains only alphanumeric characters, hyphens, and underscores
-     * - Length between 1 and 255 characters
-     * 
-     * @param id Wallpaper ID to validate
-     * @return ValidationResult.Valid if valid, ValidationResult.Invalid otherwise
-     */
     fun validateWallpaperId(id: String?): ValidationResult<String> {
         if (id.isNullOrBlank()) {
             return ValidationResult.Invalid("Wallpaper ID cannot be null or empty")
@@ -39,19 +28,8 @@ object InputValidator {
     }
     
     /**
-     * Validates a URL string.
-     * 
-     * Requirements:
-     * - Non-null and non-empty
-    * - Valid HTTPS URL format
-     * - Has valid host component
-     * 
-     * Handles URLs with unencoded characters (like spaces) by encoding them
-     * before validation. This is necessary for wallpaper sources that have
-     * folder/file names with spaces (e.g., "Rain Dark/06. Rain Dark.jpg").
-     * 
-     * @param url URL string to validate
-     * @return ValidationResult.Valid if valid, ValidationResult.Invalid otherwise
+     * Validates a URL, encoding unencoded characters (like spaces) first — some
+     * wallpaper sources have folder/file names with spaces (e.g. "Rain Dark/06. Rain Dark.jpg").
      */
     fun validateUrl(url: String?): ValidationResult<String> {
         if (url.isNullOrBlank()) {
@@ -59,20 +37,16 @@ object InputValidator {
         }
         
         try {
-            // Parse the URL to separate components
             val parsedUrl = URL(url)
             
-            // Validate protocol
             if (parsedUrl.protocol != "https") {
                 return ValidationResult.Invalid("URL must use HTTPS")
             }
             
-            // Validate host
             if (parsedUrl.host.isNullOrBlank()) {
                 return ValidationResult.Invalid("URL must have a valid host")
             }
             
-            // URL is structurally valid - return the ENCODED version for safe use
             val encodedUrl = encodeUrlPath(url)
             return ValidationResult.Valid(encodedUrl)
             
@@ -98,12 +72,8 @@ object InputValidator {
     }
     
     /**
-     * Encodes the path segment of a URL to handle special characters like spaces.
-     * Preserves the scheme, host, and query parameters while encoding the path.
-     * 
-     * Example: 
-     * Input:  https://cdn.jsdelivr.net/gh/repo@main/Rain Dark/06. Rain Dark.jpg
-     * Output: https://cdn.jsdelivr.net/gh/repo@main/Rain%20Dark/06.%20Rain%20Dark.jpg
+     * Encodes the path segment of a URL to handle special characters like spaces,
+     * preserving the scheme, host, and query parameters.
      */
     fun encodeUrlPath(url: String): String {
         return try {
@@ -115,7 +85,6 @@ object InputValidator {
                         .replace("+", "%20") // URLEncoder encodes spaces as +, but we want %20
                 }
             
-            // Reconstruct the URL with encoded path
             val port = if (parsed.port == -1 || parsed.port == parsed.defaultPort) "" else ":${parsed.port}"
             val query = if (parsed.query != null) "?${parsed.query}" else ""
             val ref = if (parsed.ref != null) "#${parsed.ref}" else ""
@@ -127,21 +96,7 @@ object InputValidator {
         }
     }
     
-    /**
-     * Validates a hex color code.
-     * 
-     * Requirements:
-     * - Non-null and non-empty
-     * - Starts with '#'
-     * - Followed by 6 (RGB) or 8 (ARGB) hexadecimal digits
-     * 
-     * Valid formats:
-     * - #RRGGBB (e.g., #FF5733)
-     * - #AARRGGBB (e.g., #80FF5733)
-     * 
-     * @param colorHex Hex color code to validate
-     * @return ValidationResult.Valid if valid, ValidationResult.Invalid otherwise
-     */
+    /** Validates a hex color code in #RRGGBB or #AARRGGBB format. */
     fun validateColorHex(colorHex: String?): ValidationResult<String> {
         if (colorHex.isNullOrBlank()) {
             return ValidationResult.Invalid("Color hex cannot be null or empty")
@@ -159,15 +114,6 @@ object InputValidator {
         return ValidationResult.Valid(colorHex)
     }
     
-    /**
-     * Validates a brightness value.
-     * 
-     * Requirements:
-     * - Must be in range 0-100 inclusive
-     * 
-     * @param brightness Brightness value to validate
-     * @return ValidationResult.Valid if valid, ValidationResult.Invalid otherwise
-     */
     fun validateBrightness(brightness: Int): ValidationResult<Int> {
         if (brightness < 0 || brightness > 100) {
             return ValidationResult.Invalid("Brightness must be between 0 and 100, got: $brightness")
@@ -175,15 +121,6 @@ object InputValidator {
         return ValidationResult.Valid(brightness)
     }
     
-    /**
-     * Validates a contrast value.
-     * 
-     * Requirements:
-     * - Must be in range 0-100 inclusive
-     * 
-     * @param contrast Contrast value to validate
-     * @return ValidationResult.Valid if valid, ValidationResult.Invalid otherwise
-     */
     fun validateContrast(contrast: Int): ValidationResult<Int> {
         if (contrast < 0 || contrast > 100) {
             return ValidationResult.Invalid("Contrast must be between 0 and 100, got: $contrast")
@@ -191,16 +128,6 @@ object InputValidator {
         return ValidationResult.Valid(contrast)
     }
     
-    /**
-     * Validates a priority/similarity score.
-     * 
-     * Requirements:
-     * - Must be in range 0.0-1.0 inclusive
-     * - Must not be NaN or Infinite
-     * 
-     * @param priority Priority score to validate
-     * @return ValidationResult.Valid if valid, ValidationResult.Invalid otherwise
-     */
     fun validatePriority(priority: Float): ValidationResult<Float> {
         if (priority.isNaN()) {
             return ValidationResult.Invalid("Priority cannot be NaN")
@@ -217,17 +144,7 @@ object InputValidator {
         return ValidationResult.Valid(priority)
     }
     
-    /**
-     * Validates an embedding vector.
-     * 
-     * Requirements:
-     * - Non-null
-     * - Must have exactly 1280 dimensions (MobileNetV4-Conv-Small embedding size)
-     * - Must not contain NaN or Infinite values
-     * 
-     * @param embedding Embedding vector to validate
-     * @return ValidationResult.Valid if valid, ValidationResult.Invalid otherwise
-     */
+    /** Requires exactly 1280 dimensions (MobileNetV4-Conv-Small embedding size). */
     fun validateEmbedding(embedding: FloatArray?): ValidationResult<FloatArray> {
         if (embedding == null) {
             return ValidationResult.Invalid("Embedding cannot be null")
@@ -244,15 +161,6 @@ object InputValidator {
         return ValidationResult.Valid(embedding)
     }
     
-    /**
-     * Validates a target screen parameter.
-     * 
-     * Requirements:
-     * - Must be one of: "home", "lock", "both", "both_different"
-     * 
-     * @param targetScreen Target screen value to validate
-     * @return ValidationResult.Valid if valid, ValidationResult.Invalid otherwise
-     */
     fun validateTargetScreen(targetScreen: String?): ValidationResult<String> {
         if (targetScreen.isNullOrBlank()) {
             return ValidationResult.Invalid("Target screen cannot be null or empty")
@@ -268,15 +176,6 @@ object InputValidator {
         return ValidationResult.Valid(targetScreen)
     }
     
-    /**
-     * Validates a playlist size.
-     * 
-     * Requirements:
-     * - Must be in range 5-50 inclusive
-     * 
-     * @param playlistSize Playlist size to validate
-     * @return ValidationResult.Valid if valid, ValidationResult.Invalid otherwise
-     */
     fun validatePlaylistSize(playlistSize: Int): ValidationResult<Int> {
         if (playlistSize < 5 || playlistSize > 50) {
             return ValidationResult.Invalid("Playlist size must be between 5 and 50, got: $playlistSize")
@@ -284,16 +183,6 @@ object InputValidator {
         return ValidationResult.Valid(playlistSize)
     }
     
-    /**
-     * Validates a retry count.
-     * 
-     * Requirements:
-     * - Must be non-negative
-     * - Must not exceed reasonable maximum (10)
-     * 
-     * @param retryCount Retry count to validate
-     * @return ValidationResult.Valid if valid, ValidationResult.Invalid otherwise
-     */
     fun validateRetryCount(retryCount: Int): ValidationResult<Int> {
         if (retryCount < 0) {
             return ValidationResult.Invalid("Retry count cannot be negative, got: $retryCount")
@@ -306,12 +195,6 @@ object InputValidator {
         return ValidationResult.Valid(retryCount)
     }
     
-    /**
-     * Validates a list of color hex codes.
-     * 
-     * @param colors List of hex color codes to validate
-     * @return ValidationResult.Valid if all valid, ValidationResult.Invalid otherwise
-     */
     fun validateColorList(colors: List<String>?): ValidationResult<List<String>> {
         if (colors == null) {
             return ValidationResult.Invalid("Color list cannot be null")
@@ -334,51 +217,23 @@ object InputValidator {
     }
 }
 
-/**
- * Sealed class representing the result of a validation operation.
- * 
- * Allows for exhaustive when-expressions and type-safe error handling.
- * 
- * @param T Type of the value being validated
- */
+/** Result of a validation operation; enables exhaustive handling. */
 sealed class ValidationResult<out T> {
-    /**
-     * Indicates the value is valid.
-     * 
-     * @property value The validated value
-     */
     data class Valid<T>(val value: T) : ValidationResult<T>()
     
-    /**
-     * Indicates the value is invalid.
-     * 
-     * @property reason Human-readable explanation of why validation failed
-     */
     data class Invalid(val reason: String) : ValidationResult<Nothing>()
     
-   /**
-     * Returns the validated value if Valid, or null if Invalid.
-     */
     fun getOrNull(): T? = when (this) {
         is Valid -> value
         is Invalid -> null
     }
-    
-    /**
-     * Returns the validated value if Valid, or throws IllegalArgumentException if Invalid.
-     */
+
     fun getOrThrow(): T = when (this) {
         is Valid -> value
         is Invalid -> throw IllegalArgumentException(reason)
     }
-    
-    /**
-     * Returns true if the validation was successful.
-     */
+
     fun isValid(): Boolean = this is Valid
-    
-    /**
-     * Returns true if the validation failed.
-     */
+
     fun isInvalid(): Boolean = this is Invalid
 }

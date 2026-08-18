@@ -20,16 +20,7 @@ data class CategoryPreference(
     val views: Int = 0,
     val lastShown: Long = 0L
 ) {
-    /**
-     * Calculates preference score for this category.
-     * 
-     * Formula: (likes - 2 × dislikes) / (likes + dislikes + 1)
-     * 
-     * - Dislikes weighted more heavily to avoid showing disliked content
-     * - +1 in denominator prevents division by zero and reduces impact of single feedback
-     * 
-     * @return Score from -1.0 (strong aversion) to +1.0 (strong preference)
-     */
+    /** Dislikes weighted 2× to avoid surfacing disliked categories. */
     fun calculateScore(): Float {
         val totalFeedback = likes + dislikes
         if (totalFeedback == 0) return 0f
@@ -38,23 +29,11 @@ data class CategoryPreference(
         return weightedScore.toFloat() / (totalFeedback + 1)
     }
     
-    /**
-     * Checks if this category is underexplored.
-     * A category is underexplored if it has few views relative to feedback potential.
-     * 
-     * @return True if should be shown more often for exploration
-     */
     fun isUnderexplored(): Boolean {
         return views < 3 // Show at least 3 times before making judgment
     }
     
-    /**
-     * Checks if category was shown recently.
-     * Used for temporal diversity enforcement.
-     * 
-     * @param withinMillis Time window to check (default: 24 hours)
-     * @return True if shown within the specified time window
-     */
+    /** Enforces temporal diversity in selection. */
     fun wasShownRecently(withinMillis: Long = 24 * 60 * 60 * 1000L): Boolean {
         return (System.currentTimeMillis() - lastShown) < withinMillis
     }

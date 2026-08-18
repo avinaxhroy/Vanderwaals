@@ -208,45 +208,22 @@ class SettingsDataStore @Inject constructor(
         context.dataStore.edit { it[VANDERWAALS_COLLECTION_MANIFEST_TYPE] = type }
     }
 
-    // =========================================================================
-    // VERSION TRACKING AND MIGRATION METHODS
-    // =========================================================================
-    
-    /**
-     * Updates the last known version code.
-     * Called on app startup to detect version upgrades.
-     */
     suspend fun updateLastKnownVersionCode(versionCode: Int) {
         context.dataStore.edit { it[LAST_KNOWN_VERSION_CODE] = versionCode }
     }
     
-    /**
-     * Updates the current manifest version.
-     * Called after successful manifest sync.
-     */
     suspend fun updateManifestVersion(version: Int) {
         context.dataStore.edit { it[MANIFEST_VERSION] = version }
     }
     
-    /**
-     * Sets whether a manifest migration is pending.
-     * Set to true when app detects upgrade from old version.
-     */
     suspend fun setManifestMigrationPending(pending: Boolean) {
         context.dataStore.edit { it[MANIFEST_MIGRATION_PENDING] = pending }
     }
     
-    /**
-     * Sets whether user has dismissed the migration dialog.
-     * Used to avoid showing the dialog repeatedly.
-     */
     suspend fun setManifestMigrationDismissed(dismissed: Boolean) {
         context.dataStore.edit { it[MANIFEST_MIGRATION_DISMISSED] = dismissed }
     }
     
-    /**
-     * Clears migration flags after successful migration.
-     */
     suspend fun clearMigrationFlags() {
         context.dataStore.edit {
             it[MANIFEST_MIGRATION_PENDING] = false
@@ -254,14 +231,6 @@ class SettingsDataStore @Inject constructor(
         }
     }
     
-    // =========================================================================
-    // EMBEDDING DIMENSION MIGRATION METHODS (MobileNetV3 576D → MobileNetV4 1280D)
-    // =========================================================================
-    
-    /**
-     * Updates the stored embedding dimension.
-     * Called after successful onboarding or migration.
-     */
     suspend fun updateEmbeddingDimension(dimension: Int) {
         context.dataStore.edit { it[EMBEDDING_DIMENSION] = dimension }
     }
@@ -294,12 +263,7 @@ class SettingsDataStore @Inject constructor(
         }
     }
     
-    /**
-     * Checks if embedding migration is needed based on stored dimension.
-     * 
-     * @param hasPreferences Whether user has existing preferences in database
-     * @return true if embedding migration dialog should be shown
-     */
+    /** True if the embedding migration dialog should be shown. */
     suspend fun checkEmbeddingMigrationNeeded(hasPreferences: Boolean): Boolean {
         val prefs = context.dataStore.data.first()
         val embeddingDim = prefs[EMBEDDING_DIMENSION] ?: 0
@@ -335,13 +299,7 @@ class SettingsDataStore @Inject constructor(
         return false
     }
     
-    /**
-     * Checks if a manifest migration is needed based on version upgrade.
-     * 
-     * @param currentVersionCode Current app version code
-     * @param databaseHasWallpapers Whether the database contains wallpapers (indicates existing user)
-     * @return true if migration dialog should be shown
-     */
+    /** True if the manifest migration dialog should be shown. */
     suspend fun checkAndSetMigrationNeeded(
         currentVersionCode: Int,
         databaseHasWallpapers: Boolean
@@ -372,12 +330,8 @@ class SettingsDataStore @Inject constructor(
         
         // Existing user check for v5.0.0+ (MobileNetV4 with 1280D embeddings)
         val isUpgradingToV5 = currentVersionCode >= MANIFEST_V3_MIN_VERSION_CODE
-        val hasOldManifest = manifestVersion < 3  // v1 or v2 manifests need update to v3
+        val hasOldManifest = manifestVersion < 3
         
-        // Show migration if:
-        // 1. Upgrading to v5.0.0+ AND
-        // 2. Has old manifest (v1 or v2) AND
-        // 3. Has wallpapers in database (existing user)
         if (isUpgradingToV5 && hasOldManifest && databaseHasWallpapers) {
             context.dataStore.edit { 
                 it[MANIFEST_MIGRATION_PENDING] = true

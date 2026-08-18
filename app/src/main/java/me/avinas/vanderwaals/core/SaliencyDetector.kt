@@ -19,8 +19,8 @@ import kotlin.math.max
  *    (a cheap 16x16 signature), so the four wallpaper-apply call sites and the
  *    Glide preview transformation that re-crop the same image do not recompute.
  *
- * The actual mathematics live in [CropEngine] and are fully unit-testable on a
- * plain JVM; this class only bridges Android `Bitmap` to that pure core.
+ * The actual mathematics live in [CropEngine] and are unit-testable on a plain
+ * JVM; this class only bridges Android `Bitmap` to that pure core.
  */
 object SaliencyDetector {
     private const val TAG = "SaliencyDetector"
@@ -118,8 +118,6 @@ object SaliencyDetector {
         }
         return sb.toString()
     }
-
-    // -----------------------------------------------------------------------------------
 
     /** Core path: downscale, bulk-read pixels, run [CropEngine], scale back up. */
     private fun analyze(bitmap: Bitmap): CachedAnalysis {

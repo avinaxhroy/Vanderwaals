@@ -32,6 +32,7 @@ android {
     namespace = "me.avinas.vanderwaals"
     compileSdk = 36
 
+
     signingConfigs {
         create("release") {
             // Try environment variables first, then fall back to local.properties
@@ -57,8 +58,8 @@ android {
         applicationId = "me.avinas.vanderwaals"
         minSdk = 30
         targetSdk = 36
-        versionCode = 463 // Vanderwaals 4.6.2
-        versionName = "4.6.3"
+        versionCode = 464 // Vanderwaals 4.6.2
+        versionName = "4.6.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -69,6 +70,10 @@ android {
             //noinspection ChromeOsAbiSupport
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
         }
+    }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
     }
 
     buildTypes {
@@ -112,6 +117,12 @@ android {
         generateLocaleConfig = true
     }
 
+    sourceSets {
+        getByName("debug").assets.srcDirs("$projectDir/schemas")
+        getByName("test").assets.srcDirs("$projectDir/schemas")
+        getByName("test").resources.srcDirs("$projectDir/schemas")
+    }
+
     buildToolsVersion = "35.0.1"
     dependenciesInfo {
         includeInApk = false
@@ -142,6 +153,7 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.isIncludeAndroidResources = true
     }
 }
 
@@ -174,6 +186,8 @@ dependencies {
     implementation(libs.androidx.foundation)
     implementation(libs.androidx.profileinstaller)
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.ui.test.junit4)
@@ -188,21 +202,13 @@ dependencies {
     implementation(libs.dfc)
     implementation (libs.kotlinx.serialization.json)
 
-    // LiteRT API - Provides backward-compatible TFLite API with 16KB page size support
     implementation(libs.litert.api)
-    // LiteRT Support - Image preprocessing utilities and model metadata support
     implementation(libs.litert.support)
-    // LiteRT GPU - Hardware acceleration for faster inference on supported devices
     implementation(libs.litert.gpu)
 
-    // Retrofit - Type-safe HTTP client for GitHub API and Bing API network calls
     implementation(libs.retrofit)
-    // Retrofit Gson Converter - JSON deserialization for API responses and manifest parsing
     implementation(libs.retrofit.converter.gson)
-    // OkHttp - HTTP client for network requests
     implementation(libs.okhttp)
-    // OkHttp Logging Interceptor - HTTP request/response logging for debugging
     implementation(libs.okhttp.logging.interceptor)
-    // Coil
     implementation("io.coil-kt:coil-compose:2.6.0")
 }

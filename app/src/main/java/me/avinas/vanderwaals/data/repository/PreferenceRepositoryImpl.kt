@@ -5,9 +5,6 @@ import me.avinas.vanderwaals.data.VanderwaalsDatabase
 import me.avinas.vanderwaals.data.dao.UserPreferenceDao
 import me.avinas.vanderwaals.data.entity.UserPreferences
 
-/**
- * Implementation of PreferenceRepository for user preference management.
- */
 class PreferenceRepositoryImpl(
     private val userPreferenceDao: UserPreferenceDao,
     private val database: VanderwaalsDatabase
@@ -58,7 +55,6 @@ class PreferenceRepositoryImpl(
                 lastUpdated = System.currentTimeMillis()
             )
         } else {
-            // No existing preferences - create default
             UserPreferences.createDefault()
         }
         

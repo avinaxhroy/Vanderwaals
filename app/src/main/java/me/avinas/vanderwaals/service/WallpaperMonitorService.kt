@@ -33,21 +33,8 @@ import java.io.File
 import javax.inject.Inject
 
 /**
- * Foreground Service to monitor device unlock events.
- * 
- * Required for Android 8.0+ (API 26+) because apps cannot register for
- * ACTION_USER_PRESENT in the manifest. This service keeps the app alive
- * (foreground) so it can dynamically register the receiver.
- * 
- * IMPORTANT: This service ONLY handles "unlock" interval mode.
- * The "15min" interval uses AlarmManager (not this service).
- * 
- * OPTIMIZED: Executes wallpaper change logic directly to avoid WorkManager latency.
- * 
- * SAMSUNG FIX (Dec 2025): Added wakelock and Samsung-specific receiver registration
- * to handle aggressive One UI power management on S23 and newer devices.
- * 
- * @see me.avinas.vanderwaals.worker.WorkScheduler
+ * Foreground service that registers a broadcast receiver for USER_PRESENT unlock events.
+ * Used for the Every Unlock cadence mode on Android 8.0+.
  */
 @AndroidEntryPoint
 class WallpaperMonitorService : Service() {
@@ -69,17 +56,12 @@ class WallpaperMonitorService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
-    /**
-     * Wakelock to prevent CPU from sleeping during unlock detection.
-     * SAMSUNG FIX: Helps keep the service alive on aggressive One UI power management.
-     */
     private var wakeLock: PowerManager.WakeLock? = null
     
-    // Internal receiver for unlock events
     private val unlockReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == Intent.ACTION_USER_PRESENT) {
-                Log.d(TAG, "Device unlocked (received via Service)")
+                Log.d(TAG, "Device unlocked")
                 handleUnlock()
             }
         }
@@ -90,27 +72,22 @@ class WallpaperMonitorService : Service() {
         private const val CHANNEL_ID = me.avinas.vanderwaals.core.NotificationConstants.CHANNEL_WALLPAPER_MONITOR
         private const val NOTIFICATION_ID = me.avinas.vanderwaals.core.NotificationConstants.NOTIFICATION_ID_MONITOR
         
-        // Rate limiting
         private const val PREF_NAME = "vanderwaals_unlock"
         private const val KEY_LAST_TRIGGER = "last_trigger_time"
         private const val KEY_FAILURE_COUNT = "failure_count"
         private const val KEY_LAST_HEALTH_CHECK = "last_health_check"
-        private const val MIN_INTERVAL_MS = 60_000L // 1 minute
+        private const val MIN_INTERVAL_MS = 60_000L
         
-        // Health check interval
-        private const val HEALTH_CHECK_INTERVAL_MS = 300_000L // 5 minutes
+        private const val HEALTH_CHECK_INTERVAL_MS = 300_000L
         private const val MAX_CONSECUTIVE_FAILURES = 5
-        
-        // Wakelock timeout (2 minutes - refreshed on each unlock event)
         private const val WAKELOCK_TIMEOUT_MS = 2 * 60 * 1000L
     }
     
-    // Service state
     private enum class ServiceState {
-        IDLE,           // Waiting for unlock
-        PROCESSING,     // Changing wallpaper
-        RATE_LIMITED,   // Rate limit active
-        ERROR           // Error state
+        IDLE,
+        PROCESSING,
+        RATE_LIMITED,
+        ERROR
     }
     
     @Volatile
@@ -123,12 +100,7 @@ class WallpaperMonitorService : Service() {
         createNotificationChannel()
         currentState = ServiceState.IDLE
 
-        // CRITICAL: Call startForeground() as early as possible in onCreate.
-        // Android requires startForeground() within 5s of startForegroundService();
-        // any work before this (Samsung checks, wakelock, receiver registration)
-        // can cause ForegroundServiceDidNotStartInTimeException.
-        // Android 15+ (API 35+): dataSync FGS from BOOT_COMPLETED also throws
-        // ForegroundServiceStartNotAllowedException here.
+        // Call startForeground() early in onCreate to satisfy the 5-second system startup window.
         try {
             startForeground(NOTIFICATION_ID, createNotification("Monitoring device unlock"))
         } catch (e: Exception) {
@@ -140,21 +112,17 @@ class WallpaperMonitorService : Service() {
         // Log Samsung device info for debugging
         SamsungPowerHelper.logDeviceInfo()
         
-        // Warn if battery restricted on Samsung
         if (SamsungPowerHelper.isBatteryRestricted(this)) {
-            Log.w(TAG, "⚠️ SAMSUNG BATTERY RESTRICTION DETECTED - unlock events may be delayed or missed!")
+            Log.w(TAG, "SAMSUNG BATTERY RESTRICTION DETECTED - unlock events may be delayed or missed!")
             Log.w(TAG, SamsungPowerHelper.getSamsungPowerInstructions())
         }
         
-        // SAMSUNG FIX: Acquire wakelock to prevent CPU sleep
         acquireWakeLock()
         
-        // Register receiver for USER_PRESENT with high priority for Samsung
         val filter = IntentFilter(Intent.ACTION_USER_PRESENT).apply {
             priority = IntentFilter.SYSTEM_HIGH_PRIORITY
         }
         
-        // Use appropriate registration method based on API level
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(unlockReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
@@ -162,7 +130,6 @@ class WallpaperMonitorService : Service() {
         }
         Log.d(TAG, "Unlock receiver registered successfully (priority=${filter.priority})")
         
-        // Perform initial health check
         performHealthCheck()
     }
 
@@ -170,14 +137,12 @@ class WallpaperMonitorService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "Service started - Lifecycle: onStartCommand()")
         
-        // Handle STOP_SERVICE action from notification
         if (intent?.action == "STOP_SERVICE") {
             Log.d(TAG, "STOP_SERVICE action received - stopping service")
             stopSelf()
             return START_NOT_STICKY
         }
         
-        // Verify settings to ensure service should be running
         serviceScope.launch {
             try {
                 val settings = settingsDataStore.settings.first()
@@ -191,8 +156,6 @@ class WallpaperMonitorService : Service() {
             }
         }
         
-        // Ensure we are in foreground with updated notification
-        // (startForeground already called in onCreate; just update notification here)
         try {
             val notificationManager = getSystemService(NotificationManager::class.java)
             notificationManager.notify(NOTIFICATION_ID, createNotification("Monitoring device unlock"))
@@ -200,7 +163,6 @@ class WallpaperMonitorService : Service() {
             Log.e(TAG, "Failed to update notification in onStartCommand", e)
         }
         
-        // Return START_STICKY to restart service if killed
         return START_STICKY
     }
 
@@ -208,7 +170,6 @@ class WallpaperMonitorService : Service() {
         super.onDestroy()
         Log.d(TAG, "Service destroyed - Lifecycle: onDestroy()")
         
-        // Unregister broadcast receiver
         try {
             unregisterReceiver(unlockReceiver)
             Log.d(TAG, "Unlock receiver unregistered successfully")
@@ -218,18 +179,15 @@ class WallpaperMonitorService : Service() {
             Log.e(TAG, "Error unregistering receiver", e)
         }
         
-        // Cancel all coroutines and cleanup
         try {
             serviceScope.cancel("Service destroyed")
             Log.d(TAG, "Service scope cancelled")
         } catch (e: Exception) {
-        Log.e(TAG, "Error cancelling service scope", e)
+            Log.e(TAG, "Error cancelling service scope", e)
         }
         
-        // SAMSUNG FIX: Release wakelock
         releaseWakeLock()
         
-        // Update state
         currentState = ServiceState.IDLE
         Log.d(TAG, "Service cleanup completed")
     }
@@ -240,9 +198,8 @@ class WallpaperMonitorService : Service() {
 
     private fun handleUnlock() {
         serviceScope.launch {
-            var targetScreen = "both" // Default value
+            var targetScreen = "both"
             try {
-                // Check rate limiting
                 if (!shouldTriggerChange()) {
                     currentState = ServiceState.RATE_LIMITED
                     updateNotification("Rate limited - waiting")
@@ -250,10 +207,9 @@ class WallpaperMonitorService : Service() {
                     return@launch
                 }
 
-                // Verify settings (double check)
                 val settings = settingsDataStore.settings.first()
                 if (settings.changeInterval != "unlock") {
-                    Log.w(TAG, "CRITICAL: Interval is ${settings.changeInterval}, NOT 'unlock'. Stopping service and aborting.")
+                    Log.w(TAG, "Interval is ${settings.changeInterval}, not 'unlock'. Stopping service.")
                     stopSelf()
                     return@launch
                 }
@@ -266,30 +222,23 @@ class WallpaperMonitorService : Service() {
                     else -> "both"
                 }
 
-                // Update state and notification
                 currentState = ServiceState.PROCESSING
                 updateNotification("Changing wallpaper...")
-                Log.d(TAG, "Triggering wallpaper change directly for: $targetScreen (Settings: ${settings.applyTo})")
+                Log.d(TAG, "Triggering wallpaper change for: $targetScreen")
                 
-                // SAMSUNG FIX: Refresh wakelock on each unlock to prevent timeout expiry
                 acquireWakeLock()
-                
-                // DIRECT EXECUTION: Bypass WorkManager for immediate response
                 changeWallpaper(targetScreen)
                 
-                // Success - reset failure count and update state
                 resetFailureCount()
                 currentState = ServiceState.IDLE
                 updateNotification("Monitoring device unlock")
                 updateLastTriggerTime()
                 
             } catch (e: Exception) {
-                // Update state and track failure
                 currentState = ServiceState.ERROR
                 incrementFailureCount()
                 updateNotification("Error occurred")
                 
-                // Use ErrorHandler for consistent error logging
                 me.avinas.vanderwaals.core.ErrorHandler.handleWorkerError(
                     exception = e,
                     context = "UnlockWallpaperChange",
@@ -300,7 +249,6 @@ class WallpaperMonitorService : Service() {
                     )
                 )
                 
-                // Check if we should stop service due to excessive failures
                 if (shouldStopDueToFailures()) {
                     Log.e(TAG, "Stopping service due to excessive failures (${getFailureCount()} consecutive failures)")
                     stopSelf()
@@ -311,13 +259,11 @@ class WallpaperMonitorService : Service() {
     
     private suspend fun changeWallpaper(targetScreen: String) {
         try {
-            // Handle "Both But Different" mode
             if (targetScreen == "both_different") {
                 applyBothDifferentWallpapers()
                 return
             }
             
-            // Standard mode
             val wallpaperResult = selectNextWallpaperUseCase()
             if (wallpaperResult.isFailure) {
                 Log.w(TAG, "No wallpaper selected: ${wallpaperResult.exceptionOrNull()?.message}")
@@ -326,7 +272,6 @@ class WallpaperMonitorService : Service() {
             
             val wallpaper = wallpaperResult.getOrNull()!!
             
-            // Download or get cached
             var selectedWallpaper = wallpaper
             var wallpaperFile: File?
             
@@ -334,17 +279,13 @@ class WallpaperMonitorService : Service() {
             if (downloadResult.isFailure) {
                 Log.w(TAG, "Failed to download wallpaper: ${downloadResult.exceptionOrNull()?.message}")
                 
-                // OFFLINE FALLBACK: Try to find a cached wallpaper
-                Log.d(TAG, "Attempting offline fallback - searching for cached wallpapers...")
                 val cachedWallpaperResult = findCachedWallpaperUseCase(excludeWallpaperId = wallpaper.id)
-                
                 if (cachedWallpaperResult != null) {
                     val (cachedWallpaper, cachedFile) = cachedWallpaperResult
-                    Log.d(TAG, "Offline fallback successful - using cached wallpaper: ${cachedWallpaper.id}")
+                    Log.d(TAG, "Using cached wallpaper fallback: ${cachedWallpaper.id}")
                     selectedWallpaper = cachedWallpaper
                     wallpaperFile = cachedFile
                 } else {
-                    // No cached wallpapers available
                     Log.e(TAG, "No cached wallpapers available for offline fallback")
                     return
                 }
@@ -352,8 +293,6 @@ class WallpaperMonitorService : Service() {
                 wallpaperFile = downloadResult.getOrNull()!!
             }
             
-            
-            // Apply
             val applied = applyWallpaperToScreen(wallpaperFile!!, targetScreen)
             if (applied) {
                 wallpaperRepository.recordWallpaperApplied(selectedWallpaper)
@@ -362,7 +301,6 @@ class WallpaperMonitorService : Service() {
             }
             
         } catch (e: Exception) {
-            // Use ErrorHandler for consistent error logging
             me.avinas.vanderwaals.core.ErrorHandler.handleWorkerError(
                 exception = e,
                 context = "ServiceWallpaperChange",
@@ -373,28 +311,25 @@ class WallpaperMonitorService : Service() {
     }
     
     private suspend fun applyBothDifferentWallpapers() {
-        // Track home wallpaper ID for excluding in lock screen selection
         var homeWallpaperId: String? = null
         
-        // Home wallpaper
         val homeResult = selectNextWallpaperUseCase()
         if (homeResult.isSuccess) {
             var actualHomeWallpaper = homeResult.getOrNull()!!
-            homeWallpaperId = actualHomeWallpaper.id  // Store for lock screen exclusion
+            homeWallpaperId = actualHomeWallpaper.id
             var homeFile: File?
             
             val homeDownload = wallpaperRepository.downloadWallpaper(actualHomeWallpaper)
             if (homeDownload.isSuccess) {
                 homeFile = homeDownload.getOrNull()!!
             } else {
-                // OFFLINE FALLBACK for home wallpaper
-                Log.d(TAG, "Home wallpaper download failed, attempting offline fallback")
+                Log.d(TAG, "Home wallpaper download failed, attempting cached fallback")
                 val cachedHomeResult = findCachedWallpaperUseCase(excludeWallpaperId = actualHomeWallpaper.id)
                 if (cachedHomeResult != null) {
                     val (cachedWallpaper, cachedFile) = cachedHomeResult
-                    Log.d(TAG, "Offline fallback for home - using cached: ${cachedWallpaper.id}")
+                    Log.d(TAG, "Cached fallback for home: ${cachedWallpaper.id}")
                     actualHomeWallpaper = cachedWallpaper
-                    homeWallpaperId = cachedWallpaper.id  // Update to cached ID
+                    homeWallpaperId = cachedWallpaper.id
                     homeFile = cachedFile
                 } else {
                     Log.e(TAG, "No cached wallpapers for home screen")
@@ -407,7 +342,6 @@ class WallpaperMonitorService : Service() {
             }
         }
         
-        // Lock wallpaper - CRITICAL: exclude home wallpaper ID to ensure different wallpapers
         val lockResult = selectNextWallpaperUseCase(excludeWallpaperId = homeWallpaperId)
         if (lockResult.isSuccess) {
             var actualLockWallpaper = lockResult.getOrNull()!!
@@ -417,12 +351,11 @@ class WallpaperMonitorService : Service() {
             if (lockDownload.isSuccess) {
                 lockFile = lockDownload.getOrNull()!!
             } else {
-                // OFFLINE FALLBACK for lock wallpaper
-                Log.d(TAG, "Lock wallpaper download failed, attempting offline fallback")
+                Log.d(TAG, "Lock wallpaper download failed, attempting cached fallback")
                 val cachedLockResult = findCachedWallpaperUseCase(excludeWallpaperId = actualLockWallpaper.id)
                 if (cachedLockResult != null) {
                     val (cachedWallpaper, cachedFile) = cachedLockResult
-                    Log.d(TAG, "Offline fallback for lock - using cached: ${cachedWallpaper.id}")
+                    Log.d(TAG, "Cached fallback for lock: ${cachedWallpaper.id}")
                     actualLockWallpaper = cachedWallpaper
                     lockFile = cachedFile
                 } else {
@@ -448,7 +381,6 @@ class WallpaperMonitorService : Service() {
             bitmap = me.avinas.vanderwaals.core.BitmapManager.loadBitmap(file)
             if (bitmap == null) return false
             
-            // SmartCrop logic (simplified for service)
             val screenSize = me.avinas.vanderwaals.core.getDeviceScreenSize(applicationContext)
             processedBitmap = me.avinas.vanderwaals.core.SmartCrop.smartCropBitmapAsync(
                 source = bitmap,
@@ -460,7 +392,7 @@ class WallpaperMonitorService : Service() {
             // Recycle original bitmap if different from processed
             if (bitmap !== processedBitmap) {
                 me.avinas.vanderwaals.core.BitmapManager.recycleSafely(bitmap)
-                bitmap = null // Clear reference
+                bitmap = null
             }
             
             when (targetScreen) {
@@ -469,9 +401,8 @@ class WallpaperMonitorService : Service() {
                 "both" -> wallpaperManager.setBitmap(processedBitmap, null, true, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)
             }
             
-            // Recycle processed bitmap after successful application
             me.avinas.vanderwaals.core.BitmapManager.recycleSafely(processedBitmap)
-            processedBitmap = null // Clear reference
+            processedBitmap = null
             
             true
         } catch (e: Exception) {
@@ -536,10 +467,8 @@ class WallpaperMonitorService : Service() {
                     return@launch
                 }
                 
-                // Log health status
                 Log.d(TAG, "Health check passed - State: $currentState, Failures: ${getFailureCount()}")
                 
-                // Update last health check time
                 prefs.edit().putLong(KEY_LAST_HEALTH_CHECK, now).apply()
                 
             } catch (e: Exception) {
@@ -596,11 +525,8 @@ class WallpaperMonitorService : Service() {
     }
     
     /**
-     * Acquires a partial wakelock to prevent CPU from sleeping.
+     * Acquires a partial wakelock.
      * SAMSUNG FIX: Helps keep the service alive on aggressive One UI power management.
-     * 
-     * Uses PARTIAL_WAKE_LOCK with timeout to prevent battery drain.
-     * The wakelock is refreshed on each unlock event.
      */
     private fun acquireWakeLock() {
         if (wakeLock == null) {

@@ -16,14 +16,6 @@ import javax.inject.Inject
 import kotlin.math.abs
 import kotlin.math.sqrt
 
-/**
- * ViewModel for Analytics screen
- * 
- * Computes comprehensive personalization metrics from:
- * - UserPreferences (preference vector, feedback counts, learning state)
- * - WallpaperHistory (likes, dislikes, duration, timestamps)
- * - WallpaperMetadata (categories, embeddings)
- */
 @HiltViewModel
 class AnalyticsViewModel @Inject constructor(
     private val preferenceRepository: PreferenceRepository,
@@ -39,23 +31,14 @@ class AnalyticsViewModel @Inject constructor(
         loadAnalytics()
     }
 
-    /**
-     * Load and compute all analytics metrics
-     */
     private fun loadAnalytics() {
-        // CRITICAL: Run heavy math calculations on Default dispatcher (CPU intensive)
         viewModelScope.launch(Dispatchers.Default) {
             try {
                 _state.update { it.copy(isLoading = true, error = null) }
 
-                // Combine all data sources
-                // CRITICAL FIX (Dec 2025): Use getAllWallpapers() for similarity calculation
-                // getAllWallpaperSummaries() returns empty embeddings for performance,
-                // but we NEED embeddings to calculate cosine similarity for "Match Quality"
                 combine(
                     preferenceRepository.getUserPreferences(),
                     wallpaperRepository.getHistory(),
-                    // Use full wallpapers with embeddings for similarity calculation
                     wallpaperRepository.getAllWallpapers().distinctUntilChanged()
                 ) { preferences: UserPreferences?, history: List<WallpaperHistory>, allWallpapers: List<me.avinas.vanderwaals.data.entity.WallpaperMetadata> ->
                     Triple(preferences, history, allWallpapers)
@@ -81,49 +64,37 @@ class AnalyticsViewModel @Inject constructor(
                         return@collectLatest
                     }
 
-                    // Compute all metrics
+                    // Both Auto and Personalize modes learn — isLearning is true when a
+                    // preference vector exists (feedbackCount > 0)
                     val feedbackCount = preferences.feedbackCount
                     val mode = preferences.mode
-                    
-                    // IMPORTANT: Both Auto and Personalize modes learn!
-                    // isLearning = true when preference vector exists (feedbackCount > 0)
                     val isLearning = feedbackCount > 0 || preferences.preferenceVector.isNotEmpty()
                     
-                    // Calculate like/dislike counts
                     val likeCount = preferences.likedWallpaperIds.size
                     val dislikeCount = preferences.dislikedWallpaperIds.size
                     val feedbackRatio = if (feedbackCount > 0) {
                         likeCount.toFloat() / feedbackCount.toFloat()
                     } else 0f
 
-                    // Determine personalization quality
                     val quality = determineQuality(feedbackCount, feedbackRatio)
                     
-                    // Calculate history stats
                     val (avgDuration, recentLikes, recentDislikes) = calculateHistoryStats(history)
                     
-                    // Calculate category stats
                     val categoryInsights = calculateCategoryInsights(history, allWallpapers)
                     val mostLiked = categoryInsights.maxByOrNull { it.likeCount }
                     val mostDisliked = categoryInsights.maxByOrNull { it.dislikeCount }
                     
-                    // Calculate similarity metrics
                     val avgSimilarity = calculateAverageSimilarity(preferences, history, allWallpapers)
                     val trend = calculateSimilarityTrend(history, preferences, allWallpapers)
                     
-                    // Calculate activity trend
                     val activityTrend = calculateActivityTrend(history)
                     
-                    // Calculate preference drift
                     val drift = calculatePreferenceDrift(preferences)
                     
-                    // Calculate learning rate
                     val learningRate = calculateLearningRate(feedbackCount)
                     
-                    // Calculate preference vector magnitude
                     val vectorMagnitude = sqrt(preferences.preferenceVector.sumOf { (it * it).toDouble() }.toFloat())
                     
-                    // Generate smart insights
                     val insights = generateInsights(
                         isLearning,  // Both modes learn!
                         quality,
@@ -135,7 +106,6 @@ class AnalyticsViewModel @Inject constructor(
                         categoryInsights
                     )
 
-                    // Generate recommendations
                     val recommendations = generateRecommendations(
                         quality,
                         feedbackCount,
@@ -143,9 +113,6 @@ class AnalyticsViewModel @Inject constructor(
                         avgDuration
                     )
                     
-                    // CRITICAL FIX (Dec 2025): Check if original embedding exists
-                    // Original embedding only exists when user uploaded an image or selected categories during onboarding
-                    // In Auto Mode (mode = "auto"), user doesn't have an original embedding
                     val hasOriginalEmbedding = preferences.originalEmbedding.isNotEmpty()
 
                     _state.update {
@@ -191,9 +158,6 @@ class AnalyticsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Determine personalization quality based on feedback count and consistency
-     */
     private fun determineQuality(feedbackCount: Int, feedbackRatio: Float): PersonalizationQuality {
         if (feedbackCount == 0) return PersonalizationQuality.NOT_INITIALIZED
         
@@ -208,9 +172,6 @@ class AnalyticsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Calculate history-based statistics
-     */
     private fun calculateHistoryStats(history: List<WallpaperHistory>): Triple<Long, Int, Int> {
         val avgDuration = if (history.isNotEmpty()) {
             history.mapNotNull { it.getDurationSeconds() }.average().toLong()
@@ -225,9 +186,6 @@ class AnalyticsViewModel @Inject constructor(
         return Triple(avgDuration, recentLikes, recentDislikes)
     }
 
-    /**
-     * Calculate category insights from history
-     */
     private fun calculateCategoryInsights(
         history: List<WallpaperHistory>,
         allWallpapers: List<me.avinas.vanderwaals.data.entity.WallpaperMetadata>
@@ -260,15 +218,27 @@ class AnalyticsViewModel @Inject constructor(
                 likeCount = likes,
                 dislikeCount = dislikes,
                 preferenceStrength = strength,
-                displayName = category.replaceFirstChar { it.uppercase() },
+                displayName = formatCategoryDisplayName(category),
                 emoji = getCategoryEmoji(category)
             )
         }.sortedByDescending { abs(it.preferenceStrength) }
     }
 
-    /**
-     * Get emoji for category
-     */
+    private fun formatCategoryDisplayName(category: String): String {
+        return when (category.lowercase().trim()) {
+            "3d_render", "3d" -> "3D Render"
+            "sci_fi" -> "Sci-Fi"
+            "digital_art" -> "Digital Art"
+            "pixel_art" -> "Pixel Art"
+            else -> category.split("_", "-", " ")
+                .filter { it.isNotBlank() }
+                .joinToString(" ") { word ->
+                    if (word.lowercase() == "3d") "3D"
+                    else word.replaceFirstChar { it.uppercase() }
+                }
+        }
+    }
+
     private fun getCategoryEmoji(category: String): String {
         return when (category.lowercase()) {
             "nature", "landscape" -> "🌲"
@@ -284,9 +254,6 @@ class AnalyticsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Calculate average similarity score for recent wallpapers
-     */
     private fun calculateAverageSimilarity(
         preferences: me.avinas.vanderwaals.data.entity.UserPreferences,
         history: List<WallpaperHistory>,
@@ -304,17 +271,14 @@ class AnalyticsViewModel @Inject constructor(
 
         val similarities = recent.mapNotNull { h ->
             wallpaperMap[h.wallpaperId]?.let { wallpaper ->
-                // CRITICAL FIX (Dec 2025): Check if embedding is not empty before calculating
-                // getAllWallpaperSummaries returns empty embeddings, causing 0 similarity
                 if (wallpaper.embedding.isNotEmpty() && wallpaper.embedding.size == preferences.preferenceVector.size) {
                     cosineSimilarity(preferences.preferenceVector, wallpaper.embedding)
                 } else {
-                    null // Skip wallpapers without embeddings
+                    null
                 }
             }
         }
         
-        // Log for debugging
         android.util.Log.d("AnalyticsViewModel", "Similarity calculation: ${similarities.size} valid scores from ${recent.size} history items")
 
         return if (similarities.isNotEmpty()) {
@@ -327,9 +291,6 @@ class AnalyticsViewModel @Inject constructor(
         } else 50f // Return neutral if no similarities could be calculated
     }
 
-    /**
-     * Calculate cosine similarity between two vectors
-     */
     private fun cosineSimilarity(a: FloatArray, b: FloatArray): Float {
         if (a.size != b.size || a.isEmpty()) return 0f
         
@@ -347,9 +308,6 @@ class AnalyticsViewModel @Inject constructor(
         return if (denominator > 0) (dotProduct / denominator).toFloat() else 0f
     }
 
-    /**
-     * Calculate similarity trend over recent wallpapers
-     */
     private fun calculateSimilarityTrend(
         history: List<WallpaperHistory>,
         preferences: me.avinas.vanderwaals.data.entity.UserPreferences,
@@ -395,9 +353,6 @@ class AnalyticsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Calculate activity trend
-     */
     private fun calculateActivityTrend(history: List<WallpaperHistory>): ActivityTrend {
         val fourteenDaysAgo = System.currentTimeMillis() - (14 * 24 * 60 * 60 * 1000L)
         val sevenDaysAgo = System.currentTimeMillis() - (7 * 24 * 60 * 60 * 1000L)
@@ -415,9 +370,6 @@ class AnalyticsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Calculate preference drift from original embedding
-     */
     private fun calculatePreferenceDrift(preferences: me.avinas.vanderwaals.data.entity.UserPreferences): Float {
         if (preferences.originalEmbedding.isEmpty() || preferences.preferenceVector.isEmpty()) {
             return 0f
@@ -427,18 +379,12 @@ class AnalyticsViewModel @Inject constructor(
         return (1f - similarity) * 100f // Convert to 0-100 scale
     }
 
-    /**
-     * Calculate adaptive learning rate
-     */
     private fun calculateLearningRate(feedbackCount: Int): Float {
         val baseRate = 0.3f
         val decayFactor = 0.995f
         return baseRate * Math.pow(decayFactor.toDouble(), feedbackCount.toDouble()).toFloat()
     }
 
-    /**
-     * Generate smart insights based on analytics
-     */
     private fun generateInsights(
         isPersonalized: Boolean,  // Keep for compatibility but unused
         quality: PersonalizationQuality,
@@ -460,48 +406,48 @@ class AnalyticsViewModel @Inject constructor(
             PersonalizationQuality.NOT_INITIALIZED -> {
                 insights.add(SmartInsight(
                     type = InsightType.TIP,
-                    title = "Ready to learn your style!",
-                    description = "Like or dislike wallpapers to teach Vanderwaals your preferences. After your first like, the app will start showing similar wallpapers.",
+                    title = "Ready to learn your style",
+                    description = "Like or hide wallpapers to train Vanderwaals. After your first rating, recommendations will start matching your taste.",
                     actionable = false
                 ))
             }
             PersonalizationQuality.LEARNING -> {
                 insights.add(SmartInsight(
                     type = InsightType.LEARNING,
-                    title = "Learning your style...",
-                    description = "Great start! The algorithm is beginning to understand your preferences. Keep providing feedback for better recommendations.",
+                    title = "Learning your style",
+                    description = "Vanderwaals is building your taste profile. Keep rating wallpapers to sharpen recommendations.",
                     actionable = false
                 ))
             }
             PersonalizationQuality.DEVELOPING -> {
                 insights.add(SmartInsight(
                     type = InsightType.SUCCESS,
-                    title = "Personalization is developing!",
-                    description = "Your feedback is helping! Wallpapers are being ranked based on your $feedbackCount interactions. The recommendations will keep improving.",
+                    title = "Profile developing",
+                    description = "Wallpapers are being ranked using your $feedbackCount ratings. Matches will continue to improve as you explore.",
                     actionable = false
                 ))
             }
             PersonalizationQuality.ESTABLISHED -> {
                 insights.add(SmartInsight(
                     type = InsightType.SUCCESS,
-                    title = "Personalization is working great!",
-                    description = "With $feedbackCount feedback items, the algorithm has a solid understanding of your taste. Recommendations are tuned to your preferences.",
+                    title = "Taste profile established",
+                    description = "With $feedbackCount ratings recorded, recommendations are closely tuned to your style.",
                     actionable = false
                 ))
             }
             PersonalizationQuality.REFINED -> {
                 insights.add(SmartInsight(
                     type = InsightType.SUCCESS,
-                    title = "Excellent personalization!",
-                    description = "Your $feedbackCount feedback items have created a refined preference profile. The algorithm is delivering highly personalized recommendations.",
+                    title = "Refined taste profile",
+                    description = "Your $feedbackCount ratings have built a precise taste profile with strong style matches.",
                     actionable = false
                 ))
             }
             PersonalizationQuality.EXCELLENT -> {
                 insights.add(SmartInsight(
                     type = InsightType.SUCCESS,
-                    title = "Masterful personalization!",
-                    description = "With $feedbackCount feedback items, you've built an exceptional preference profile. The algorithm knows exactly what you love!",
+                    title = "Fully tuned profile",
+                    description = "Your taste profile is well established with $feedbackCount recorded ratings.",
                     actionable = false
                 ))
             }
@@ -512,16 +458,16 @@ class AnalyticsViewModel @Inject constructor(
             SimilarityTrend.IMPROVING -> {
                 insights.add(SmartInsight(
                     type = InsightType.DISCOVERY,
-                    title = "Recommendations improving!",
-                    description = "Recent wallpapers are matching your preferences better. Your feedback is making a real difference!",
+                    title = "Recommendations improving",
+                    description = "Recent wallpapers show higher match scores with your profile.",
                     actionable = false
                 ))
             }
             SimilarityTrend.DECLINING -> {
                 insights.add(SmartInsight(
                     type = InsightType.NEED_FEEDBACK,
-                    title = "Need more feedback",
-                    description = "Recent recommendations seem less aligned with your taste. Like or dislike wallpapers to realign the algorithm.",
+                    title = "More feedback needed",
+                    description = "Recent wallpapers had lower match scores. Like or hide wallpapers to keep recommendations accurate.",
                     actionable = false
                 ))
             }
@@ -530,7 +476,7 @@ class AnalyticsViewModel @Inject constructor(
                     insights.add(SmartInsight(
                         type = InsightType.SUCCESS,
                         title = "Consistent recommendations",
-                        description = "The algorithm is consistently matching your preferences. Your feedback has created stable, reliable recommendations.",
+                        description = "Recommendations are matching your established style profile.",
                         actionable = false
                     ))
                 }
@@ -543,16 +489,16 @@ class AnalyticsViewModel @Inject constructor(
                 feedbackRatio > 0.8f -> {
                     insights.add(SmartInsight(
                         type = InsightType.TIP,
-                        title = "You love most wallpapers!",
-                        description = "You're liking ${(feedbackRatio * 100).toInt()}% of wallpapers. The algorithm can learn better from both likes and dislikes.",
+                        title = "High like rate",
+                        description = "You've liked ${(feedbackRatio * 100).toInt()}% of wallpapers. Hiding styles you dislike helps sharpen suggestions further.",
                         actionable = false
                     ))
                 }
                 feedbackRatio < 0.3f -> {
                     insights.add(SmartInsight(
                         type = InsightType.TIP,
-                        title = "Being selective?",
-                        description = "You're only liking ${(feedbackRatio * 100).toInt()}% of wallpapers. More likes help the algorithm understand what you enjoy.",
+                        title = "Selective feedback",
+                        description = "You've liked ${(feedbackRatio * 100).toInt()}% of wallpapers. Liking more wallpapers helps Vanderwaals discover what you enjoy.",
                         actionable = false
                     ))
                 }
@@ -560,7 +506,7 @@ class AnalyticsViewModel @Inject constructor(
                     insights.add(SmartInsight(
                         type = InsightType.SUCCESS,
                         title = "Balanced feedback",
-                        description = "Your ${(feedbackRatio * 100).toInt()}% like rate shows you're thoughtfully curating. This helps the algorithm learn faster!",
+                        description = "Your ${(feedbackRatio * 100).toInt()}% like rate provides a balanced set of positive and negative style signals.",
                         actionable = false
                     ))
                 }
@@ -573,8 +519,8 @@ class AnalyticsViewModel @Inject constructor(
             val favorite = strongPreferences.first()
             insights.add(SmartInsight(
                 type = InsightType.DISCOVERY,
-                title = "Category preference detected",
-                description = "You ${if (favorite.preferenceStrength > 0) "love" else "dislike"} ${favorite.displayName} wallpapers! The algorithm is boosting similar styles.",
+                title = "Category preference",
+                description = "You ${if (favorite.preferenceStrength > 0) "frequently like" else "frequently hide"} ${favorite.displayName} wallpapers. Vanderwaals is adjusting recommendations accordingly.",
                 actionable = false
             ))
         }
@@ -583,15 +529,15 @@ class AnalyticsViewModel @Inject constructor(
         if (drift > 30f && feedbackCount > 20) {
             insights.add(SmartInsight(
                 type = InsightType.DISCOVERY,
-                title = "Your taste is evolving",
-                description = "Your preferences have shifted ${drift.toInt()}% from your original style. The algorithm adapts while keeping your core aesthetic!",
+                title = "Taste is evolving",
+                description = "Your preferences have shifted ${drift.toInt()}% from your initial setup while preserving core style elements.",
                 actionable = false
             ))
         } else if (drift < 10f && feedbackCount > 20) {
             insights.add(SmartInsight(
                 type = InsightType.SUCCESS,
-                title = "Consistent taste",
-                description = "Your preferences remain close to your original style. The dual-anchor system is maintaining your aesthetic identity!",
+                title = "Consistent preferences",
+                description = "Your style preferences remain steady relative to your initial profile.",
                 actionable = false
             ))
         }
@@ -599,9 +545,6 @@ class AnalyticsViewModel @Inject constructor(
         return insights
     }
 
-    /**
-     * Generate actionable recommendations
-     */
     private fun generateRecommendations(
         quality: PersonalizationQuality,
         feedbackCount: Int,
@@ -638,9 +581,6 @@ class AnalyticsViewModel @Inject constructor(
         return recommendations
     }
 
-    /**
-     * Refresh analytics data
-     */
     fun refresh() {
         loadAnalytics()
     }

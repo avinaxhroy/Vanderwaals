@@ -7,16 +7,8 @@ import me.avinas.vanderwaals.data.entity.ColorPreference
 import javax.inject.Inject
 
 /**
- * Implementation of ColorPreferenceRepository for color-level tracking.
- * 
- * Manages color preferences using Room database with reactive Flow updates.
- * All database operations run on IO dispatcher via Room's suspend functions.
- * 
- * Provides fallback personalization when wallpaper categories are missing:
- * - Tracks user preferences for specific color hex codes
- * - Extracts top 3 colors from wallpaper palettes
- * - Uses RGB Euclidean distance for color similarity matching
- * - Applies lower weight (10%) than category boost (15%)
+ * Color preferences are fallback personalization when categories are missing,
+ * using RGB Euclidean distance and weighted at 10% vs category boost at 15%.
  */
 class ColorPreferenceRepositoryImpl @Inject constructor(
     private val colorPreferenceDao: ColorPreferenceDao

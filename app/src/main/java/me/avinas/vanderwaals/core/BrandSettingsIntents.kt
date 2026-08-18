@@ -17,53 +17,24 @@ object BrandSettingsIntents {
     
     private const val TAG = "BrandSettingsIntents"
     
-    /**
-     * Gets the device manufacturer name in lowercase.
-     * 
-     * **Examples:**
-     * - "xiaomi", "samsung", "realme", "oppo", "vivo", "google"
-     * 
-     * @return Manufacturer name (lowercase)
-     */
     fun getDeviceManufacturer(): String {
         return Build.MANUFACTURER.lowercase()
     }
     
-    /**
-     * Gets the device brand name in lowercase.
-     * 
-     * May differ from manufacturer (e.g., Redmi is a brand of Xiaomi).
-     * 
-     * @return Brand name (lowercase)
-     */
+    /** Brand in lowercase; may differ from the manufacturer (e.g. Redmi is a brand of Xiaomi). */
     fun getDeviceBrand(): String {
         return Build.BRAND.lowercase()
     }
     
     /**
-     * Opens the appropriate settings page for disabling live wallpaper.
-     * 
-     * **Intent Strategy:**
-     * 1. Try brand-specific intent (most direct path)
-     * 2. If fails, try generic wallpaper settings
-     * 3. If fails, try app settings for live wallpaper package
-     * 4. Return false if all fail (caller should show instructions)
-     * 
-     * **User Flow:**
-     * - Opens settings app to the most relevant page
-     * - User can disable/uninstall live wallpaper service
-     * - Returns to app to verify success
-     * 
-     * @param context Application context
-     * @param liveWallpaperPackage Optional package name of live wallpaper to disable
-     * @return true if settings were opened successfully, false otherwise
+     * Opens the best available settings page for disabling a live wallpaper,
+     * falling back from brand-specific intents to generic wallpaper settings.
      */
     fun openLiveWallpaperSettings(context: Context, liveWallpaperPackage: String? = null): Boolean {
         val manufacturer = getDeviceManufacturer()
         
         Log.d(TAG, "Opening live wallpaper settings for manufacturer: $manufacturer")
         
-        // Try brand-specific intent first
         val brandSpecificSuccess = when {
             manufacturer.contains("xiaomi") || manufacturer.contains("redmi") -> {
                 openXiaomiLockScreenSettings(context) || 
@@ -76,7 +47,6 @@ object BrandSettingsIntents {
             }
             
             manufacturer.contains("realme") || manufacturer.contains("oppo") -> {
-                // First try to open Glance app settings if package is known
                 if (liveWallpaperPackage != null) {
                     openAppSettings(context, liveWallpaperPackage)
                 } else {
@@ -109,19 +79,16 @@ object BrandSettingsIntents {
         
         Log.w(TAG, "Brand-specific intent failed, trying fallbacks")
         
-        // Fallback 1: Try generic wallpaper settings
         if (openGenericWallpaperSettings(context)) {
             Log.d(TAG, "Generic wallpaper settings opened")
             return true
         }
         
-        // Fallback 2: Try live wallpaper picker
         if (openLiveWallpaperPicker(context)) {
             Log.d(TAG, "Live wallpaper picker opened")
             return true
         }
         
-        // Fallback 3: Try app settings for the live wallpaper package
         if (liveWallpaperPackage != null && openAppSettings(context, liveWallpaperPackage)) {
             Log.d(TAG, "App settings opened for package: $liveWallpaperPackage")
             return true
@@ -131,14 +98,6 @@ object BrandSettingsIntents {
         return false
     }
     
-    /**
-     * Opens Xiaomi/Redmi lock screen settings.
-     * 
-     * **Path:** Settings → Lock screen
-     * 
-     * @param context Application context
-     * @return true if successful
-     */
     private fun openXiaomiLockScreenSettings(context: Context): Boolean {
         return try {
             val intent = Intent("miui.intent.action.LOCK_SCREEN_SETTINGS").apply {
@@ -155,12 +114,6 @@ object BrandSettingsIntents {
         }
     }
     
-    /**
-     * Opens Xiaomi wallpaper settings.
-     * 
-     * @param context Application context
-     * @return true if successful
-     */
     private fun openXiaomiWallpaperSettings(context: Context): Boolean {
         return try {
             val intent = Intent(Settings.ACTION_HOME_SETTINGS).apply {
@@ -174,24 +127,12 @@ object BrandSettingsIntents {
         }
     }
     
-    /**
-     * Opens Samsung Wallpaper Services menu.
-     * 
-     * **Path:** Settings → Lock screen → Wallpaper services
-     * 
-     * @param context Application context
-     * @return true if successful
-     */
     private fun openSamsungWallpaperServices(context: Context): Boolean {
-        // Try multiple Samsung-specific intents in order of preference
+        // Try multiple Samsung-specific intents in order of preference.
         val intentsToTry = listOf(
-            // Samsung Lock Screen settings (most direct path to wallpaper services)
             "com.samsung.android.app.routines.LOCK_SCREEN_SETTINGS",
-            // AOD Lock screen services
             "com.samsung.android.app.aodservice.settings.LOCKSCREEN_SERVICES",
-            // Samsung Settings Lock Screen
             "com.samsung.settings.LOCK_SCREEN_SETTINGS",
-            // Direct component for Lock Screen settings
             "android.settings.LOCK_SCREEN_SETTINGS"
         )
         
@@ -209,7 +150,6 @@ object BrandSettingsIntents {
             }
         }
         
-        // Try opening Samsung Settings app directly to Lock Screen section
         try {
             val intent = Intent().apply {
                 setClassName(
@@ -230,16 +170,11 @@ object BrandSettingsIntents {
     }
     
     /**
-     * Opens Samsung wallpaper settings.
-     * 
-     * Note: We avoid ACTION_WALLPAPER_SETTINGS as it opens the wallpaper picker
-     * ("Choose Wallpaper from") instead of the settings to disable live wallpapers.
-     * 
-     * @param context Application context
-     * @return true if successful
+     * Opens Samsung wallpaper settings. Avoids ACTION_WALLPAPER_SETTINGS because it
+     * opens the wallpaper picker ("Choose Wallpaper from") instead of the settings
+     * used to disable live wallpapers.
      */
     private fun openSamsungWallpaperSettings(context: Context): Boolean {
-        // Try to open Lock Screen settings first (where Wallpaper services is located)
         try {
             val intent = Intent(Settings.ACTION_DISPLAY_SETTINGS).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -265,14 +200,6 @@ object BrandSettingsIntents {
         }
     }
     
-    /**
-     * Opens Realme/OPPO lock screen settings.
-     * 
-     * **Path:** Settings → Home screen & Lock screen
-     * 
-     * @param context Application context
-     * @return true if successful
-     */
     private fun openRealmeLockScreenSettings(context: Context): Boolean {
         return try {
             val intent = Intent("com.oppo.launcher.action.LOCKSCREEN_SETTINGS").apply {
@@ -286,14 +213,6 @@ object BrandSettingsIntents {
         }
     }
     
-    /**
-     * Opens Vivo lock screen settings.
-     * 
-     * **Path:** Settings → Lock screen & wallpaper
-     * 
-     * @param context Application context
-     * @return true if successful
-     */
     private fun openVivoLockScreenSettings(context: Context): Boolean {
         return try {
             val intent = Intent("vivo.intent.action.LOCK_SCREEN_SETTINGS").apply {
@@ -307,12 +226,6 @@ object BrandSettingsIntents {
         }
     }
     
-    /**
-     * Opens OnePlus wallpaper settings.
-     * 
-     * @param context Application context
-     * @return true if successful
-     */
     private fun openOnePlusWallpaperSettings(context: Context): Boolean {
         return try {
             val intent = Intent("android.settings.WALLPAPER_SETTINGS").apply {
@@ -326,14 +239,6 @@ object BrandSettingsIntents {
         }
     }
     
-    /**
-     * Opens generic Android wallpaper settings.
-     * 
-     * **Standard Android Action:** Settings.ACTION_WALLPAPER_SETTINGS
-     * 
-     * @param context Application context
-     * @return true if successful
-     */
     private fun openGenericWallpaperSettings(context: Context): Boolean {
         return try {
             val intent = Intent("android.settings.WALLPAPER_SETTINGS").apply {
@@ -347,21 +252,12 @@ object BrandSettingsIntents {
         }
     }
     
-    /**
-     * Opens live wallpaper picker (shows all available live wallpapers).
-     * 
-     * User can select "None" or different wallpaper from here.
-     * 
-     * @param context Application context
-     * @return true if successful
-     */
     @SuppressLint("QueryPermissionsNeeded")
     private fun openLiveWallpaperPicker(context: Context): Boolean {
         return try {
             val intent = Intent(android.app.WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            // Check if any app can handle this intent
             if (intent.resolveActivity(context.packageManager) != null) {
                 context.startActivity(intent)
                 true
@@ -375,23 +271,6 @@ object BrandSettingsIntents {
         }
     }
     
-    /**
-     * Opens app settings page for a specific package.
-     * 
-     * **Use Cases:**
-     * - Open Glance app settings to uninstall/disable
-     * - Fallback when direct settings intents fail
-     * 
-     * **User Actions:**
-     * - Force stop
-     * - Uninstall
-     * - Disable
-     * - Clear data
-     * 
-     * @param context Application context
-     * @param packageName Package name of app to open settings for
-     * @return true if successful
-     */
     fun openAppSettings(context: Context, packageName: String): Boolean {
         return try {
             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -408,19 +287,8 @@ object BrandSettingsIntents {
     }
     
     /**
-     * Gets brand-specific instructions for disabling live wallpaper.
-     * 
-     * **Format:**
-     * - Step-by-step instructions
-     * - Clear, concise language
-     * - Matches actual device settings path
-     * 
-     * **Use Cases:**
-     * - Show in instruction dialog
-     * - Help/FAQ section
-     * - Support documentation
-     * 
-     * @return Formatted instruction string
+     * Step-by-step instructions for disabling the live wallpaper on the
+     * current manufacturer.
      */
     fun getBrandSpecificInstructions(): String {
         val manufacturer = getDeviceManufacturer()

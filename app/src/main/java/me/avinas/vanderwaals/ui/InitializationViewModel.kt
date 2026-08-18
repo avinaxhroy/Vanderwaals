@@ -16,16 +16,6 @@ import me.avinas.vanderwaals.data.datastore.SettingsDataStore
 import me.avinas.vanderwaals.data.repository.ManifestRepository
 import javax.inject.Inject
 
-/**
- * ViewModel for managing app initialization state.
- * 
- * Tracks:
- * - Database initialization (wallpaper catalog synced)
- * - Loading screen visibility
- * - Status messages for user feedback
- * - WorkManager sync progress
- * - Manifest migration state for version upgrades
- */
 @HiltViewModel
 class InitializationViewModel @Inject constructor(
     private val manifestRepository: ManifestRepository,
@@ -43,10 +33,10 @@ class InitializationViewModel @Inject constructor(
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
     
-    private val _loadingMessage = MutableStateFlow("Loading Wallpapers...")
+    private val _loadingMessage = MutableStateFlow("Loading Wallpapers…")
     val loadingMessage: StateFlow<String> = _loadingMessage.asStateFlow()
     
-    private val _loadingSubMessage = MutableStateFlow("Please wait while we prepare your wallpapers")
+    private val _loadingSubMessage = MutableStateFlow("Preparing your wallpaper library…")
     val loadingSubMessage: StateFlow<String> = _loadingSubMessage.asStateFlow()
     
     private val _loadingProgress = MutableStateFlow<Float?>(null)
@@ -112,7 +102,6 @@ class InitializationViewModel @Inject constructor(
             _migrationMessage.value = "Connecting to server..."
             
             try {
-                // Get settings to check which sources are enabled
                 val settings = settingsDataStore.settings.first()
                 val bingEnabled = settings.bingEnabled
                 val bingManifestType = settings.bingManifestType
@@ -124,7 +113,6 @@ class InitializationViewModel @Inject constructor(
                 var bingSuccess = false
                 var vanderwaalsSuccess = false
 
-                // Compute per-source progress slices
                 val activeSources = listOfNotNull(
                     "github".takeIf { settings.githubEnabled },
                     "bing".takeIf { bingEnabled },
@@ -136,7 +124,6 @@ class InitializationViewModel @Inject constructor(
                     return offset + (subProgress * slice)
                 }
 
-                // Phase 1: Sync GitHub manifest v3 (MobileNetV4)
                 if (settings.githubEnabled) {
                     _migrationMessage.value = "Updating Community wallpapers..."
                     manifestRepository.syncManifest(
@@ -158,7 +145,6 @@ class InitializationViewModel @Inject constructor(
                     )
                 }
 
-                // Phase 2: Sync Bing manifest v2 (MobileNetV4) if enabled
                 if (bingEnabled) {
                     _migrationMessage.value = "Updating Bing wallpapers..."
                     bingManifestRepository.syncBingManifest(
@@ -180,7 +166,6 @@ class InitializationViewModel @Inject constructor(
                     )
                 }
 
-                // Phase 3: Sync Vanderwaals Collection manifest if enabled
                 if (vanderwaalsCollectionEnabled) {
                     _migrationMessage.value = "Updating Vanderwaals Collection wallpapers..."
                     vanderwaalsCollectionRepository.syncVanderwaalsCollectionManifest(
@@ -202,7 +187,6 @@ class InitializationViewModel @Inject constructor(
                     )
                 }
 
-                // Check if at least one source succeeded
                 if (githubSuccess || bingSuccess || vanderwaalsSuccess) {
                     Log.i(TAG, "Migration completed: $totalWallpapers total wallpapers")
                     _migrationMessage.value = "Updated $totalWallpapers wallpapers!"
@@ -212,7 +196,6 @@ class InitializationViewModel @Inject constructor(
                     settingsDataStore.updateManifestVersion(3)
                     settingsDataStore.clearMigrationFlags()
                     
-                    // Close dialog after brief delay
                     kotlinx.coroutines.delay(1000L)
                     _showMigrationDialog.value = false
                     _migrationInProgress.value = false
@@ -243,10 +226,6 @@ class InitializationViewModel @Inject constructor(
         }
     }
     
-    /**
-     * Called when user taps "Don't Show Again".
-     * Permanently dismisses the migration dialog.
-     */
     fun dismissMigrationPermanently() {
         viewModelScope.launch {
             settingsDataStore.setManifestMigrationDismissed(true)
@@ -255,15 +234,10 @@ class InitializationViewModel @Inject constructor(
     }
 
     
-    /**
-     * Observes real-time download progress from DownloadProgressManager.
-     * Updates UI with actual bytes downloaded and progress percentage.
-     */
     private fun observeDownloadProgress() {
         viewModelScope.launch {
             downloadProgressManager.progressState.collect { progress ->
                 if (progress.bytesDownloaded > 0) {
-                    // Update UI with real download progress
                     val formattedProgress = progress.formatProgress()
                     _loadingSubMessage.value = "Downloading: $formattedProgress"
                     _loadingProgress.value = progress.progress
@@ -278,22 +252,9 @@ class InitializationViewModel @Inject constructor(
         }
     }
     
-    /**
-     * Checks if the app is fully initialized (database has wallpapers).
-     * Updates state accordingly.
-     * 
-     * Improved logic:
-     * - Skips loading screen if database already has wallpapers
-     * - Monitors actual WorkManager sync job for first launch
-     * - Shows "Downloading wallpapers" instead of "syncing catalog"
-     * - Provides real progress based on WorkManager state
-     * - Waits for actual download to complete
-     * - Shows clear error state if download failed
-     */
     private fun checkInitialization() {
         viewModelScope.launch {
             try {
-                // Check if database is initialized FIRST
                 val isDbInitialized = manifestRepository.isDatabaseInitialized()
                 
                 // If database already has wallpapers, skip loading screen entirely
@@ -318,14 +279,10 @@ class InitializationViewModel @Inject constructor(
         }
     }
     
-    /**
-     * Retry initialization (called from UI retry button).
-     */
     fun retryInitialization() {
         _isInitialized.value = false
         _syncFailed.value = false
         
-        // Trigger sync again via WorkManager
         val workRequest = androidx.work.OneTimeWorkRequestBuilder<me.avinas.vanderwaals.worker.CatalogSyncWorker>()
             .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .build()

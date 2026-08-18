@@ -11,44 +11,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 
-/**
- * Onboarding navigation graph.
- * 
- * Flow:
- * 0. **Welcome**: Informational overview with Get Started/Skip
- *    - Get Started → WallpaperSourceSelection
- *    - Skip → WallpaperSourceSelection
- * 
- * 1. **WallpaperSourceSelection**: Choose wallpaper sources
- *    - Continue → InitialSync
- * 
- * 2. **InitialSync**: Download wallpaper catalog
- *    - On complete → ModeSelection
- * 
- * 3. **ModeSelection**: Choose Auto or Personalize
- *    - Auto → ApplicationSettings
- *    - Personalize → UploadWallpaper
- * 
- * 4. **UploadWallpaper**: Upload image or select sample
- *    - After processing → ConfirmationGallery
- * 
- * 5. **ConfirmationGallery**: Like/dislike wallpapers
- *    - After 3+ likes → ApplicationSettings
- * 
- * 6. **ApplicationSettings**: Configure app settings
- *    - Start Using → Main screen (onOnboardingComplete)
- * 
- * **Shared ViewModels:**
- * - UploadWallpaperViewModel: Shares similar wallpapers with ConfirmationGallery
- * - ModeSelectionViewModel: Shared across onboarding to track selected mode
- * 
- * **Back Navigation Data Handling:**
- * - UploadWallpaper → ModeSelection: Clears upload data
- * - ConfirmationGallery → UploadWallpaper: Clears confirmation data, preserves upload results for reuse
- * - ApplicationSettings → Previous: Navigates to correct previous screen based on flow
- * 
- * @param onOnboardingComplete Callback when onboarding finishes
- */
 @Composable
 fun OnboardingNavGraph(
     navController: NavHostController = rememberNavController(),
@@ -62,7 +24,6 @@ fun OnboardingNavGraph(
         navController = navController,
         startDestination = OnboardingRoutes.WELCOME
     ) {
-        // Screen 0: Welcome (NEW!)
         composable(OnboardingRoutes.WELCOME) {
             WelcomeScreen(
                 onGetStarted = {
@@ -78,7 +39,6 @@ fun OnboardingNavGraph(
             )
         }
 
-        // Screen 1: Wallpaper Source Selection
         composable(OnboardingRoutes.WALLPAPER_SOURCE_SELECTION) {
             WallpaperSourceSelectionScreen(
                 onContinue = {
@@ -92,7 +52,6 @@ fun OnboardingNavGraph(
             )
         }
 
-        // Screen 2: Initial Sync (Download)
         composable(OnboardingRoutes.INITIAL_SYNC) {
             InitialSyncScreen(
                 onSyncComplete = {
@@ -103,7 +62,6 @@ fun OnboardingNavGraph(
             )
         }
 
-        // Screen 3: Mode Selection
         composable(OnboardingRoutes.MODE_SELECTION) {
             val selectedMode by modeSelectionViewModel.selectedMode.collectAsState()
             val totalSteps = if (selectedMode == OnboardingMode.AUTO) 4 else 6
@@ -122,7 +80,6 @@ fun OnboardingNavGraph(
             )
         }
 
-        // Screen 4: Upload Wallpaper (Personalize only)
         composable(OnboardingRoutes.UPLOAD_WALLPAPER) {
             val uploadViewModel: UploadWallpaperViewModel = hiltViewModel()
             val similarWallpapers by uploadViewModel.similarWallpapers.collectAsState()
@@ -142,7 +99,6 @@ fun OnboardingNavGraph(
             )
         }
 
-        // Screen 5: Confirmation Gallery (Personalize only)
         composable(OnboardingRoutes.CONFIRMATION_GALLERY) { backStackEntry ->
             val parentEntry = remember(backStackEntry) {
                 navController.getBackStackEntry(OnboardingRoutes.UPLOAD_WALLPAPER)
@@ -179,7 +135,6 @@ fun OnboardingNavGraph(
             )
         }
 
-        // Screen 6: Application Settings (Both flows)
         composable(OnboardingRoutes.APPLICATION_SETTINGS) {
             val selectedMode by modeSelectionViewModel.selectedMode.collectAsState()
             val isAuto = selectedMode == OnboardingMode.AUTO
@@ -208,9 +163,6 @@ fun OnboardingNavGraph(
     }
 }
 
-/**
- * Remember function for imports.
- */
 @Composable
 private fun <T> remember(key: Any?, calculation: () -> T): T {
     return androidx.compose.runtime.remember(key) { calculation() }

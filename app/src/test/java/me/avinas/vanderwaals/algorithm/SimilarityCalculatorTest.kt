@@ -6,18 +6,6 @@ import org.junit.Assert.*
 import kotlin.math.abs
 import kotlin.math.sqrt
 
-/**
- * Unit tests for [SimilarityCalculator].
- *
- * Verifies:
- * - Cosine similarity normalisation ([0, 1] range)
- * - Composite similarity scoring with correct weights (renormalised to 1.0)
- * - Colour similarity via CIE76 ΔE (LAB space)
- * - Category bonus (brightness / contrast / category match)
- * - Perfect-match score equals 1.0 (H1 fix)
- * - Dislike penalty reduces score
- * - Empty / mismatched embedding handling
- */
 class SimilarityCalculatorTest {
 
     private val calculator = SimilarityCalculator()
@@ -51,7 +39,7 @@ class SimilarityCalculatorTest {
         attribution = null
     )
 
-    // ── Cosine similarity ─────────────────────────────────────────────────────
+    // Cosine similarity
 
     @Test
     fun cosineSimilarityIdenticalVectorsIsOne() {
@@ -89,7 +77,7 @@ class SimilarityCalculatorTest {
         assertEquals(0f, sim, 0.0001f)
     }
 
-    // ── Composite similarity ──────────────────────────────────────────────────
+    // Composite similarity
 
     @Test
     fun perfectMatchScoresOne() {
@@ -140,7 +128,7 @@ class SimilarityCalculatorTest {
         assertTrue("Penalty should reduce score", scoreWithPenalty < scoreNoPenalty)
     }
 
-    // ── Colour similarity (LAB ΔE) ────────────────────────────────────────────
+    // Colour similarity (LAB ΔE)
 
     @Test
     fun identicalColorsHaveMaxSimilarity() {
@@ -174,7 +162,7 @@ class SimilarityCalculatorTest {
         assertTrue("Score should be in [0, 1]", score in 0f..1f)
     }
 
-    // ── Category bonus ────────────────────────────────────────────────────────
+    // Category bonus
 
     @Test
     fun matchingCategoryScoresHigherThanMismatch() {

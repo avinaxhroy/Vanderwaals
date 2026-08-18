@@ -8,8 +8,8 @@ import java.nio.ByteBuffer
 import java.security.MessageDigest
 
 /**
- * Glide transformation that applies smart cropping to preview images
- * This ensures the preview matches the actual wallpaper that will be applied
+ * Glide transformation that applies smart cropping to preview images,
+ * so the preview matches the actual wallpaper that will be applied.
  */
 class SmartCropTransformation(
     private val targetWidth: Int,

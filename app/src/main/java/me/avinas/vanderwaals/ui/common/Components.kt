@@ -20,12 +20,6 @@ import com.skydoves.landscapist.glide.GlideImage
 import me.avinas.vanderwaals.ui.theme.VanderwaalsTan
 import me.avinas.vanderwaals.ui.theme.VanderwaalsTan
 
-/**
- * Vanderwaals branded card component.
- * 
- * Consistent card styling across the app with proper elevation,
- * rounded corners, and color scheme.
- */
 @Composable
 fun VanderwaalsCard(
     modifier: Modifier = Modifier,
@@ -58,9 +52,6 @@ fun VanderwaalsCard(
     }
 }
 
-/**
- * Vanderwaals branded button with primary color.
- */
 @Composable
 fun VanderwaalsButton(
     onClick: () -> Unit,
@@ -82,9 +73,6 @@ fun VanderwaalsButton(
     }
 }
 
-/**
- * Gradient button variant with purple gradient.
- */
 @Composable
 fun GradientButton(
     onClick: () -> Unit,
@@ -115,11 +103,6 @@ fun GradientButton(
     }
 }
 
-/**
- * Wallpaper image component with proper loading and error states.
- * 
- * Uses Landscapist Glide with caching and smooth crossfade.
- */
 @Composable
 fun WallpaperImage(
     model: Any,
@@ -175,9 +158,6 @@ fun WallpaperImage(
     )
 }
 
-/**
- * Loading indicator with optional message.
- */
 @Composable
 fun LoadingIndicator(
     message: String? = null,
@@ -202,9 +182,6 @@ fun LoadingIndicator(
     }
 }
 
-/**
- * Error content with retry button.
- */
 @Composable
 fun ErrorContent(
     message: String,
@@ -240,9 +217,6 @@ fun ErrorContent(
     }
 }
 
-/**
- * Empty state content with icon and message.
- */
 @Composable
 fun EmptyContent(
     icon: androidx.compose.ui.graphics.vector.ImageVector,

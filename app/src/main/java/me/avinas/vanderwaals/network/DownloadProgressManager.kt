@@ -14,12 +14,7 @@ class DownloadProgressManager @Inject constructor() {
     val progressState: StateFlow<DownloadProgress> = _progressState.asStateFlow()
     
     /**
-     * Updates download progress.
-     * Called by DownloadProgressInterceptor as bytes are read.
-     * 
-     * @param bytesDownloaded Bytes downloaded so far
-     * @param totalBytes Total file size
-     * @param isDone Whether download is complete
+     * Updates download progress. Called by DownloadProgressInterceptor as bytes are read.
      */
     fun updateProgress(bytesDownloaded: Long, totalBytes: Long, isDone: Boolean) {
         val progress = if (totalBytes > 0) {
@@ -45,14 +40,6 @@ class DownloadProgressManager @Inject constructor() {
     }
 }
 
-/**
- * Download progress state.
- * 
- * @property bytesDownloaded Bytes downloaded so far
- * @property totalBytes Total file size (0 if unknown)
- * @property progress Download progress from 0.0 to 1.0
- * @property isDone Whether download is complete
- */
 data class DownloadProgress(
     val bytesDownloaded: Long,
     val totalBytes: Long,

@@ -1,6 +1,8 @@
 package me.avinas.vanderwaals.ui.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material3.*
@@ -13,31 +15,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.avinas.vanderwaals.core.BatteryOptimizationHelper
 
-/**
- * Dialog prompting user to disable battery optimization for reliable background work.
- * 
- * **When to Show:**
- * - First time user enables auto-change feature
- * - After app restart if not yet exempt
- * - When user manually triggers from settings
- * 
- * **Dialog Flow:**
- * 1. Show rationale explaining why exemption is needed
- * 2. "Allow" button → Opens system battery settings
- * 3. "Not Now" button → Dismisses, will ask again after cooldown
- * 4. "Don't Ask Again" button → Permanently dismisses
- * 
- * **Design:**
- * - Material 3 AlertDialog
- * - Battery alert icon for visual clarity
- * - Clear, concise explanation
- * - Non-blocking (user can decline)
- * 
- * @param onAllow Callback when user taps "Allow" (opens system settings)
- * @param onDecline Callback when user taps "Not Now" (dismiss with cooldown)
- * @param onNeverAskAgain Callback when user taps "Don't Ask Again" (permanent dismiss)
- * @param onDismiss Callback when dialog is dismissed (back button, outside tap)
- */
 @Composable
 fun BatteryOptimizationDialog(
     onAllow: () -> Unit,
@@ -67,16 +44,18 @@ fun BatteryOptimizationDialog(
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "To ensure wallpapers change reliably on schedule, Vanderwaals needs to be excluded from battery optimization.",
+                    text = "To change wallpapers reliably on schedule, Vanderwaals needs background activity permission without being stopped by battery optimization.",
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Start
                 )
                 
-                // What happens without exemption
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
@@ -94,7 +73,7 @@ fun BatteryOptimizationDialog(
                             color = MaterialTheme.colorScheme.error
                         )
                         Text(
-                            text = "• Auto-change may not work after restart",
+                            text = "• Auto-change may stop after restart",
                             style = MaterialTheme.typography.bodySmall
                         )
                         Text(
@@ -102,13 +81,12 @@ fun BatteryOptimizationDialog(
                             style = MaterialTheme.typography.bodySmall
                         )
                         Text(
-                            text = "• Background sync may fail",
+                            text = "• Background sync may pause",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
                 }
                 
-                // What happens with exemption
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
@@ -126,7 +104,7 @@ fun BatteryOptimizationDialog(
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "✓ Wallpapers change exactly on schedule",
+                            text = "✓ Wallpapers change on schedule",
                             style = MaterialTheme.typography.bodySmall
                         )
                         Text(
@@ -134,13 +112,12 @@ fun BatteryOptimizationDialog(
                             style = MaterialTheme.typography.bodySmall
                         )
                         Text(
-                            text = "✓ Minimal battery impact",
+                            text = "✓ Efficient battery use",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
                 }
                 
-                // Manufacturer-specific guidance (if applicable)
                 if (BatteryOptimizationHelper.needsAutoStartPermission(context)) {
                     Card(
                         colors = CardDefaults.cardColors(
@@ -212,22 +189,6 @@ fun BatteryOptimizationDialog(
     )
 }
 
-/**
- * Simpler battery optimization prompt card for in-context display.
- * 
- * **Use Cases:**
- * - Show in settings screen below auto-change toggle
- * - Display in onboarding after user selects auto mode
- * - Show in main screen if exemption not granted
- * 
- * **Design:**
- * - Compact card with icon and message
- * - Single "Grant Permission" button
- * - Dismissible (X button in corner)
- * 
- * @param onGrantPermission Callback when user taps "Grant Permission"
- * @param onDismiss Callback when user dismisses the card
- */
 @Composable
 fun BatteryOptimizationPromptCard(
     onGrantPermission: () -> Unit,
@@ -300,19 +261,6 @@ fun BatteryOptimizationPromptCard(
     }
 }
 
-/**
- * Info card displaying current battery optimization status.
- * 
- * **Use Cases:**
- * - Show in settings screen under "Battery & Performance" section
- * - Display in diagnostics/about screen
- * 
- * **States:**
- * - Exempt: Green checkmark, "✓ Background work unrestricted"
- * - Not Exempt: Yellow warning, "Battery optimization active"
- * 
- * @param modifier Modifier for the card
- */
 @Composable
 fun BatteryOptimizationStatusCard(
     modifier: Modifier = Modifier
@@ -386,7 +334,6 @@ fun BatteryOptimizationStatusCard(
                 }
             }
             
-            // Show manufacturer-specific guidance
             if (needsAutoStart) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 

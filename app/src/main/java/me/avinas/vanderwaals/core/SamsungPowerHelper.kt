@@ -9,32 +9,17 @@ import android.provider.Settings
 import android.util.Log
 
 /**
- * Helper for Samsung-specific power management issues.
- * 
- * Samsung devices (especially One UI 5.x on S23 and newer) have aggressive
- * power management that can kill foreground services even when battery
- * optimization is disabled.
- * 
- * This helper provides:
- * - Detection of Samsung devices
- * - Guidance to Samsung's app power management settings
- * - Detection of One UI version
+ * Samsung devices (especially One UI 5.x on S23 and newer) run aggressive power
+ * management that can kill foreground services even with battery optimization
+ * disabled; this helper detects that and guides the user to the right settings.
  */
 object SamsungPowerHelper {
     private const val TAG = "SamsungPowerHelper"
     
-    /**
-     * Checks if the device is manufactured by Samsung.
-     */
     fun isSamsungDevice(): Boolean {
         return Build.MANUFACTURER.equals("samsung", ignoreCase = true)
     }
     
-    /**
-     * Gets the One UI version if available.
-     * 
-     * @return One UI version string (e.g., "5.1") or null if not available
-     */
     fun getOneUIVersion(): String? {
         return try {
             val semPlatformInt = Build::class.java.getField("VERSION").type
@@ -51,15 +36,8 @@ object SamsungPowerHelper {
         }
     }
     
-    /**
-     * Attempts to open Samsung's Device Care > Battery > App power management.
-     * 
-     * @param context Application context
-     * @return true if intent was launched, false if failed
-     */
     fun openSamsungBatterySettings(context: Context): Boolean {
         return try {
-            // Try Samsung-specific Device Care intent first
             val samsungIntent = Intent().apply {
                 component = android.content.ComponentName(
                     "com.samsung.android.lool",
@@ -75,7 +53,6 @@ object SamsungPowerHelper {
                 return true
             }
             
-            // Fallback: Try opening app details
             openAppDetailsSettings(context)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to open Samsung battery settings", e)
@@ -84,9 +61,6 @@ object SamsungPowerHelper {
         }
     }
     
-    /**
-     * Opens app details settings as a fallback.
-     */
     private fun openAppDetailsSettings(context: Context): Boolean {
         return try {
             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -103,14 +77,8 @@ object SamsungPowerHelper {
     }
     
     /**
-     * Checks if the app is being battery-restricted by Samsung.
-     * 
-     * Returns true if:
-     * - Device is Samsung AND
-     * - Battery optimization is enabled for the app
-     * 
-     * Note: This doesn't detect Samsung's "Sleeping apps" list,
-     * which requires manual user verification.
+     * True on Samsung devices with battery optimization enabled. Does not detect
+     * Samsung's "Sleeping apps" list, which requires manual user verification.
      */
     fun isBatteryRestricted(context: Context): Boolean {
         if (!isSamsungDevice()) return false
@@ -119,9 +87,6 @@ object SamsungPowerHelper {
         return !pm.isIgnoringBatteryOptimizations(context.packageName)
     }
     
-    /**
-     * Gets user-friendly instructions for Samsung power management.
-     */
     fun getSamsungPowerInstructions(): String {
         return """
             To ensure wallpaper changes work reliably on Samsung devices:
@@ -138,9 +103,6 @@ object SamsungPowerHelper {
         """.trimIndent()
     }
     
-    /**
-     * Logs Samsung device information for debugging.
-     */
     fun logDeviceInfo() {
         if (!isSamsungDevice()) {
             Log.d(TAG, "Not a Samsung device: ${Build.MANUFACTURER}")

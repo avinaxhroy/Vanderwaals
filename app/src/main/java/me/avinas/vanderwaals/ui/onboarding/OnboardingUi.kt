@@ -1,70 +1,50 @@
 package me.avinas.vanderwaals.ui.onboarding
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import me.avinas.vanderwaals.ui.theme.BrandPrimary
-import me.avinas.vanderwaals.ui.theme.BrandAccent
-import me.avinas.vanderwaals.ui.theme.LocalNavigationBarPadding
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material3.*
+import androidx.compose.material3.ripple
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import me.avinas.vanderwaals.ui.settings.RadicalPalette
+import me.avinas.vanderwaals.ui.settings.RadicalTactileBackdrop
+import me.avinas.vanderwaals.ui.settings.RadicalTactileCard
+import me.avinas.vanderwaals.ui.theme.LocalNavigationBarPadding
+import me.avinas.vanderwaals.ui.theme.PlayfairDisplayFamily
 
 @Immutable
 data class OnboardingLayoutMetrics(
@@ -87,41 +67,45 @@ data class OnboardingLayoutMetrics(
 @Composable
 fun rememberOnboardingLayoutMetrics(): OnboardingLayoutMetrics {
     val configuration = LocalConfiguration.current
-
     val widthDp = configuration.screenWidthDp
     val heightDp = configuration.screenHeightDp
 
-    val compactWidth = widthDp < 380
+    val compactWidth = widthDp < 360
+    val standardPhoneWidth = widthDp in 360..420
     val compactHeight = heightDp < 700
     val expandedWidth = widthDp >= 720
 
     val horizontalPadding = when {
-        expandedWidth -> 36.dp
-        compactWidth -> 18.dp
-        else -> 24.dp
+        expandedWidth -> 32.dp
+        compactWidth -> 14.dp
+        standardPhoneWidth -> 18.dp
+        else -> 22.dp
     }
 
     val maxContentWidth = when {
         widthDp >= 960 -> 720.dp
-        widthDp >= 720 -> 620.dp
-        else -> 520.dp
+        widthDp >= 720 -> 640.dp
+        else -> 560.dp
     }
 
     val sectionSpacing = when {
         compactHeight -> 12.dp
-        expandedWidth -> 24.dp
-        else -> 18.dp
+        expandedWidth -> 28.dp
+        compactWidth -> 14.dp
+        standardPhoneWidth -> 16.dp
+        else -> 20.dp
     }
 
     val cardSpacing = when {
-        compactWidth -> 10.dp
-        expandedWidth -> 16.dp
+        compactWidth -> 8.dp
+        standardPhoneWidth -> 10.dp
+        expandedWidth -> 14.dp
         else -> 12.dp
     }
 
     val buttonHeight = when {
-        compactHeight -> 52.dp
-        expandedWidth -> 60.dp
+        compactHeight || compactWidth -> 48.dp
+        standardPhoneWidth -> 52.dp
         else -> 56.dp
     }
 
@@ -132,30 +116,35 @@ fun rememberOnboardingLayoutMetrics(): OnboardingLayoutMetrics {
     }
 
     val galleryMinCellSize = when {
-        widthDp >= 960 -> 220.dp
-        widthDp >= 720 -> 180.dp
+        widthDp >= 960 -> 200.dp
+        widthDp >= 720 -> 168.dp
         compactWidth -> 130.dp
-        else -> 150.dp
+        standardPhoneWidth -> 142.dp
+        else -> 152.dp
     }
 
     val cardCornerRadius = when {
-        compactWidth -> 20.dp
-        else -> 24.dp
+        compactWidth -> 14.dp
+        standardPhoneWidth -> 16.dp
+        else -> 18.dp
     }
 
     val iconBoxSize = when {
-        compactWidth -> 42.dp
-        else -> 48.dp
+        compactWidth -> 38.dp
+        standardPhoneWidth -> 42.dp
+        else -> 44.dp
     }
 
     val iconSize = when {
-        compactWidth -> 20.dp
-        else -> 24.dp
+        compactWidth -> 18.dp
+        standardPhoneWidth -> 20.dp
+        else -> 22.dp
     }
 
     val topBarHeight = when {
-        compactHeight -> 56.dp
-        else -> 64.dp
+        compactHeight || compactWidth -> 48.dp
+        standardPhoneWidth -> 52.dp
+        else -> 56.dp
     }
 
     return remember(
@@ -195,188 +184,13 @@ fun rememberOnboardingLayoutMetrics(): OnboardingLayoutMetrics {
     }
 }
 
+/** Shared across onboarding screens. */
 @Composable
 fun OnboardingBackdrop(
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // Create infinite transition for subtle floating animation
-    val infiniteTransition = rememberInfiniteTransition(label = "backdrop")
-    val waveOffset1 by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 2f * Math.PI.toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 16000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "waveOffset1"
-    )
-    val waveOffset2 by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 2f * Math.PI.toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 20000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "waveOffset2"
-    )
-
-    Canvas(modifier = modifier) {
-        // Premium gradient background - Warm Luxe base
-        val background = Brush.verticalGradient(
-            colors = if (isDark) {
-                listOf(
-                    Color(0xFF0D0C0A), // Warm Jet Black
-                    Color(0xFF14120F), // Dark Amber-Grey
-                    Color(0xFF0F0E0D), // Warm Charcoal
-                    Color(0xFF070706)  // Deepest Black
-                )
-            } else {
-                listOf(
-                    Color(0xFFF5EFE6), // Warm Alabaster/Cream
-                    Color(0xFFEAE3D2), // Soft Beige
-                    Color(0xFFF9F7F5), // Warm White
-                    Color(0xFFEFECE9)  // Soft Warm Grey
-                )
-            }
-        )
-
-        drawRect(brush = background)
-
-        // Floating center computation helpers
-        val xOffset1 = kotlin.math.sin(waveOffset1)
-        val yOffset1 = kotlin.math.cos(waveOffset1)
-        val xOffset2 = kotlin.math.cos(waveOffset2)
-        val yOffset2 = kotlin.math.sin(waveOffset2)
-
-        // Primary glow - animated warm amber/bronze orb
-        val primaryRadius = size.minDimension * (0.65f + xOffset1 * 0.08f)
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = if (isDark) {
-                    listOf(
-                        Color(0xFFD4A574).copy(alpha = 0.22f),  // Warm amber
-                        Color(0xFFC4956A).copy(alpha = 0.11f),  // Deeper amber
-                        Color(0xFFB8854D).copy(alpha = 0.04f),  // Edge fade
-                        Color.Transparent
-                    )
-                } else {
-                    listOf(
-                        Color(0xFFE6C594).copy(alpha = 0.28f),  // Warm honey/amber
-                        Color(0xFFD4A574).copy(alpha = 0.14f),  // Deeper amber
-                        Color(0xFFC4956A).copy(alpha = 0.04f),  // Edge fade
-                        Color.Transparent
-                    )
-                }
-            ),
-            radius = primaryRadius,
-            center = Offset(
-                x = size.width * (0.12f + xOffset1 * 0.05f),
-                y = size.height * (0.15f + yOffset1 * 0.04f)
-            )
-        )
-
-        // Secondary glow - animated peach/terracotta orb
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = if (isDark) {
-                    listOf(
-                        Color(0xFFE8C4A0).copy(alpha = 0.16f),  // Peach
-                        Color(0xFFD4A574).copy(alpha = 0.06f),  // Warm tone
-                        Color.Transparent
-                    )
-                } else {
-                    listOf(
-                        Color(0xFFF3C29E).copy(alpha = 0.24f),  // Warm Peach
-                        Color(0xFFE8C4A0).copy(alpha = 0.12f),  // Muted peach
-                        Color.Transparent
-                    )
-                }
-            ),
-            radius = size.minDimension * (0.45f + yOffset2 * 0.06f),
-            center = Offset(
-                x = size.width * (0.78f + xOffset2 * 0.04f),
-                y = size.height * (0.35f + yOffset2 * 0.05f)
-            )
-        )
-
-        // Accent glow - subtle cream/white orb
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = if (isDark) {
-                    listOf(
-                        Color(0xFFF5E6D3).copy(alpha = 0.12f),  // Cream
-                        Color(0xFFEED5B8).copy(alpha = 0.04f),  // Warm cream
-                        Color.Transparent
-                    )
-                } else {
-                    listOf(
-                        Color(0xFFFFF9F2).copy(alpha = 0.35f),  // Bright Warm White
-                        Color(0xFFF5E6D3).copy(alpha = 0.18f),  // Cream
-                        Color.Transparent
-                    )
-                }
-            ),
-            radius = size.minDimension * 0.5f,
-            center = Offset(
-                x = size.width * (0.85f + xOffset1 * 0.06f),
-                y = size.height * (0.82f + yOffset2 * 0.04f)
-            )
-        )
-
-        // Subtle accent glow for depth (Dusty Rose)
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = if (isDark) {
-                    listOf(
-                        Color(0xFFE8C4C4).copy(alpha = 0.07f),  // Dusty rose
-                        Color.Transparent
-                    )
-                } else {
-                    listOf(
-                        Color(0xFFF5D6D6).copy(alpha = 0.20f),  // Warm soft pink/rose
-                        Color(0xFFE8C4C4).copy(alpha = 0.08f),  // Dusty rose
-                        Color.Transparent
-                    )
-                }
-            ),
-            radius = size.minDimension * 0.35f,
-            center = Offset(
-                x = size.width * (0.25f + yOffset1 * 0.05f),
-                y = size.height * (0.75f + xOffset2 * 0.04f)
-            )
-        )
-
-        // Premium mesh pattern - subtle diagonal lines
-        val stripeColor = if (isDark) {
-            Color.White.copy(alpha = 0.02f)
-        } else {
-            Color.Black.copy(alpha = 0.015f)
-        }
-
-        val stripeGap = size.width / 12f
-        var x = -size.height * 0.4f
-        while (x < size.width + size.height * 0.4f) {
-            drawLine(
-                color = stripeColor,
-                start = Offset(x = x, y = 0f),
-                end = Offset(x = x + size.height * 0.4f, y = size.height),
-                strokeWidth = 0.8f
-            )
-            x += stripeGap
-        }
-
-        // Noise texture overlay (subtle)
-        if (isDark) {
-            drawRect(
-                color = Color.White.copy(alpha = 0.008f)
-            )
-        } else {
-            drawRect(
-                color = Color.Black.copy(alpha = 0.005f)
-            )
-        }
-    }
+    RadicalTactileBackdrop(isDark = isDark, modifier = modifier)
 }
 
 @Composable
@@ -384,57 +198,217 @@ fun OnboardingStepIndicator(
     currentStep: Int,
     totalSteps: Int,
     isDark: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    accentColor: Color = RadicalPalette.EmeraldJade
 ) {
+    val trackBg = if (isDark) {
+        Color(0xFF141822)
+    } else {
+        Color(0xFFE2E8F0)
+    }
+    val trackBorder = if (isDark) {
+        Color.White.copy(alpha = 0.08f)
+    } else {
+        Color.Black.copy(alpha = 0.06f)
+    }
+
     Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(99.dp))
+            .background(trackBg)
+            .border(0.8.dp, trackBorder, RoundedCornerShape(99.dp))
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         for (i in 0 until totalSteps) {
-            val isActive = i <= currentStep
-            val isCurrent = i == currentStep
             val isCompleted = i < currentStep
+            val isCurrent = i == currentStep
 
-            val dotColor by animateColorAsState(
+            val fraction by animateFloatAsState(
                 targetValue = when {
-                    isCurrent -> BrandPrimary
-                    isCompleted -> Color(0xFFD4A574).copy(alpha = 0.8f)  // Warm amber for completed
-                    isActive -> BrandPrimary.copy(alpha = 0.4f)
-                    else -> if (isDark) Color(0xFF27272A) else Color(0xFFE5E5E5)
+                    isCompleted -> 1f
+                    isCurrent -> 1f
+                    else -> 0f
                 },
-                animationSpec = tween(300),
-                label = "dot_color_$i"
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMedium),
+                label = "step_fraction_$i"
             )
 
-            // Premium step indicator with glow effect for active/completed steps
+            val barColor by animateColorAsState(
+                targetValue = when {
+                    isCurrent -> accentColor
+                    isCompleted -> accentColor.copy(alpha = 0.85f)
+                    else -> Color.Transparent
+                },
+                animationSpec = tween(240),
+                label = "step_color_$i"
+            )
+
             Box(
                 modifier = Modifier
-                    .height(if (isCurrent) 4.dp else 3.dp)
-                    .width(if (isCurrent) 28.dp else if (isCompleted) 14.dp else 10.dp)
-                    .graphicsLayer {
-                        // Subtle scale animation for current step
-                        if (isCurrent) {
-                            scaleX = 1.1f
-                            scaleY = 1.1f
-                        }
-                    }
-                    .clip(RoundedCornerShape(50))
-                    .then(
-                        if (isCurrent && isDark) {
-                            Modifier.background(
+                    .weight(1f)
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(99.dp))
+                    .background(if (isDark) Color(0xFF1E2433).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.7f))
+            ) {
+                if (fraction > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(fraction)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(99.dp))
+                            .background(
                                 Brush.horizontalGradient(
                                     colors = listOf(
-                                        BrandPrimary.copy(alpha = 0.6f),
-                                        BrandAccent.copy(alpha = 0.4f)
+                                        barColor,
+                                        if (isCurrent) barColor.copy(alpha = 0.8f) else barColor
                                     )
                                 )
                             )
-                        } else {
-                            Modifier.background(dotColor)
-                        }
+                            .border(
+                                0.5.dp,
+                                Color.White.copy(alpha = if (isCurrent) 0.45f else 0.20f),
+                                RoundedCornerShape(99.dp)
+                            )
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun OnboardingHeader(
+    stepLabel: String,
+    title: String,
+    subtitle: String,
+    isDark: Boolean,
+    modifier: Modifier = Modifier,
+    accentColor: Color = RadicalPalette.EmeraldJade
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (stepLabel.isNotEmpty()) {
+            TactileStepChip(
+                text = stepLabel,
+                accentColor = accentColor,
+                isDark = isDark
             )
+            Spacer(Modifier.height(8.dp))
+        }
+
+        Text(
+            text = title,
+            fontFamily = PlayfairDisplayFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 25.sp,
+            color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
+            letterSpacing = (-0.4).sp,
+            lineHeight = 31.sp
+        )
+
+        if (subtitle.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
+                lineHeight = 21.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun OnboardingTopBar(
+    isDark: Boolean,
+    metrics: OnboardingLayoutMetrics,
+    onBack: (() -> Unit)? = null,
+    trailing: @Composable RowScope.() -> Unit = {}
+) {
+    val haptic = LocalHapticFeedback.current
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .height(metrics.topBarHeight),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = metrics.maxContentWidth)
+                .padding(horizontal = metrics.horizontalPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            if (onBack != null) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .shadow(
+                            elevation = if (isDark) 4.dp else 2.dp,
+                            shape = CircleShape,
+                            ambientColor = Color.Black.copy(alpha = 0.25f),
+                            spotColor = Color.Black.copy(alpha = 0.20f)
+                        )
+                        .clip(CircleShape)
+                        .background(
+                            if (isDark) {
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color(0xFF1E2433),
+                                        Color(0xFF111622)
+                                    )
+                                )
+                            } else {
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.White,
+                                        Color(0xFFF1F5F9)
+                                    )
+                                )
+                            }
+                        )
+                        .border(
+                            width = 1.dp,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = if (isDark) 0.25f else 0.9f),
+                                    if (isDark) Color.Black.copy(alpha = 0.5f) else Color(0xFFCBD5E1)
+                                )
+                            ),
+                            shape = CircleShape
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = ripple(bounded = true),
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onBack()
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = if (isDark) Color.White else Color(0xFF0F172A),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            } else {
+                Spacer(Modifier.size(40.dp))
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                trailing()
+            }
         }
     }
 }
@@ -445,11 +419,11 @@ fun OnboardingBottomBar(
     metrics: OnboardingLayoutMetrics,
     buttonEnabled: Boolean = true,
     buttonText: String = "Continue",
-    showBorderGradient: Boolean = true,
     showLoading: Boolean = false,
     loadingText: String = "",
     onButtonClick: () -> Unit,
-    extraContent: @Composable (() -> Unit)? = null
+    extraContent: @Composable (() -> Unit)? = null,
+    accentColor: Color = RadicalPalette.EmeraldJade
 ) {
     val systemNavBarPadding = LocalNavigationBarPadding.current
     val bottomInset = if (systemNavBarPadding != Dp.Unspecified) {
@@ -457,133 +431,281 @@ fun OnboardingBottomBar(
     } else {
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     }
+    val haptic = LocalHapticFeedback.current
 
-    Box(
+    val scrimColors = if (isDark) {
+        listOf(
+            Color.Transparent,
+            RadicalPalette.DarkCanvasBase.copy(alpha = 0.75f),
+            RadicalPalette.DarkCanvasBase.copy(alpha = 0.95f),
+            RadicalPalette.DarkCanvasBase
+        )
+    } else {
+        listOf(
+            Color.Transparent,
+            RadicalPalette.LightCanvasBase.copy(alpha = 0.75f),
+            RadicalPalette.LightCanvasBase.copy(alpha = 0.95f),
+            RadicalPalette.LightCanvasBase
+        )
+    }
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val buttonScale by animateFloatAsState(
+        targetValue = if (isPressed && buttonEnabled && !showLoading) 0.98f else 1f,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMedium),
+        label = "btnScale"
+    )
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    colors = if (isDark) {
-                        listOf(
-                            Color.Transparent,
-                            Color(0xB30D0C0A),
-                            Color(0xFF0D0C0A)
-                        )
-                    } else {
-                        listOf(
-                            Color.Transparent,
-                            Color(0xB3F5EFE6),
-                            Color(0xFFF5EFE6)
-                        )
-                    }
-                )
-            )
+            .background(Brush.verticalGradient(colors = scrimColors))
             .padding(horizontal = metrics.horizontalPadding)
-            .padding(
-                top = 24.dp,
-                bottom = bottomInset + 24.dp
-            )
+            .padding(top = 10.dp, bottom = bottomInset + 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            extraContent?.invoke()
+        extraContent?.let {
+            Box(modifier = Modifier.widthIn(max = metrics.maxContentWidth).fillMaxWidth()) { it() }
+        }
 
-            if (extraContent != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-            }
+        val buttonShape = RoundedCornerShape(16.dp)
 
-            // Premium gradient button
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = metrics.maxContentWidth)
-                    .shadow(16.dp, RoundedCornerShape(16.dp))
-                    .height(metrics.buttonHeight)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        if (showBorderGradient && buttonEnabled) {
-                            Brush.horizontalGradient(
-                                colors = listOf(BrandPrimary, BrandAccent)
-                            )
-                        } else if (buttonEnabled) {
-                            Brush.horizontalGradient(
-                                colors = listOf(BrandPrimary, BrandPrimary)
-                            )
-                        } else {
-                            Brush.horizontalGradient(
-                                colors = if (isDark) {
-                                    listOf(Color(0xFF1F2937), Color(0xFF1F2937))
-                                } else {
-                                    listOf(Color(0xFFE5E7EB), Color(0xFFE5E7EB))
-                                }
-                            )
-                        }
-                    )
-            ) {
-                Button(
-                    onClick = onButtonClick,
-                    enabled = buttonEnabled,
-                    modifier = Modifier.fillMaxSize(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = Color.White,
-                        disabledContainerColor = Color.Transparent,
-                        disabledContentColor = if (isDark) Color(0xFF6B7280) else Color(0xFF9CA3AF)
+        val activeGradient = Brush.verticalGradient(
+            colors = listOf(
+                accentColor,
+                accentColor.copy(alpha = 0.88f)
+            )
+        )
+
+        val disabledGradient = if (isDark) {
+            Brush.verticalGradient(listOf(Color(0xFF1E2433), Color(0xFF141A26)))
+        } else {
+            Brush.verticalGradient(listOf(Color(0xFFE2E8F0), Color(0xFFCBD5E1)))
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = metrics.maxContentWidth)
+                .graphicsLayer {
+                    scaleX = buttonScale
+                    scaleY = buttonScale
+                }
+                .shadow(
+                    elevation = if (buttonEnabled && !showLoading) if (isPressed) 2.dp else 6.dp else 0.dp,
+                    shape = buttonShape,
+                    ambientColor = if (buttonEnabled) accentColor.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.1f),
+                    spotColor = if (buttonEnabled) accentColor.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.1f)
+                )
+                .height(metrics.buttonHeight)
+                .clip(buttonShape)
+                .background(if (buttonEnabled && !showLoading) activeGradient else disabledGradient)
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = if (buttonEnabled && !showLoading) 0.40f else 0.12f),
+                            Color.Black.copy(alpha = if (buttonEnabled && !showLoading) 0.25f else 0.20f)
+                        )
                     ),
-                    elevation = ButtonDefaults.buttonElevation(
-                        defaultElevation = 0.dp,
-                        pressedElevation = 0.dp,
-                        disabledElevation = 0.dp
+                    shape = buttonShape
+                )
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = ripple(color = Color.White.copy(alpha = 0.25f)),
+                    enabled = buttonEnabled && !showLoading,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onButtonClick()
+                    }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                if (showLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = Color.White,
+                        strokeWidth = 2.2.dp
                     )
-                ) {
-                    if (showLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(22.dp),
-                            color = Color.White,
-                            strokeWidth = 2.5.dp
-                        )
-                        if (loadingText.isNotEmpty()) {
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(text = loadingText, style = MaterialTheme.typography.bodyMedium)
-                        }
-                    } else {
+                    if (loadingText.isNotEmpty()) {
+                        Spacer(Modifier.width(10.dp))
                         Text(
-                            text = buttonText,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
+                            text = loadingText,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
                         )
                     }
+                } else {
+                    Text(
+                        text = buttonText,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (buttonEnabled) Color.White else if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8),
+                        letterSpacing = 0.2.sp
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = if (buttonEnabled) Color.White else if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)
+                    )
                 }
             }
         }
     }
 }
 
-// === PREMIUM THEMING COLOR HELPERS ===
-fun getOnboardingTextPrimary(isDark: Boolean): Color {
-    return if (isDark) Color(0xFFFFFDF9) else Color(0xFF1C1A17)
+@Composable
+fun TactileStepChip(
+    text: String,
+    accentColor: Color,
+    isDark: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(99.dp))
+            .background(
+                if (isDark) {
+                    accentColor.copy(alpha = 0.15f)
+                } else {
+                    accentColor.copy(alpha = 0.12f)
+                }
+            )
+            .border(
+                1.dp,
+                if (isDark) {
+                    accentColor.copy(alpha = 0.35f)
+                } else {
+                    accentColor.copy(alpha = 0.25f)
+                }
+            ,
+                RoundedCornerShape(99.dp)
+            )
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(accentColor)
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = if (isDark) accentColor else accentColor.copy(alpha = 0.95f),
+            letterSpacing = 0.3.sp
+        )
+    }
 }
 
-fun getOnboardingTextSecondary(isDark: Boolean): Color {
-    return if (isDark) Color(0xFFC7C1B6) else Color(0xFF5C5549)
+@Composable
+fun TactileHeroBadge(
+    icon: ImageVector,
+    accentColor: Color,
+    isDark: Boolean,
+    modifier: Modifier = Modifier,
+    size: Dp = 64.dp,
+    iconSize: Dp = 32.dp
+) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .shadow(
+                elevation = if (isDark) 8.dp else 4.dp,
+                shape = RoundedCornerShape(20.dp),
+                ambientColor = accentColor.copy(alpha = 0.35f),
+                spotColor = accentColor.copy(alpha = 0.45f)
+            )
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                if (isDark) {
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF222B3D),
+                            Color(0xFF141924)
+                        )
+                    )
+                } else {
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White,
+                            Color(0xFFF1F5F9)
+                        )
+                    )
+                }
+            )
+            .border(
+                width = 1.2.dp,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        accentColor.copy(alpha = 0.8f),
+                        accentColor.copy(alpha = 0.25f)
+                    )
+                ),
+                shape = RoundedCornerShape(20.dp)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(size * 0.65f)
+                .clip(CircleShape)
+                .background(accentColor.copy(alpha = if (isDark) 0.18f else 0.12f))
+        )
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(iconSize),
+            tint = accentColor
+        )
+    }
 }
 
-fun getOnboardingCardBackground(isDark: Boolean): Color {
-    return if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.04f)
+/**
+ * Tactile helper card wrapping RadicalTactileCard with consistent bounceClick behavior.
+ */
+@Composable
+fun TactileOnboardingCard(
+    isDark: Boolean,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(16.dp),
+    onClick: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    RadicalTactileCard(
+        isDark = isDark,
+        modifier = modifier.let { if (onClick != null) it.bounceClick(onClick) else it },
+        contentPadding = contentPadding,
+        content = content
+    )
 }
 
-fun getOnboardingCardBorder(isDark: Boolean): Color {
-    return if (isDark) Color.White.copy(alpha = 0.09f) else Color.Black.copy(alpha = 0.08f)
-}
+fun getOnboardingTextPrimary(isDark: Boolean): Color =
+    if (isDark) RadicalPalette.DarkCardTextPrimary else RadicalPalette.LightCardTextPrimary
+
+fun getOnboardingTextSecondary(isDark: Boolean): Color =
+    if (isDark) RadicalPalette.DarkCardTextSecondary else RadicalPalette.LightCardTextSecondary
+
+fun getOnboardingCardBackground(isDark: Boolean): Color =
+    if (isDark) RadicalPalette.DarkCardTop else RadicalPalette.LightCardTop
+
+fun getOnboardingCardBorder(isDark: Boolean): Color =
+    if (isDark) RadicalPalette.DarkCardBorderBottom else RadicalPalette.LightCardBorderBottom
 
 fun Modifier.bounceClick(
     onClick: () -> Unit = {}
@@ -591,21 +713,22 @@ fun Modifier.bounceClick(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
+        targetValue = if (isPressed) 0.982f else 1f,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
+            dampingRatio = 0.8f,
             stiffness = Spring.StiffnessMedium
         ),
-        label = "bounceScale"
+        label = "pressScale"
     )
+    val haptic = LocalHapticFeedback.current
     this
-        .graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-        }
+        .graphicsLayer { scaleX = scale; scaleY = scale }
         .clickable(
             interactionSource = interactionSource,
-            indication = null,
-            onClick = onClick
+            indication = ripple(),
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            }
         )
 }

@@ -4,17 +4,10 @@ import android.content.Context
 import java.io.File
 
 /**
- * Resolves the local image file for a wallpaper by probing both the cache and
- * permanent storage directories for [.jpg] and [.png] extensions.
- *
- * Wallpapers are downloaded to `cacheDir/wallpapers/{id}.jpg` by the repository,
- * but SmartCrop 2.0 saves lossless PNG copies. Some code paths previously looked
- * only in `filesDir` with a hardcoded `.jpg`, silently failing for any wallpaper
- * stored as `.png` or in the cache directory.
- *
- * @param context   Android context providing access to filesystem dirs.
- * @param wallpaperId  The wallpaper identifier (without extension).
- * @return the first existing, non-empty file, or `null` if none is found.
+ * Probes both cache and permanent storage for [.jpg] and [.png]. Wallpapers are
+ * downloaded to `cacheDir/wallpapers/{id}.jpg`, but SmartCrop 2.0 saves lossless
+ * PNG copies; earlier code looked only in `filesDir` for a hardcoded `.jpg`, so it
+ * silently failed for any `.png` or cache-stored wallpaper.
  */
 fun resolveWallpaperFile(context: Context, wallpaperId: String): File? {
     val cacheDir = File(context.cacheDir, "wallpapers")

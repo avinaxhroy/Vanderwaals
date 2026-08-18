@@ -30,9 +30,6 @@ class DeviceUnlockReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "DeviceUnlockReceiver"
         
-        /**
-         * Shared preferences key for last trigger time.
-         */
         private const val PREF_NAME = "vanderwaals_unlock"
         private const val KEY_LAST_TRIGGER = "last_trigger_time"
         
@@ -50,13 +47,11 @@ class DeviceUnlockReceiver : BroadcastReceiver() {
         
         Log.d(TAG, "Device unlocked, checking if wallpaper change is needed")
         
-        // Use goAsync() for asynchronous work
         val pendingResult = goAsync()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         
         scope.launch {
             try {
-                // Check if user has "Every unlock" mode enabled
                 val settings = settingsDataStore.settings.first()
                 val intervalSetting = settings.changeInterval
                 
@@ -67,13 +62,11 @@ class DeviceUnlockReceiver : BroadcastReceiver() {
                 
                 Log.d(TAG, "User has 'Every unlock' mode enabled")
                 
-                // Check rate limiting
                 if (!shouldTriggerChange(context)) {
                     Log.d(TAG, "Skipping change (rate limited)")
                     return@launch
                 }
                 
-                // Load user's "Apply To" setting
                 val targetScreen = when (settings.applyTo) {
                     "lock_screen" -> "lock"
                     "home_screen" -> "home"
@@ -84,10 +77,8 @@ class DeviceUnlockReceiver : BroadcastReceiver() {
                 
                 Log.d(TAG, "Triggering wallpaper change for target screen: $targetScreen")
                 
-                // Trigger immediate wallpaper change with correct target screen
                 workScheduler.triggerImmediateWallpaperChange(targetScreen)
                 
-                // Update last trigger time
                 updateLastTriggerTime(context)
                 
                 Log.d(TAG, "Wallpaper change triggered")
@@ -102,15 +93,6 @@ class DeviceUnlockReceiver : BroadcastReceiver() {
         }
     }
     
-    /**
-     * Checks if enough time has passed since last trigger.
-     * 
-     * Implements rate limiting to prevent excessive wallpaper changes
-     * from rapid lock/unlock cycles.
-     * 
-     * @param context Application context
-     * @return true if change should be triggered, false otherwise
-     */
     private fun shouldTriggerChange(context: Context): Boolean {
         val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         val lastTrigger = prefs.getLong(KEY_LAST_TRIGGER, 0L)
@@ -119,11 +101,6 @@ class DeviceUnlockReceiver : BroadcastReceiver() {
         return (now - lastTrigger) >= MIN_INTERVAL_MS
     }
     
-    /**
-     * Updates the last trigger time in shared preferences.
-     * 
-     * @param context Application context
-     */
     private fun updateLastTriggerTime(context: Context) {
         val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         prefs.edit().putLong(KEY_LAST_TRIGGER, System.currentTimeMillis()).apply()

@@ -31,11 +31,7 @@ class WallpaperApplicator @Inject constructor(
         const val TARGET_BOTH = "both"
     }
     
-    /**
-     * Result of wallpaper application.
-     */
     sealed class ApplyResult {
-        /** Successfully applied wallpaper. */
         data object Success : ApplyResult()
         
         /** Failed to decode/load the bitmap. */
@@ -51,18 +47,6 @@ class WallpaperApplicator @Inject constructor(
         data class InvalidTarget(val target: String) : ApplyResult()
     }
     
-    /**
-     * Applies wallpaper file to the specified screen(s) with SmartCrop processing.
-     * 
-     * Uses a "try then verify" approach for live wallpaper detection:
-     * 1. Attempt to apply the wallpaper
-     * 2. Verify the change was successful
-     * 3. If failed, check if live wallpaper is blocking
-     * 
-     * @param wallpaperFile File containing the wallpaper image
-     * @param targetScreen Target screen: "home", "lock", or "both"
-     * @return ApplyResult indicating success or failure reason
-     */
     suspend fun apply(wallpaperFile: File, targetScreen: String): ApplyResult {
         var originalBitmap: Bitmap? = null
         var processedBitmap: Bitmap? = null
@@ -70,15 +54,12 @@ class WallpaperApplicator @Inject constructor(
         return try {
             val wallpaperManager = WallpaperManager.getInstance(context)
             
-            // Step 1: Load bitmap safely with OOM protection
             originalBitmap = BitmapManager.loadBitmap(wallpaperFile)
-            
             if (originalBitmap == null) {
                 Log.e(TAG, "Failed to decode wallpaper file: ${wallpaperFile.name}")
                 return ApplyResult.DecodeFailed("Failed to decode wallpaper file")
             }
             
-            // Step 2: Apply SmartCrop to actual screen dimensions
             val screenSize = getDeviceScreenSize(context)
             
             processedBitmap = SmartCrop.smartCropBitmapAsync(
@@ -88,26 +69,21 @@ class WallpaperApplicator @Inject constructor(
                 mode = SmartCrop.CropMode.AUTO
             )
             
-            // Step 3: Save cropped bitmap for preview consistency
             saveCroppedWallpaper(wallpaperFile, processedBitmap)
             
-            // Step 4: Recycle original to save memory
             if (processedBitmap !== originalBitmap) {
                 BitmapManager.recycleSafely(originalBitmap)
                 originalBitmap = null
             }
             
-            // Step 5: Apply to WallpaperManager
             val applied = applyToWallpaperManager(wallpaperManager, processedBitmap, targetScreen)
             if (!applied) {
                 return ApplyResult.InvalidTarget(targetScreen)
             }
             
-            // Step 6: Recycle processed bitmap
             BitmapManager.recycleSafely(processedBitmap)
             processedBitmap = null
             
-            // Step 7: Verify live wallpaper isn't blocking
             val wallpaperInfo = wallpaperManager.wallpaperInfo
             if (wallpaperInfo != null) {
                 val (isBlocking, serviceName) = LiveWallpaperDetector.detectBlockingAfterFailure(context)
@@ -117,7 +93,6 @@ class WallpaperApplicator @Inject constructor(
                 }
             }
             
-            // Step 8: Record engagement
             engagementTracker.recordWallpaperChange()
             
             Log.d(TAG, "Successfully applied wallpaper with SmartCrop processing")
@@ -127,16 +102,11 @@ class WallpaperApplicator @Inject constructor(
             Log.e(TAG, "Error applying wallpaper", e)
             ApplyResult.Error(e)
         } finally {
-            // Ensure bitmaps are recycled even if exception occurs
             BitmapManager.recycleSafely(originalBitmap)
             BitmapManager.recycleSafely(processedBitmap)
         }
     }
     
-    /**
-     * Applies bitmap to WallpaperManager for the specified target.
-     * @return true if target was valid and applied, false otherwise
-     */
     private fun applyToWallpaperManager(
         wallpaperManager: WallpaperManager,
         bitmap: Bitmap,
@@ -209,9 +179,6 @@ class WallpaperApplicator @Inject constructor(
         }
     }
     
-    /**
-     * Checks if applying to the specified target is supported on this device.
-     */
     fun isTargetSupported(targetScreen: String): Boolean {
         return when (targetScreen) {
             TARGET_HOME, TARGET_BOTH -> true

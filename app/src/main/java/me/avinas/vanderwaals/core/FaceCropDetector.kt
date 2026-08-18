@@ -39,10 +39,6 @@ object FaceCropDetector {
         return detectSkinToneFallback(bitmap)
     }
 
-    // =====================================================================================
-    // Skin-tone detection — conservative connected-components on a downscale
-    // =====================================================================================
-
     private const val FALLBACK_MAX = 160
 
     private fun detectSkinToneFallback(bitmap: Bitmap): List<Face> {

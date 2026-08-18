@@ -40,7 +40,6 @@ class SegmentedDownloader @Inject constructor(
         try {
             downloadStandard(url, targetFile)
 
-            // Verify file integrity
             if (targetFile.length() <= 0) {
                  if (targetFile.exists()) targetFile.delete()
                  return@withContext Result.failure(IOException("Download failed: File is empty"))
@@ -73,14 +72,12 @@ class SegmentedDownloader @Inject constructor(
 
             deferreds.awaitAll()
             
-            // Verify file size
             if (targetFile.length() == contentLength) {
                 Result.success(targetFile)
             } else {
                 Result.failure(IOException("Segmented download size mismatch"))
             }
         } catch (e: Exception) {
-            // Clean up on failure
             if (targetFile.exists()) targetFile.delete()
             Result.failure(e)
         }
