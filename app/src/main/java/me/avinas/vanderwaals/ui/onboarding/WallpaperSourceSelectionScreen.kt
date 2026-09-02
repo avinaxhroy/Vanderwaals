@@ -118,13 +118,11 @@ fun WallpaperSourceSelectionScreen(
                             currentStep = currentStep - 1,
                             totalSteps = totalSteps,
                             isDark = isDark,
-                            accentColor = RadicalPalette.CyberMagenta,
                             modifier = Modifier.padding(bottom = 12.dp)
                         )
                         OnboardingHeader(
-                            stepLabel = "STAGE 0$currentStep / 0$totalSteps · $selectedCount ACTIVE",
-                            title = "Choose wallpaper sources",
-                            subtitle = "Select catalogs to include in your rotations, and choose download depth.",
+                            title = "Wallpaper sources",
+                            subtitle = "",
                             isDark = isDark,
                             accentColor = RadicalPalette.CyberMagenta
                         )
@@ -134,7 +132,7 @@ fun WallpaperSourceSelectionScreen(
                 item {
                     SourceSelectionCard(
                         title = "Bing Daily Wallpapers",
-                        subtitle = "Daily landscape and nature photography worldwide",
+                        subtitle = "Daily landscape & nature photography",
                         icon = Icons.Default.Language,
                         accentColor = RadicalPalette.RadiantAmber,
                         isEnabled = bingEnabled,
@@ -188,16 +186,6 @@ fun WallpaperSourceSelectionScreen(
                                     isDark = isDark,
                                     accentColor = RadicalPalette.RadiantAmber
                                 )
-
-                                Text(
-                                    text = if (bingManifestType == "lite")
-                                        "Downloads ~1,000 recent wallpapers for faster initial sync."
-                                    else
-                                        "Downloads the complete 5,400+ wallpaper historical archive.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (isDark) Color(0xFF383532) else Color(0xFFA7F3D0),
-                                    lineHeight = 18.sp
-                                )
                             }
                         }
                     )
@@ -206,7 +194,7 @@ fun WallpaperSourceSelectionScreen(
                 item {
                     SourceSelectionCard(
                         title = "Community Collections",
-                        subtitle = "Curated photography from open-source repositories",
+                        subtitle = "Curated open-source photography",
                         icon = Icons.Default.CloudDownload,
                         accentColor = RadicalPalette.AmethystPurple,
                         isEnabled = communityEnabled,
@@ -218,7 +206,7 @@ fun WallpaperSourceSelectionScreen(
                 item {
                     SourceSelectionCard(
                         title = "Vanderwaals Collection",
-                        subtitle = "Flagship aesthetic collection indexed with visual embeddings",
+                        subtitle = "AI-curated aesthetic collection",
                         icon = Icons.Default.AutoAwesome,
                         accentColor = RadicalPalette.TealCyan,
                         isEnabled = vanderwaalsCollectionEnabled,
@@ -273,16 +261,6 @@ fun WallpaperSourceSelectionScreen(
                                     },
                                     isDark = isDark,
                                     accentColor = RadicalPalette.TealCyan
-                                )
-
-                                Text(
-                                    text = if (vanderwaalsCollectionManifestType == "lite")
-                                        "Core highlights calibrated for fast setup."
-                                    else
-                                        "Complete library containing all high-resolution albums.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (isDark) Color(0xFF383532) else Color(0xFFA7F3D0),
-                                    lineHeight = 18.sp
                                 )
                             }
                         }

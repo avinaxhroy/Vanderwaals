@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import me.avinas.vanderwaals.algorithm.EmbeddingExtractor
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -16,14 +18,18 @@ class ExtractEmbeddingUseCase @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val embeddingExtractor: EmbeddingExtractor
 ) {
-    operator fun invoke(imageUri: Uri): Result<FloatArray> {
+    suspend operator fun invoke(imageUri: Uri): Result<FloatArray> {
         return try {
-            val bitmap = loadBitmapFromUri(imageUri)
+            val bitmap = withContext(Dispatchers.IO) {
+                loadBitmapFromUri(imageUri)
+            }
                 ?: return Result.failure(
                     IllegalArgumentException("Failed to load image from Uri: $imageUri")
                 )
-            
-            val embedding = embeddingExtractor.extractEmbedding(bitmap)
+
+            val embedding = withContext(Dispatchers.IO) {
+                embeddingExtractor.extractEmbedding(bitmap)
+            }
                 ?: return Result.failure(
                     IllegalStateException("Failed to extract embedding from image")
                 )

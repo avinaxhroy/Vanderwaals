@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -199,7 +200,7 @@ fun OnboardingStepIndicator(
     totalSteps: Int,
     isDark: Boolean,
     modifier: Modifier = Modifier,
-    accentColor: Color = RadicalPalette.EmeraldJade
+    accentColor: Color = if (isDark) Color.White else Color(0xFF0F172A)
 ) {
     val trackBg = if (isDark) {
         Color(0xFF141822)
@@ -207,7 +208,7 @@ fun OnboardingStepIndicator(
         Color(0xFFE2E8F0)
     }
     val trackBorder = if (isDark) {
-        Color.White.copy(alpha = 0.08f)
+        Color.White.copy(alpha = 0.10f)
     } else {
         Color.Black.copy(alpha = 0.06f)
     }
@@ -239,7 +240,7 @@ fun OnboardingStepIndicator(
             val barColor by animateColorAsState(
                 targetValue = when {
                     isCurrent -> accentColor
-                    isCompleted -> accentColor.copy(alpha = 0.85f)
+                    isCompleted -> accentColor.copy(alpha = 0.90f)
                     else -> Color.Transparent
                 },
                 animationSpec = tween(240),
@@ -251,7 +252,7 @@ fun OnboardingStepIndicator(
                     .weight(1f)
                     .height(6.dp)
                     .clip(RoundedCornerShape(99.dp))
-                    .background(if (isDark) Color(0xFF1E2433).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.7f))
+                    .background(if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f))
             ) {
                 if (fraction > 0f) {
                     Box(
@@ -263,13 +264,13 @@ fun OnboardingStepIndicator(
                                 Brush.horizontalGradient(
                                     colors = listOf(
                                         barColor,
-                                        if (isCurrent) barColor.copy(alpha = 0.8f) else barColor
+                                        if (isCurrent) barColor.copy(alpha = 0.92f) else barColor
                                     )
                                 )
                             )
                             .border(
                                 0.5.dp,
-                                Color.White.copy(alpha = if (isCurrent) 0.45f else 0.20f),
+                                if (isDark) Color.White.copy(alpha = if (isCurrent) 0.55f else 0.25f) else Color.Black.copy(alpha = 0.12f),
                                 RoundedCornerShape(99.dp)
                             )
                     )
@@ -281,7 +282,6 @@ fun OnboardingStepIndicator(
 
 @Composable
 fun OnboardingHeader(
-    stepLabel: String,
     title: String,
     subtitle: String,
     isDark: Boolean,
@@ -289,32 +289,25 @@ fun OnboardingHeader(
     accentColor: Color = RadicalPalette.EmeraldJade
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        if (stepLabel.isNotEmpty()) {
-            TactileStepChip(
-                text = stepLabel,
-                accentColor = accentColor,
-                isDark = isDark
-            )
-            Spacer(Modifier.height(8.dp))
-        }
-
         Text(
             text = title,
             fontFamily = PlayfairDisplayFamily,
             fontWeight = FontWeight.Bold,
-            fontSize = 25.sp,
+            fontSize = 22.sp,
             color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
             letterSpacing = (-0.4).sp,
-            lineHeight = 31.sp
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            lineHeight = 28.sp
         )
 
         if (subtitle.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
-                lineHeight = 21.sp
+                lineHeight = 20.sp
             )
         }
     }

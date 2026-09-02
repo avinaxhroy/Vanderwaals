@@ -80,49 +80,43 @@ fun ModeSelectionScreen(
                     .padding(
                         top = paddingValues.calculateTopPadding() + 8.dp,
                         bottom = paddingValues.calculateBottomPadding() + 20.dp
-                    ),
+                    )
+                    .widthIn(max = metrics.maxContentWidth)
+                    .align(Alignment.TopCenter),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceBetween
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .widthIn(max = metrics.maxContentWidth)
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     OnboardingStepIndicator(
                         currentStep = currentStep - 1,
                         totalSteps = totalSteps,
                         isDark = isDark,
-                        accentColor = RadicalPalette.CyberMagenta,
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
 
                     OnboardingHeader(
-                        stepLabel = "STAGE 0$currentStep / 0$totalSteps · ENGINE MODE",
                         title = "Choose curation mode",
-                        subtitle = "Personalized mode matches wallpapers to your style. Auto mode starts right away with curated highlights.",
+                        subtitle = "",
                         isDark = isDark,
                         accentColor = RadicalPalette.CyberMagenta
                     )
                 }
 
-                Spacer(Modifier.height(16.dp))
-
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .widthIn(max = metrics.maxContentWidth),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     RichModeOptionCard(
                         title = "Personalized Mode",
-                        subtitle = "Builds a taste profile from your favorite images and ranks matching wallpapers on-device.",
+                        subtitle = "Learns your taste from favorite photos & likes.",
                         badge = "RECOMMENDED",
                         badgeBg = Color(0xFFFFE4EC),
                         badgeTextColor = Color(0xFFBE123C),
                         icon = Icons.Default.AutoAwesome,
                         accentColor = RadicalPalette.CyberMagenta,
-                        features = listOf("On-Device AI", "Quick 1-Minute Setup"),
+                        features = listOf("On-Device AI", "1-Min Setup"),
                         isSelected = selectedMode == OnboardingMode.PERSONALIZE,
                         onClick = { viewModel.selectMode(OnboardingMode.PERSONALIZE) {} },
                         isDark = isDark
@@ -130,31 +124,18 @@ fun ModeSelectionScreen(
 
                     RichModeOptionCard(
                         title = "Auto Mode",
-                        subtitle = "Starts right away with curated wallpapers, then learns as you like or hide images.",
+                        subtitle = "Instant curated wallpapers, learns as you go.",
                         badge = "INSTANT START",
                         badgeBg = Color(0xFFFEF3C7),
                         badgeTextColor = Color(0xFFB45309),
                         icon = Icons.Default.Shuffle,
                         accentColor = RadicalPalette.RadiantAmber,
-                        features = listOf("No Setup Needed", "Learns as You Like"),
+                        features = listOf("Instant Start", "Learns As You Like"),
                         isSelected = selectedMode == OnboardingMode.AUTO,
                         onClick = { viewModel.selectMode(OnboardingMode.AUTO) {} },
                         isDark = isDark
                     )
                 }
-
-                Spacer(Modifier.height(16.dp))
-
-                Text(
-                    text = "You can switch modes anytime in Settings. Your taste profile is always saved.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                    modifier = Modifier
-                        .widthIn(max = metrics.maxContentWidth)
-                        .padding(horizontal = 4.dp),
-                    textAlign = TextAlign.Center,
-                    lineHeight = 19.sp
-                )
             }
         }
     }

@@ -117,13 +117,11 @@ fun UploadWallpaperScreen(
                             currentStep = currentStep - 1,
                             totalSteps = totalSteps,
                             isDark = isDark,
-                            accentColor = RadicalPalette.CyberMagenta,
                             modifier = Modifier.padding(bottom = 12.dp)
                         )
                         OnboardingHeader(
-                            stepLabel = "STAGE 0$currentStep / 0$totalSteps · TASTE REFERENCE",
-                            title = "Pick your starting style",
-                            subtitle = "Choose a photo from your gallery or pick an aesthetic below to set up your taste profile.",
+                            title = "Pick your style",
+                            subtitle = "Upload a photo or pick an aesthetic below.",
                             isDark = isDark,
                             accentColor = RadicalPalette.CyberMagenta
                         )
@@ -195,19 +193,6 @@ fun UploadWallpaperScreen(
                             }
                         }
                     }
-                }
-
-                item {
-                    Text(
-                        text = "Processed locally on your device with MobileNetV4. Photos are never uploaded.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
-                        textAlign = TextAlign.Center,
-                        lineHeight = 16.sp
-                    )
                 }
             }
         }

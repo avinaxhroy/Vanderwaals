@@ -82,9 +82,10 @@ fun InitialSyncScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .statusBarsPadding()
                     .padding(horizontal = metrics.horizontalPadding)
                     .padding(
-                        top = paddingValues.calculateTopPadding() + 8.dp,
+                        top = 16.dp,
                         bottom = paddingValues.calculateBottomPadding() + 20.dp
                     ),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -99,14 +100,12 @@ fun InitialSyncScreen(
                         currentStep = currentStep - 1,
                         totalSteps = totalSteps,
                         isDark = isDark,
-                        accentColor = RadicalPalette.CyberMagenta,
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
 
                     OnboardingHeader(
-                        stepLabel = "STAGE 0$currentStep / 0$totalSteps · CATALOG SYNC",
-                        title = "Indexing wallpaper catalog",
-                        subtitle = "Downloads and indexes wallpaper catalogs for offline matching.",
+                        title = "Setting up catalog",
+                        subtitle = "",
                         isDark = isDark,
                         accentColor = RadicalPalette.CyberMagenta
                     )

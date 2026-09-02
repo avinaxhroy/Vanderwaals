@@ -1,5 +1,6 @@
 package me.avinas.vanderwaals.network.dto
 
+import com.google.gson.Gson
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -140,6 +141,66 @@ class WallpaperMetadataDtoTest {
         val entity = dto.toEntity()
 
         assertEquals("https://example.com/wallpaper.jpg", entity.thumbnailUrl)
+    }
+
+    // ========== Gson Deserialization Regression Tests ==========
+
+    @Test
+    fun `toEntity survives Gson deserialization when mood and style are absent`() {
+        // Gson instantiates DTOs via reflection, bypassing Kotlin default values:
+        // fields absent from the JSON are null at runtime even when declared
+        // non-null with a default. Community and Bing manifests omit mood/style
+        // entirely, which used to crash toEntity() with an NPE.
+        val json = """
+            {
+                "id": "bing_2026-06-30_US_en",
+                "url": "https://example.com/wallpaper.jpg",
+                "source": "bing",
+                "category": "nature",
+                "colors": ["#282828"],
+                "brightness": 65,
+                "contrast": 50,
+                "resolution": "1920x1080",
+                "attribution": null,
+                "embedding": [0.1, 0.2]
+            }
+        """.trimIndent()
+
+        val dto = Gson().fromJson(json, WallpaperMetadataDto::class.java)
+        val entity = dto.toEntity()
+
+        assertEquals("bing_2026-06-30_US_en", entity.id)
+        assertTrue(entity.mood.isEmpty())
+        assertTrue(entity.style.isEmpty())
+        assertEquals(0f, entity.aestheticScore, 0f)
+        assertEquals(2, entity.embedding.size)
+    }
+
+    @Test
+    fun `toEntity preserves mood style and aestheticScore when present`() {
+        val json = """
+            {
+                "id": "vc_001",
+                "url": "https://example.com/wallpaper.jpg",
+                "source": "vanderwaals",
+                "category": "abstract",
+                "colors": ["#000000"],
+                "brightness": 50,
+                "contrast": 50,
+                "resolution": "1920x1080",
+                "attribution": null,
+                "mood": ["surreal", "cozy"],
+                "style": ["minimalist"],
+                "aestheticScore": 7.5
+            }
+        """.trimIndent()
+
+        val dto = Gson().fromJson(json, WallpaperMetadataDto::class.java)
+        val entity = dto.toEntity()
+
+        assertEquals(listOf("surreal", "cozy"), entity.mood)
+        assertEquals(listOf("minimalist"), entity.style)
+        assertEquals(7.5f, entity.aestheticScore, 0.001f)
     }
 
     // ========== Dimension Detection Helper Tests ==========

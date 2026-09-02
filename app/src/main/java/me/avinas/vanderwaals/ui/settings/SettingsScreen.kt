@@ -257,79 +257,14 @@ fun SettingsScreen(
                     isDark = isDark
                 ) {
                     Column {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(18.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                SettingsIconBox(
-                                    icon = Icons.Default.Update,
-                                    isDark = isDark,
-                                    accentColor = Color(0xFF8B5CF6)
-                                )
-                                Column {
-                                    Text(
-                                        text = "Frequency",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (isDark) TextPrimaryDark else TextPrimaryLight
-                                    )
-                                    Text(
-                                        text = settings.interval.displayName,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = if (isDark) TextSecondaryDark else TextSecondaryLight
-                                    )
-                                }
-                            }
-                            
-                            var expanded by remember { mutableStateOf(false) }
-                            Box {
-                                Row(
-                                    modifier = Modifier.clickable { expanded = true },
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = settings.interval.displayName,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = if (isDark) TextSecondaryDark else TextSecondaryLight,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Default.ArrowDropDown,
-                                        contentDescription = null,
-                                        tint = if (isDark) TextSecondaryDark else TextSecondaryLight
-                                    )
-                                }
-                                
-                                DropdownMenu(
-                                    expanded = expanded,
-                                    onDismissRequest = { expanded = false },
-                                    containerColor = if (isDark) SurfaceOverlayDark else SurfaceLight,
-                                    tonalElevation = 4.dp
-                                ) {
-                                    ChangeInterval.entries.forEach { interval ->
-                                        DropdownMenuItem(
-                                            text = { 
-                                                Text(
-                                                    interval.displayName,
-                                                    color = if (isDark) TextPrimaryDark else TextPrimaryLight
-                                                ) 
-                                            },
-                                            onClick = {
-                                                viewModel.updateInterval(interval)
-                                                expanded = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                        RadicalFrequencyStudio(
+                            currentInterval = settings.interval,
+                            onIntervalSelected = { viewModel.updateInterval(it) },
+                            dailyTime = settings.dailyTime,
+                            onOpenFullTimePicker = { showTimePickerDialog = true },
+                            isDark = isDark,
+                            accentColor = BrandPrimary
+                        )
 
                         if (settings.interval == ChangeInterval.EVERY_UNLOCK) {
                             SettingsDivider(isDark = isDark)
@@ -354,7 +289,7 @@ fun SettingsScreen(
                                             accentColor = Color(0xFFF43F5E)
                                         )
                                         Text(
-                                            text = "Daily Playlist Size",
+                                            text = "Daily Unlock Playlist Size",
                                             style = MaterialTheme.typography.bodyLarge,
                                             fontWeight = FontWeight.SemiBold,
                                             color = if (isDark) TextPrimaryDark else TextPrimaryLight
@@ -474,48 +409,6 @@ fun SettingsScreen(
                                         )
                                     }
                                 }
-                            }
-                        }
-
-                        if (settings.interval == ChangeInterval.DAILY) {
-                            SettingsDivider(isDark = isDark)
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { showTimePickerDialog = true }
-                                    .padding(18.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    SettingsIconBox(
-                                        icon = Icons.Default.Schedule,
-                                        isDark = isDark,
-                                        accentColor = Color(0xFFF59E0B)
-                                    )
-                                    Column {
-                                        Text(
-                                            text = "Change Time",
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (isDark) TextPrimaryDark else TextPrimaryLight
-                                        )
-                                        Text(
-                                            text = settings.dailyTime?.let { "${it.hour}:${it.minute.toString().padStart(2, '0')}" } ?: "9:00 AM",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = if (isDark) TextSecondaryDark else TextSecondaryLight
-                                        )
-                                    }
-                                }
-                                Text(
-                                    text = settings.dailyTime?.let { String.format("%02d:%02d", it.hour, it.minute) } ?: "09:00",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (isDark) TextSecondaryDark else TextSecondaryLight,
-                                    fontWeight = FontWeight.Medium
-                                )
                             }
                         }
                     }

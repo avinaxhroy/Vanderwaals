@@ -296,13 +296,11 @@ fun ConfirmationGalleryScreen(
                                 currentStep = currentStep - 1,
                                 totalSteps = totalSteps,
                                 isDark = isDark,
-                                accentColor = RadicalPalette.CoralRose,
                                 modifier = Modifier.padding(bottom = 12.dp)
                             )
                             OnboardingHeader(
-                                stepLabel = if (likedCount >= 4) "STAGE 0$currentStep / 0$totalSteps · $likedCount LIKED (READY)" else "STAGE 0$currentStep / 0$totalSteps · $likedCount OF 4 LIKED",
-                                title = "Refine your taste matches",
-                                subtitle = "Tap wallpapers to like them, or tap shuffle for more suggestions.",
+                                title = "Refine your taste",
+                                subtitle = "Like at least 4 wallpapers to continue.",
                                 isDark = isDark,
                                 accentColor = RadicalPalette.CoralRose
                             )

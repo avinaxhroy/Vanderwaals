@@ -3165,20 +3165,24 @@ fun RadicalRadioRow(
                 fontWeight = FontWeight.Bold,
                 color = if (isDark) RadicalPalette.DarkCardTextPrimary else RadicalPalette.LightCardTextPrimary
             )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (isSelected) accentColor else (if (isDark) RadicalPalette.DarkCardTextSecondary else RadicalPalette.LightCardTextSecondary),
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 1.dp)
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (isDark) RadicalPalette.DarkCardTextTertiary else RadicalPalette.LightCardTextSecondary,
-                lineHeight = 17.sp,
-                modifier = Modifier.padding(top = 3.dp)
-            )
+            if (subtitle.isNotEmpty()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isSelected) accentColor else (if (isDark) RadicalPalette.DarkCardTextSecondary else RadicalPalette.LightCardTextSecondary),
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 1.dp)
+                )
+            }
+            if (description.isNotEmpty()) {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isDark) RadicalPalette.DarkCardTextTertiary else RadicalPalette.LightCardTextSecondary,
+                    lineHeight = 17.sp,
+                    modifier = Modifier.padding(top = 3.dp)
+                )
+            }
         }
     }
 }

@@ -21,8 +21,8 @@ data class WallpaperMetadataDto(
     // Vanderwaals Collection semantic metadata (optional, absent for GitHub/Bing sources)
     @SerializedName("aestheticScore")
     val aestheticScore: Float = 0f,
-    val mood: List<String> = emptyList(),
-    val style: List<String> = emptyList(),
+    val mood: List<String>? = null,
+    val style: List<String>? = null,
 
     // Legacy full embedding (v1 format)
     val embedding: List<Float>? = null,
@@ -81,8 +81,8 @@ fun WallpaperMetadataDto.toEntity(): WallpaperMetadata {
         resolution = resolution,
         attribution = attribution,
         aestheticScore = aestheticScore,
-        mood = mood,
-        style = style
+        mood = mood ?: emptyList(),
+        style = style ?: emptyList()
     )
 }
 

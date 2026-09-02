@@ -63,11 +63,6 @@ venv/
 .DS_Store
 Thumbs.db
 
-# F-Droid submission documentation (local reference)
-FDROID_*.md
-SIGNING_AND_RELEASE.md
-FILES_CREATED.txt
-.fdroid/GITLAB_RFP_ISSUE_TEMPLATE.md
 
 # Scripts
 scripts/.DS_Store
@@ -94,17 +89,10 @@ app/src/main/assets/bing_manifest_lite.json.gz
 app/src/main/assets/bing_manifest_full.json
 app/src/main/assets/bing_manifest_full.json.gz
 
-index.html
-landing_page_template.html
-.fdroid/COMPLETION_CHECKLIST.txt
-.superpowers/
-ALGORITHM_REVIEW_ISSUES.md
-/thoughts
-VC/lite.json
-private-api.md
-Inspiration.html
-/docs/superpowers
-docs/GLASSMORPHISM_TECHNIQUES.md
-BUILD_WARNINGS_FIX_SUMMARY.md
-/.commandcode
-.comment-cleanup-criteria.md
+# Generic local & private developer files
+*.local
+*.local.*
+*.private
+/private/
+/scratch/
+
