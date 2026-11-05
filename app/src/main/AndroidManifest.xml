@@ -86,7 +86,7 @@
         <service
             android:name=".service.WallpaperChangeService"
             android:enabled="true"
-            android:exported="false"
+            android:exported="true"
             android:foregroundServiceType="dataSync" />
 
         
